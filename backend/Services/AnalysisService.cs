@@ -10,21 +10,18 @@ public class AnalysisService : IAnalysisService
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<AnalysisService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
-    private readonly IDefaultUserService _defaultUserService;
 
     public AnalysisService(
         IOpenAIService openAIService,
         ILogger<AnalysisService> logger,
-        RecruiterReplyDbContext dbContext,
-        IDefaultUserService defaultUserService)
+        RecruiterReplyDbContext dbContext)
     {
         _openAIService = openAIService;
         _logger = logger;
         _dbContext = dbContext;
-        _defaultUserService = defaultUserService;
     }
 
-    public async Task<AnalyzeMessageResponse> AnalyzeRecruiterMessageAsync(AnalyzeMessageRequest request)
+    public async Task<AnalyzeMessageResponse> AnalyzeRecruiterMessageAsync(AnalyzeMessageRequest request, Guid userId)
     {
         if (string.IsNullOrWhiteSpace(request.RecruiterMessage))
         {
@@ -33,8 +30,6 @@ public class AnalysisService : IAnalysisService
 
         try
         {
-            var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync();
-
             var message = new MessageEntity
             {
                 Id = Guid.NewGuid(),

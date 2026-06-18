@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: recruiterreply-postgres
+  namespace: recruiterreply-dev
+spec:
+  serviceName: recruiterreply-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recruiterreply-postgres
+  template:
+    metadata:
+      labels:
+        app: recruiterreply-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: recruiterreply_dev
+            - name: POSTGRES_USER
+              value: recruiterreply_dev
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: recruiterreply-backend-secrets
+                  key: Postgres__Password
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U recruiterreply_dev -d recruiterreply_dev
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U recruiterreply_dev -d recruiterreply_dev
+            initialDelaySeconds: 10
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

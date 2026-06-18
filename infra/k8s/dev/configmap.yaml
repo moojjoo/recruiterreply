@@ -5,3 +5,6 @@ metadata:
   namespace: recruiterreply-dev
 data:
   ASPNETCORE_ENVIRONMENT: Development
+  Database__AutoCreateSchema: "false"
+  Jwt__Issuer: RecruiterReply
+  Jwt__Audience: RecruiterReply.Client

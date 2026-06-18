@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: recruiterreply-db-init
+  namespace: recruiterreply-dev
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: recruiterreply-db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: recruiterreply-backend-secrets
+                  key: Postgres__Password
+          command:
+            - sh
+            - -c
+            - |
+              set -euo pipefail
+              until pg_isready -h recruiterreply-postgres -p 5432 -U recruiterreply_dev -d recruiterreply_dev; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+
+              PGPASSWORD="$POSTGRES_PASSWORD" \
+                psql \
+                -h recruiterreply-postgres \
+                -p 5432 \
+                -U recruiterreply_dev \
+                -d recruiterreply_dev \
+                -v ON_ERROR_STOP=1 \
+                -f /sql/init_postgres.sql
+          volumeMounts:
+            - name: db-init-sql
+              mountPath: /sql
+      volumes:
+        - name: db-init-sql
+          configMap:
+            name: recruiterreply-db-init-sql

@@ -1,28 +1,28 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using RecruiterReply.Data;
 using RecruiterReply.Entities;
-using RecruiterReply.Services;
+using RecruiterReply.Extensions;
 
 namespace RecruiterReply.Controllers;
 
 [ApiController]
 [Route("api/messages")]
+[Authorize]
 public class MessagesController : ControllerBase
 {
     private readonly RecruiterReplyDbContext _db;
-    private readonly IDefaultUserService _defaultUserService;
 
-    public MessagesController(RecruiterReplyDbContext db, IDefaultUserService defaultUserService)
+    public MessagesController(RecruiterReplyDbContext db)
     {
         _db = db;
-        _defaultUserService = defaultUserService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetMessages(CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var messages = await _db.Messages
             .AsNoTracking()
             .Where(m => m.UserId == userId)
@@ -35,7 +35,7 @@ public class MessagesController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetMessage(Guid id, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var message = await _db.Messages
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == id && m.UserId == userId, ct);
@@ -46,7 +46,7 @@ public class MessagesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateMessage([FromBody] MessageEntity request, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
 
         var message = new MessageEntity
         {
@@ -70,7 +70,7 @@ public class MessagesController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateMessage(Guid id, [FromBody] MessageEntity request, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == id && m.UserId == userId, ct);
 
         if (message is null)
@@ -92,7 +92,7 @@ public class MessagesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteMessage(Guid id, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == id && m.UserId == userId, ct);
 
         if (message is null)

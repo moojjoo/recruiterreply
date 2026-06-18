@@ -62,19 +62,21 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddDbContext<RecruiterReplyDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// Add OpenAI Service
+// Add OpenAI Service (placeholder-safe for dev/test startup)
 var openAiKey = builder.Configuration["OpenAI:ApiKey"];
-if (string.IsNullOrEmpty(openAiKey))
+if (string.IsNullOrWhiteSpace(openAiKey) || openAiKey == "sk-proj-YOUR_KEY_HERE")
 {
-    throw new InvalidOperationException("OpenAI:ApiKey is not configured in appsettings.json. Please set it before running.");
+    openAiKey = "sk-proj-NOT_CONFIGURED";
 }
-builder.Services.AddSingleton<IOpenAIService>(sp => 
+builder.Services.AddSingleton<IOpenAIService>(sp =>
     new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>()));
 
 // Add application services
 builder.Services.AddScoped<IAnalysisService, AnalysisService>();
 builder.Services.AddScoped<IReplyService, ReplyService>();
 builder.Services.AddScoped<IComparisonService, ComparisonService>();
+builder.Services.AddScoped<IPasswordHashService, PasswordHashService>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IDefaultUserService, DefaultUserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();

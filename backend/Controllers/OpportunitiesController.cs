@@ -1,28 +1,28 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using RecruiterReply.Data;
 using RecruiterReply.Entities;
-using RecruiterReply.Services;
+using RecruiterReply.Extensions;
 
 namespace RecruiterReply.Controllers;
 
 [ApiController]
 [Route("api/opportunities")]
+[Authorize]
 public class OpportunitiesController : ControllerBase
 {
     private readonly RecruiterReplyDbContext _db;
-    private readonly IDefaultUserService _defaultUserService;
 
-    public OpportunitiesController(RecruiterReplyDbContext db, IDefaultUserService defaultUserService)
+    public OpportunitiesController(RecruiterReplyDbContext db)
     {
         _db = db;
-        _defaultUserService = defaultUserService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetOpportunities(CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var opportunities = await _db.Opportunities
             .AsNoTracking()
             .Where(o => o.UserId == userId)
@@ -35,7 +35,7 @@ public class OpportunitiesController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetOpportunity(Guid id, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var opportunity = await _db.Opportunities
             .AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId, ct);
@@ -46,7 +46,7 @@ public class OpportunitiesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateOpportunity([FromBody] OpportunityEntity request, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var now = DateTime.UtcNow;
 
         var opportunity = new OpportunityEntity
@@ -82,7 +82,7 @@ public class OpportunitiesController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateOpportunity(Guid id, [FromBody] OpportunityEntity request, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var opportunity = await _db.Opportunities.FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId, ct);
 
         if (opportunity is null)
@@ -115,7 +115,7 @@ public class OpportunitiesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteOpportunity(Guid id, CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var opportunity = await _db.Opportunities.FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId, ct);
 
         if (opportunity is null)

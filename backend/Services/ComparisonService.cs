@@ -10,21 +10,18 @@ public class ComparisonService : IComparisonService
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<ComparisonService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
-    private readonly IDefaultUserService _defaultUserService;
 
     public ComparisonService(
         IOpenAIService openAIService,
         ILogger<ComparisonService> logger,
-        RecruiterReplyDbContext dbContext,
-        IDefaultUserService defaultUserService)
+        RecruiterReplyDbContext dbContext)
     {
         _openAIService = openAIService;
         _logger = logger;
         _dbContext = dbContext;
-        _defaultUserService = defaultUserService;
     }
 
-    public async Task<CompareOffersResponse> CompareOffersAsync(CompareOffersRequest request)
+    public async Task<CompareOffersResponse> CompareOffersAsync(CompareOffersRequest request, Guid userId)
     {
         if (request.OfferOne == null || request.OfferTwo == null)
         {
@@ -33,7 +30,6 @@ public class ComparisonService : IComparisonService
 
         try
         {
-            var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync();
             var offerOneJson = JsonSerializer.Serialize(request.OfferOne);
             var offerTwoJson = JsonSerializer.Serialize(request.OfferTwo);
 

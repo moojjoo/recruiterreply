@@ -1,28 +1,30 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using RecruiterReply.Data;
-using RecruiterReply.Services;
+using RecruiterReply.Extensions;
 
 namespace RecruiterReply.Controllers;
 
 [ApiController]
 [Route("api/users")]
+[Authorize]
 public class UsersController : ControllerBase
 {
     private readonly RecruiterReplyDbContext _db;
-    private readonly IDefaultUserService _defaultUserService;
 
-    public UsersController(RecruiterReplyDbContext db, IDefaultUserService defaultUserService)
+    public UsersController(RecruiterReplyDbContext db)
     {
         _db = db;
-        _defaultUserService = defaultUserService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetUsers(CancellationToken ct)
     {
+        var userId = User.GetRequiredUserId();
         var users = await _db.Users
             .AsNoTracking()
+            .Where(u => u.Id == userId)
             .Select(u => new
             {
                 u.Id,
@@ -38,10 +40,10 @@ public class UsersController : ControllerBase
         return Ok(users);
     }
 
-    [HttpGet("default")]
-    public async Task<IActionResult> GetOrCreateDefaultUser(CancellationToken ct)
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMe(CancellationToken ct)
     {
-        var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
+        var userId = User.GetRequiredUserId();
         var user = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == userId)

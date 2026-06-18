@@ -76,17 +76,41 @@ jobs:
             --secret-id "${{ secrets.OPENAI_SECRET_ID }}" \
             --query SecretString \
             --output text)
+          JWT_KEY="${{ secrets.JWT_KEY }}"
+          DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+
+          if [[ -z "$JWT_KEY" ]]; then
+            echo "JWT_KEY secret is required"
+            exit 1
+          fi
+
+          if [[ -z "$DB_PASSWORD" ]]; then
+            echo "DB_PASSWORD secret is required"
+            exit 1
+          fi
+
+          CONNECTION_STRING="Host=recruiterreply-postgres;Port=5432;Database=recruiterreply_dev;Username=recruiterreply_dev;Password=$DB_PASSWORD"
 
           kubectl create namespace "$K8S_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
           kubectl -n "$K8S_NAMESPACE" create secret generic recruiterreply-backend-secrets \
             --from-literal=OpenAI__ApiKey="$OPENAI_KEY" \
+            --from-literal=Jwt__Key="$JWT_KEY" \
+            --from-literal=Postgres__Password="$DB_PASSWORD" \
+            --from-literal=ConnectionStrings__DefaultConnection="$CONNECTION_STRING" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply Kubernetes manifests
         run: |
           set -euo pipefail
           kubectl apply -k infra/k8s/dev
+
+      - name: Run database init job
+        run: |
+          set -euo pipefail
+          kubectl -n "$K8S_NAMESPACE" delete job recruiterreply-db-init --ignore-not-found=true
+          kubectl apply -f infra/k8s/dev/db-init-job.yaml
+          kubectl -n "$K8S_NAMESPACE" wait --for=condition=complete job/recruiterreply-db-init --timeout=300s
 
       - name: Set image tags for this commit
         env:

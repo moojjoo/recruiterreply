@@ -4,6 +4,9 @@ namespace: recruiterreply-dev
 resources:
   - namespace.yaml
   - configmap.yaml
+  - db-init-configmap.yaml
+  - postgres-service.yaml
+  - postgres-statefulset.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml

@@ -9,21 +9,18 @@ public class ReplyService : IReplyService
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<ReplyService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
-    private readonly IDefaultUserService _defaultUserService;
 
     public ReplyService(
         IOpenAIService openAIService,
         ILogger<ReplyService> logger,
-        RecruiterReplyDbContext dbContext,
-        IDefaultUserService defaultUserService)
+        RecruiterReplyDbContext dbContext)
     {
         _openAIService = openAIService;
         _logger = logger;
         _dbContext = dbContext;
-        _defaultUserService = defaultUserService;
     }
 
-    public async Task<GenerateReplyResponse> GenerateReplyAsync(GenerateReplyRequest request)
+    public async Task<GenerateReplyResponse> GenerateReplyAsync(GenerateReplyRequest request, Guid userId)
     {
         if (string.IsNullOrWhiteSpace(request.RecruiterMessage))
         {
@@ -37,8 +34,6 @@ public class ReplyService : IReplyService
 
         try
         {
-            var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync();
-
             var message = new MessageEntity
             {
                 Id = Guid.NewGuid(),
