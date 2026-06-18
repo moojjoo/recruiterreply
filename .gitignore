@@ -80,4 +80,4 @@ backend/artifacts/
 # -----------------------------
 !docs/**
 !frontend/package-lock.json
-!backend/RecruiterReply.csproj
+!backend/RecruiterReply.csprojgit branch --set-upstream-to=origin/dev dev
