@@ -1,4 +1,6 @@
 using RecruiterReply.Models;
+using RecruiterReply.Data;
+using RecruiterReply.Entities;
 
 namespace RecruiterReply.Services;
 
@@ -6,11 +8,19 @@ public class ReplyService : IReplyService
 {
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<ReplyService> _logger;
+    private readonly RecruiterReplyDbContext _dbContext;
+    private readonly IDefaultUserService _defaultUserService;
 
-    public ReplyService(IOpenAIService openAIService, ILogger<ReplyService> logger)
+    public ReplyService(
+        IOpenAIService openAIService,
+        ILogger<ReplyService> logger,
+        RecruiterReplyDbContext dbContext,
+        IDefaultUserService defaultUserService)
     {
         _openAIService = openAIService;
         _logger = logger;
+        _dbContext = dbContext;
+        _defaultUserService = defaultUserService;
     }
 
     public async Task<GenerateReplyResponse> GenerateReplyAsync(GenerateReplyRequest request)
@@ -27,6 +37,38 @@ public class ReplyService : IReplyService
 
         try
         {
+            var userId = await _defaultUserService.GetOrCreateDefaultUserIdAsync();
+
+            var message = new MessageEntity
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Subject = $"reply-{request.ReplyType}",
+                Body = request.RecruiterMessage,
+                CompanyName = "Unknown",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.Messages.Add(message);
+            await _dbContext.SaveChangesAsync();
+
+            var analysis = new MessageAnalysisEntity
+            {
+                Id = Guid.NewGuid(),
+                MessageId = message.Id,
+                UserId = userId,
+                CompetitivenessScore = 5,
+                CompensationEvaluation = "{}",
+                RedFlags = "[]",
+                AnalysisSummary = "Reply generation request",
+                SuggestedTone = request.ReplyType,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.MessageAnalyses.Add(analysis);
+            await _dbContext.SaveChangesAsync();
+
             var reply = await _openAIService.GenerateReplyAsync(
                 request.ReplyType,
                 request.RecruiterMessage,
@@ -35,7 +77,7 @@ public class ReplyService : IReplyService
                 request.Notes
             );
 
-            return new GenerateReplyResponse
+            var response = new GenerateReplyResponse
             {
                 Reply = reply,
                 Tone = request.ReplyType switch
@@ -48,6 +90,23 @@ public class ReplyService : IReplyService
                     _ => "Professional"
                 }
             };
+
+            var generatedReply = new GeneratedReplyEntity
+            {
+                Id = Guid.NewGuid(),
+                AnalysisId = analysis.Id,
+                UserId = userId,
+                ReplyType = request.ReplyType,
+                Content = response.Reply,
+                Tone = response.Tone,
+                IsUsed = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.GeneratedReplies.Add(generatedReply);
+            await _dbContext.SaveChangesAsync();
+
+            return response;
         }
         catch (Exception ex)
         {
