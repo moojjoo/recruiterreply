@@ -104,7 +104,7 @@ The MVP focuses on helping job seekers make informed career decisions and respon
 ## Technical Requirements
 
 - **TR1**: Frontend built with React + TypeScript
-- **TR2**: Backend built with ASP.NET Core (.NET 10)
+- **TR2**: Backend built with ASP.NET CORE 10 (.NET 10)
 - **TR3**: Database: PostgreSQL
 - **TR4**: Authentication: JWT + OAuth 2.0
 - **TR5**: AI Services: OpenAI API (GPT-4)

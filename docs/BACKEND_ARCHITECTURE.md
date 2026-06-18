@@ -2,14 +2,14 @@
 
 ## Technology Stack
 
-- **Framework**: ASP.NET Core 8
+- **Framework**: ASP.NET CORE 10
 - **Language**: C#
 - **Database**: PostgreSQL
 - **ORM**: Entity Framework Core
 - **Authentication**: JWT + OAuth 2.0
 - **API Style**: RESTful
 - **AI Service**: OpenAI API
-- **Dependency Injection**: Built-in ASP.NET Core DI
+- **Dependency Injection**: Built-in ASP.NET CORE 10 DI
 - **Logging**: Serilog
 - **Testing**: xUnit, Moq
 

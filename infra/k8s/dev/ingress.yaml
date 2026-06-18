@@ -13,6 +13,20 @@ spec:
   rules:
     - http:
         paths:
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: recruiterreply-backend
+                port:
+                  number: 8080
+          - path: /swagger
+            pathType: Prefix
+            backend:
+              service:
+                name: recruiterreply-backend
+                port:
+                  number: 8080
           - path: /api
             pathType: Prefix
             backend:

@@ -1,6 +1,6 @@
 # RecruiterReply Backend API
 
-ASP.NET Core 10 Web API for RecruiterReply MVP
+ASP.NET CORE 10 Web API for RecruiterReply MVP
 
 ## 🎯 Quick Start
 
@@ -256,12 +256,12 @@ Output: `bin/Release/net10.0/publish/`
 ### Docker
 
 ```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /app
 COPY . .
 RUN dotnet publish -c Release -o out
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/out .
 ENV ASPNETCORE_URLS=http://+:5000
@@ -410,7 +410,7 @@ git push heroku main
 ## 📚 Additional Resources
 
 - [OpenAI API Docs](https://platform.openai.com/docs/api-reference)
-- [ASP.NET Core Docs](https://learn.microsoft.com/en-us/aspnet/core/)
+- [ASP.NET CORE 10 Docs](https://learn.microsoft.com/en-us/aspnet/core/)
 - [.NET 10 Migration Guide](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10)
 
 ## Development

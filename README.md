@@ -10,7 +10,7 @@ An intelligent AI-powered web application for job seekers to analyze recruiter m
 
 ## 🏗️ Architecture
 
-- **Backend**: ASP.NET Core 8 (.NET) with OpenAI integration
+- **Backend**: ASP.NET CORE 10 (.NET) with OpenAI integration
 - **Frontend**: React 18 + TypeScript + Tailwind CSS
 - **API**: REST with Axios
 - **AI Engine**: OpenAI GPT-4-Turbo
@@ -19,7 +19,7 @@ An intelligent AI-powered web application for job seekers to analyze recruiter m
 
 ```
 recruiterreply/
-├── backend/                    # ASP.NET Core API
+├── backend/                    # ASP.NET CORE 10 API
 │   ├── Controllers/
 │   ├── Services/
 │   ├── Models/
@@ -44,7 +44,7 @@ recruiterreply/
 ## 🛠️ Tech Stack
 
 - **Frontend**: React 18 + TypeScript + Tailwind CSS
-- **Backend**: ASP.NET Core 8 + C#
+- **Backend**: ASP.NET CORE 10 + C#
 - **API**: RESTful with JSON
 - **AI**: OpenAI API (GPT-4)
 - **Build Tools**: Vite, npm
