@@ -1,4 +1,4 @@
-name: Deploy Dev (ECS)
+name: Deploy Dev (EKS)
 
 on:
   push:
@@ -12,6 +12,7 @@ permissions:
 env:
   ECR_REPO_FRONTEND: recruiterreply-frontend
   ECR_REPO_BACKEND: recruiterreply-backend
+  K8S_NAMESPACE: recruiterreply-dev
 
 jobs:
   deploy:
@@ -31,13 +32,22 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
       - name: Build and push frontend image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          docker build -t "$REGISTRY/$ECR_REPO_FRONTEND:dev-latest" -t "$REGISTRY/$ECR_REPO_FRONTEND:$IMAGE_SHA" ./frontend
+          docker build \
+            --build-arg VITE_API_BASE_URL=/api \
+            -t "$REGISTRY/$ECR_REPO_FRONTEND:dev-latest" \
+            -t "$REGISTRY/$ECR_REPO_FRONTEND:$IMAGE_SHA" \
+            ./frontend
           docker push "$REGISTRY/$ECR_REPO_FRONTEND:dev-latest"
           docker push "$REGISTRY/$ECR_REPO_FRONTEND:$IMAGE_SHA"
 
@@ -51,29 +61,50 @@ jobs:
           docker push "$REGISTRY/$ECR_REPO_BACKEND:dev-latest"
           docker push "$REGISTRY/$ECR_REPO_BACKEND:$IMAGE_SHA"
 
-      - name: Force new deployment on ECS services
+      - name: Configure kubeconfig for EKS
         run: |
           set -euo pipefail
-          aws ecs update-service \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --service "${{ secrets.ECS_FRONTEND_SERVICE }}" \
-            --force-new-deployment
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
 
-          aws ecs update-service \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --service "${{ secrets.ECS_BACKEND_SERVICE }}" \
-            --force-new-deployment
-
-      - name: Wait until services are stable
+      - name: Sync backend secret from AWS Secrets Manager
         run: |
           set -euo pipefail
-          aws ecs wait services-stable \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --services "${{ secrets.ECS_FRONTEND_SERVICE }}" "${{ secrets.ECS_BACKEND_SERVICE }}"
+          OPENAI_KEY=$(aws secretsmanager get-secret-value \
+            --secret-id "${{ secrets.OPENAI_SECRET_ID }}" \
+            --query SecretString \
+            --output text)
+
+          kubectl create namespace "$K8S_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n "$K8S_NAMESPACE" create secret generic recruiterreply-backend-secrets \
+            --from-literal=OpenAI__ApiKey="$OPENAI_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes manifests
+        run: |
+          set -euo pipefail
+          kubectl apply -k infra/k8s/dev
+
+      - name: Set image tags for this commit
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          kubectl -n "$K8S_NAMESPACE" set image deployment/recruiterreply-frontend frontend="$REGISTRY/$ECR_REPO_FRONTEND:$IMAGE_SHA"
+          kubectl -n "$K8S_NAMESPACE" set image deployment/recruiterreply-backend backend="$REGISTRY/$ECR_REPO_BACKEND:$IMAGE_SHA"
+
+      - name: Wait for rollout
+        run: |
+          set -euo pipefail
+          kubectl -n "$K8S_NAMESPACE" rollout status deployment/recruiterreply-frontend --timeout=300s
+          kubectl -n "$K8S_NAMESPACE" rollout status deployment/recruiterreply-backend --timeout=300s
 
       - name: Deployment summary
         run: |
           echo "Deployed commit: ${{ github.sha }}"
-          echo "Cluster: ${{ secrets.ECS_CLUSTER }}"
-          echo "Frontend service: ${{ secrets.ECS_FRONTEND_SERVICE }}"
-          echo "Backend service: ${{ secrets.ECS_BACKEND_SERVICE }}"
+          echo "EKS cluster: ${{ secrets.EKS_CLUSTER_NAME }}"
+          echo "Namespace: $K8S_NAMESPACE"
+          kubectl -n "$K8S_NAMESPACE" get deploy,svc,ingress

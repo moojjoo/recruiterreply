@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recruiterreply-backend
+  namespace: recruiterreply-dev
+  labels:
+    app: recruiterreply-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: recruiterreply-backend
+  template:
+    metadata:
+      labels:
+        app: recruiterreply-backend
+    spec:
+      containers:
+        - name: backend
+          image: recruiterreply-backend:dev-latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: recruiterreply-backend-config
+          env:
+            - name: OpenAI__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: recruiterreply-backend-secrets
+                  key: OpenAI__ApiKey
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /swagger/index.html
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /swagger/index.html
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15

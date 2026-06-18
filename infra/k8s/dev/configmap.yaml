@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recruiterreply-backend-config
+  namespace: recruiterreply-dev
+data:
+  ASPNETCORE_ENVIRONMENT: Development

@@ -71,14 +71,19 @@ cat > "$PERMISSION_POLICY_FILE" <<EOF
       "Resource": "*"
     },
     {
-      "Sid": "EcsDeploy",
+      "Sid": "EksAccess",
       "Effect": "Allow",
       "Action": [
-        "ecs:UpdateService",
-        "ecs:DescribeServices",
-        "ecs:DescribeTaskDefinition",
-        "ecs:ListTasks",
-        "ecs:DescribeTasks"
+        "eks:DescribeCluster"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadSecretsManager",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
       ],
       "Resource": "*"
     },
@@ -120,8 +125,12 @@ ${ROLE_ARN}
 
 Also set GitHub secrets:
 - AWS_REGION=${AWS_REGION}
-- ECS_CLUSTER=<your cluster name>
-- ECS_FRONTEND_SERVICE=<your frontend ECS service>
-- ECS_BACKEND_SERVICE=<your backend ECS service>
+- EKS_CLUSTER_NAME=<your EKS cluster name>
+- OPENAI_SECRET_ID=<your Secrets Manager secret id>
+
+Important:
+- Map this role in EKS access so kubectl apply is allowed from CI.
+- Create an EKS access entry and associate AmazonEKSClusterAdminPolicy for bootstrap,
+  or bind this role to a limited RBAC group for least privilege.
 
 EOF
