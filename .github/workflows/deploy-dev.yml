@@ -13,6 +13,7 @@ env:
   ECR_REPO_FRONTEND: recruiterreply-frontend
   ECR_REPO_BACKEND: recruiterreply-backend
   K8S_NAMESPACE: recruiterreply-dev
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
 jobs:
   deploy:
@@ -26,7 +27,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -66,7 +67,7 @@ jobs:
           set -euo pipefail
           aws eks update-kubeconfig \
             --name "${{ secrets.EKS_CLUSTER_NAME }}" \
-            --region "${{ secrets.AWS_REGION }}"
+            --region "$AWS_REGION"
 
       - name: Sync backend secret from AWS Secrets Manager
         run: |
