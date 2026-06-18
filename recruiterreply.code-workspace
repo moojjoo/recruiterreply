@@ -1,0 +1,12 @@
+{
+  "folders": [
+	{
+		"path": "."
+	}
+],
+  "settings": {
+    "github.copilot.chat.gemini35FlashReducedToolUsePrompt.enabled": true,
+    "workbench.browser.experimentalUserTools.enabled": true,
+    "github.copilot.chat.claudeAgent.allowAutoPermissions": true
+  }
+}
