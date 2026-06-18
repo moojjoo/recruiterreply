@@ -1,99 +1,111 @@
-# AWS DEV Deployment Setup (Webhook via GitHub Actions)
+# AWS DEV Deployment Setup (Webhook to EKS via GitHub Actions)
 
-This guide sets up automatic deployment to AWS DEV when you push to the `dev` branch.
+This guide sets up automatic deployment to AWS DEV on EKS when you push to the dev branch.
 
-## What This Repo Now Includes
+## What This Repo Includes
 
-- Workflow: `.github/workflows/deploy-dev.yml`
-- Bootstrap script: `scripts/aws/bootstrap_dev.sh`
+- Workflow: .github/workflows/deploy-dev.yml
+- EKS bootstrap script: scripts/aws/bootstrap_dev.sh
+- GitHub OIDC role script: scripts/aws/create_github_oidc_role.sh
+- DEV manifests: infra/k8s/dev
 
 The workflow does:
-1. Build frontend and backend Docker images
-2. Push to ECR
-3. Trigger ECS service rolling deploy (`--force-new-deployment`)
+1. Build frontend and backend images.
+2. Push images to ECR.
+3. Update kubeconfig for EKS.
+4. Sync backend OpenAI key from AWS Secrets Manager to Kubernetes Secret.
+5. Apply DEV manifests.
+6. Set deployment images to the commit SHA and wait for rollout.
 
 ## 1) Prerequisites
 
-- AWS CLI installed and configured in WSL
-- Docker available in GitHub Actions (default)
-- GitHub repo connected (already done)
+- AWS CLI installed and configured in WSL.
+- Existing EKS cluster for DEV.
+- AWS Load Balancer Controller installed on the cluster.
+- GitHub repo connected.
 
 Verify AWS identity:
 
-```bash
 aws sts get-caller-identity
-```
 
 ## 2) Bootstrap AWS DEV Base Resources
 
 Run:
 
-```bash
 chmod +x scripts/aws/bootstrap_dev.sh
-AWS_REGION=us-east-1 scripts/aws/bootstrap_dev.sh
-```
+AWS_REGION=us-east-1 EKS_CLUSTER_NAME=recruiterreply-dev scripts/aws/bootstrap_dev.sh
 
-This creates/verifies:
-- ECR repos for frontend/backend
-- ECS cluster (`recruiterreply-dev` by default)
-- CloudWatch log groups
-- OpenAI secret placeholder in Secrets Manager
+This verifies or creates:
+- ECR repos for frontend and backend.
+- OpenAI secret placeholder in Secrets Manager.
+- EKS cluster existence.
 
-## 3) Create ECS Services (One-Time)
+## 3) Create GitHub OIDC Role
 
-Create two ECS Fargate services in the `recruiterreply-dev` cluster:
-- Frontend service (container port 80)
-- Backend service (container port 8080)
+Run:
 
-Use `dev-latest` tags for initial task definitions:
-- `<account>.dkr.ecr.<region>.amazonaws.com/recruiterreply-frontend:dev-latest`
-- `<account>.dkr.ecr.<region>.amazonaws.com/recruiterreply-backend:dev-latest`
+chmod +x scripts/aws/create_github_oidc_role.sh
+scripts/aws/create_github_oidc_role.sh moojjoo recruiterreply us-east-1 recruiterreply-github-actions-role
 
-Configure backend task definition to read OpenAI key from Secrets Manager.
+This script creates or updates:
+- GitHub OIDC provider in IAM.
+- IAM role trust policy for your repository.
+- IAM permissions for ECR push, EKS describe, and Secrets Manager read.
 
-Recommended routing:
-- `/api/*` -> backend target group
-- `/*` -> frontend target group
+Important:
+- You must also grant this IAM role Kubernetes access in EKS.
+- For bootstrap, map it to cluster-admin, then reduce to least privilege RBAC later.
 
-## 4) Configure GitHub OIDC Role in AWS
+## 4) Configure GitHub Repository Secrets
 
-Create an IAM role trusted by GitHub OIDC for this repository.
-Attach permissions for:
-- ECR push/pull
-- ECS update-service + describe
-- CloudWatch logs read (optional)
-- `iam:PassRole` for ECS task roles
+In GitHub repo settings for Actions secrets, add:
 
-## 5) Add GitHub Repository Secrets
+- AWS_ROLE_TO_ASSUME
+- AWS_REGION
+- EKS_CLUSTER_NAME
+- OPENAI_SECRET_ID
 
-In GitHub repo -> Settings -> Secrets and variables -> Actions, add:
+Example OPENAI_SECRET_ID value:
+recruiterreply/dev/openai-api-key
 
-- `AWS_ROLE_TO_ASSUME` (OIDC role ARN)
-- `AWS_REGION` (for example `us-east-1`)
-- `ECS_CLUSTER` (for example `recruiterreply-dev`)
-- `ECS_FRONTEND_SERVICE` (your ECS frontend service name)
-- `ECS_BACKEND_SERVICE` (your ECS backend service name)
+## 5) Apply DEV Manifests Locally Once
+
+The workflow can apply these each run, but do an initial apply to validate:
+
+aws eks update-kubeconfig --name recruiterreply-dev --region us-east-1
+kubectl apply -k infra/k8s/dev
+
+Create real backend secret before app traffic:
+
+kubectl -n recruiterreply-dev create secret generic recruiterreply-backend-secrets \
+	--from-literal=OpenAI__ApiKey=YOUR_REAL_OPENAI_KEY \
+	--dry-run=client -o yaml | kubectl apply -f -
 
 ## 6) Trigger Webhook Deployment
 
-The workflow triggers on push to `dev`.
+The workflow triggers on push to dev.
 
-```bash
 git checkout -b dev
 git push -u origin dev
-```
 
 For future deploys:
 
-```bash
 git add .
 git commit -m "Deploy change"
 git push origin dev
-```
 
-## 7) Troubleshooting
+## 7) Verify Deployment
 
-- If workflow fails at AWS auth: validate `AWS_ROLE_TO_ASSUME` and OIDC trust policy.
-- If ECS does not roll: check service names and cluster secret values.
-- If backend fails at runtime: verify secret value and task definition secret mapping.
-- If app loads but API fails: verify ALB route `/api/*` to backend target group.
+- Check GitHub Actions run success.
+- Check workloads:
+	kubectl -n recruiterreply-dev get deploy,svc,ingress,pods
+- Check rollout:
+	kubectl -n recruiterreply-dev rollout status deployment/recruiterreply-frontend
+	kubectl -n recruiterreply-dev rollout status deployment/recruiterreply-backend
+
+## 8) Troubleshooting
+
+- If AWS auth fails in workflow: validate AWS_ROLE_TO_ASSUME trust policy and repo name.
+- If kubectl apply fails from CI: map the IAM role to EKS access entry and RBAC.
+- If image pull fails: confirm ECR repo names and pushed image tags.
+- If frontend loads but API fails: verify ingress and backend service path /api.
