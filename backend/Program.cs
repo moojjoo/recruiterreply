@@ -48,6 +48,10 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthorization();
+
+app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", status = "ok" }));
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
 app.MapControllers();
 
 app.Run();
