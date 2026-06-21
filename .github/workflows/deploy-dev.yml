@@ -18,7 +18,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ vars.DEPLOY_ENVIRONMENT || 'dev' }}
 
     steps:
       - name: Checkout
@@ -29,18 +28,24 @@ jobs:
         env:
           ROLE_FROM_VARS: ${{ vars.AWS_ROLE_TO_ASSUME }}
           ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          ROLE_ARN_FROM_VARS: ${{ vars.AWS_ROLE_ARN }}
+          ROLE_ARN_FROM_SECRETS: ${{ secrets.AWS_ROLE_ARN }}
           KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
           KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          KEY_ALIAS_FROM_VARS: ${{ vars.AWS_ACCESS_KEY }}
+          KEY_ALIAS_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY }}
           SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
           SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SECRET_ALIAS_FROM_VARS: ${{ vars.AWS_SECRET_KEY }}
+          SECRET_ALIAS_FROM_SECRETS: ${{ secrets.AWS_SECRET_KEY }}
           TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
           TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           set -euo pipefail
 
-          ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-}}"
-          AWS_ACCESS_KEY_ID_VAL="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-}}"
-          AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-}}"
+          ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-${ROLE_ARN_FROM_VARS:-${ROLE_ARN_FROM_SECRETS:-}}}}"
+          AWS_ACCESS_KEY_ID_VAL="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-${KEY_ALIAS_FROM_VARS:-${KEY_ALIAS_FROM_SECRETS:-}}}}"
+          AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-${SECRET_ALIAS_FROM_SECRETS:-${SECRET_ALIAS_FROM_VARS:-}}}}"
           AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
 
           ROLE_SET=false
@@ -72,7 +77,7 @@ jobs:
           fi
 
           echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME (vars/secrets) or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets)."
-          echo "::error::If you configured Environment-level values, ensure DEPLOY_ENVIRONMENT points to that environment name (current: ${DEPLOY_ENVIRONMENT:-dev})."
+          echo "::error::Checked aliases too: AWS_ROLE_ARN, AWS_ACCESS_KEY, AWS_SECRET_KEY."
           exit 1
 
       - name: Configure AWS credentials (OIDC role)
