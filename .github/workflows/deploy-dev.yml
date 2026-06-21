@@ -23,13 +23,58 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Resolve AWS auth inputs
+        id: aws-auth
+        env:
+          ROLE_FROM_VARS: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
+          KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
+          SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
+          TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-}}"
+          AWS_ACCESS_KEY_ID_VAL="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-}}"
+          AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-}}"
+          AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
+
+          if [[ -n "$ROLE_TO_ASSUME" ]]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "$AWS_ACCESS_KEY_ID_VAL" && -n "$AWS_SECRET_ACCESS_KEY_VAL" ]]; then
+            echo "auth_mode=keys" >> "$GITHUB_OUTPUT"
+            echo "aws_access_key_id=$AWS_ACCESS_KEY_ID_VAL" >> "$GITHUB_OUTPUT"
+            echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY_VAL" >> "$GITHUB_OUTPUT"
+            if [[ -n "$AWS_SESSION_TOKEN_VAL" ]]; then
+              echo "aws_session_token=$AWS_SESSION_TOKEN_VAL" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          echo "Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME (vars/secrets) or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets)."
+          exit 1
+
+      - name: Configure AWS credentials (OIDC role)
+        if: steps.aws-auth.outputs.auth_mode == 'oidc'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
-          aws-access-key-id: ${{ vars.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY || vars.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN || vars.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access keys)
+        if: steps.aws-auth.outputs.auth_mode == 'keys'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
+          aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
