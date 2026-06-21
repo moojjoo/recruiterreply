@@ -159,15 +159,7 @@ jobs:
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
-           set -euo pipefail
-           aws cloudfront create-invalidation \
-             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-             --paths '/*'l
-          if [[ -z "${CLOUDFRONT_DISTRIBUTION_ID:-}" ]]; then
-            echo "CLOUDFRONT_DISTRIBUTION_ID variable is required"
-            exit 1
-          fi
-
+          set -euo pipefail
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths '/*'
