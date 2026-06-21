@@ -25,11 +25,21 @@ spec:
             - configMapRef:
                 name: recruiterreply-backend-config
           env:
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: recruiterreply-backend-secrets
+                  key: ConnectionStrings__DefaultConnection
             - name: OpenAI__ApiKey
               valueFrom:
                 secretKeyRef:
                   name: recruiterreply-backend-secrets
                   key: OpenAI__ApiKey
+            - name: Jwt__Key
+              valueFrom:
+                secretKeyRef:
+                  name: recruiterreply-backend-secrets
+                  key: Jwt__Key
           resources:
             requests:
               cpu: "250m"

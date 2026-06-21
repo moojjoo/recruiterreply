@@ -123,7 +123,7 @@ Frontend
 
 Backend
 
-* ASP.NET Core
+* ASP.NET CORE 10
 
 Database
 

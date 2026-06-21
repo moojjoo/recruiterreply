@@ -1,11 +1,14 @@
 using RecruiterReply.Models;
 using RecruiterReply.Services;
+using RecruiterReply.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace RecruiterReply.Controllers;
 
 [ApiController]
 [Route("api")]
+[Authorize]
 public class AnalysisController : ControllerBase
 {
     private readonly IAnalysisService _analysisService;
@@ -22,7 +25,8 @@ public class AnalysisController : ControllerBase
     {
         try
         {
-            var result = await _analysisService.AnalyzeRecruiterMessageAsync(request);
+            var userId = User.GetRequiredUserId();
+            var result = await _analysisService.AnalyzeRecruiterMessageAsync(request, userId);
             return Ok(result);
         }
         catch (ArgumentException ex)

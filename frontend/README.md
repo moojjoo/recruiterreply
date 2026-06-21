@@ -14,11 +14,12 @@ Open: **http://localhost:5173**
 
 ## 📋 Prerequisites
 
-- Node.js 18+ ([download](https://nodejs.org))
+- Node.js 24+ ([download](https://nodejs.org))
+- npm 11.17.0+
 - Backend API running on http://localhost:5000
 - See [main README](../README.md) for full setup
 
-## 🏗️ Project Structure
+## 📁 Project Structure
 
 ```
 src/
@@ -241,7 +242,7 @@ npm run build
 ### Docker
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm install

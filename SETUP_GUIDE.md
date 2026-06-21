@@ -2,7 +2,7 @@
 
 ## 📦 What Was Created
 
-### Backend (ASP.NET Core 8)
+### Backend (ASP.NET CORE 10)
 
 **Project Files:**
 - `RecruiterReply.csproj` - Project configuration

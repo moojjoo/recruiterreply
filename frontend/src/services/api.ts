@@ -9,7 +9,8 @@ import {
 } from '../types/index';
 
 // API configuration - configurable via environment or defaults to relative path
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -20,10 +21,29 @@ const api = axios.create({
   timeout: 30000, // 30 second timeout
 });
 
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Error handler for all requests
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+
     // Enhance error messages
     if (error.response?.status === 500) {
       console.error('Server error:', error.response?.data);

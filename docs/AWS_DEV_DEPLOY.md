@@ -1,111 +1,284 @@
-# AWS DEV Deployment Setup (Webhook to EKS via GitHub Actions)
+# AWS Deployment Guide (Dev/Test/Prod on One EC2)
 
-This guide sets up automatic deployment to AWS DEV on EKS when you push to the dev branch.
+This setup matches the target architecture exactly:
 
-## What This Repo Includes
+1. Domain: recruiterreply.com
+2. Frontend:
+   1. dev.recruiterreply.com
+   2. test.recruiterreply.com
+   3. recruiterreply.com
+3. API:
+   1. api-dev.recruiterreply.com
+   2. api-test.recruiterreply.com
+   3. api.recruiterreply.com
+4. Infrastructure:
+   1. One EC2 instance (initially)
+   2. One PostgreSQL container
+   3. Three backend containers (dev/test/prod)
+   4. Three S3 buckets
+   5. Three CloudFront distributions
 
-- Workflow: .github/workflows/deploy-dev.yml
-- EKS bootstrap script: scripts/aws/bootstrap_dev.sh
-- GitHub OIDC role script: scripts/aws/create_github_oidc_role.sh
-- DEV manifests: infra/k8s/dev
+This is the lowest-cost AWS-first launch architecture with clean environment separation.
 
-The workflow does:
-1. Build frontend and backend images.
-2. Push images to ECR.
-3. Update kubeconfig for EKS.
-4. Sync backend OpenAI key from AWS Secrets Manager to Kubernetes Secret.
-5. Apply DEV manifests.
-6. Set deployment images to the commit SHA and wait for rollout.
+## 1) What Changed in This Repository
 
-## 1) Prerequisites
+The following files now implement this architecture:
 
-- AWS CLI installed and configured in WSL.
-- Existing EKS cluster for DEV.
-- AWS Load Balancer Controller installed on the cluster.
-- GitHub repo connected.
+1. .github/workflows/deploy-dev.yml
+2. .github/workflows/deploy-test.yml
+3. .github/workflows/deploy-prod.yml
+4. infra/aws/docker-compose.multi-env.yml
+5. infra/aws/.env.multi-env.example
+6. infra/aws/nginx-api-multi-env.conf
+7. infra/aws/postgres-init/01-create-databases.sql
 
-Verify AWS identity:
+## 2) High-Level Flow
 
-aws sts get-caller-identity
+For each environment (dev/test/prod):
 
-## 2) Bootstrap AWS DEV Base Resources
+1. GitHub Actions builds backend image and pushes to ECR
+2. GitHub Actions builds frontend and uploads to that environment's S3 bucket
+3. GitHub Actions invalidates that environment's CloudFront distribution
+4. GitHub Actions SSHes into EC2 and updates exactly one backend service image
+5. Nginx routes each API hostname to the correct local backend port
 
-Run:
+## 3) AWS Resources to Create
 
-chmod +x scripts/aws/bootstrap_dev.sh
-AWS_REGION=us-east-1 EKS_CLUSTER_NAME=recruiterreply-dev scripts/aws/bootstrap_dev.sh
+### 3.1 Networking and DNS
 
-This verifies or creates:
-- ECR repos for frontend and backend.
-- OpenAI secret placeholder in Secrets Manager.
-- EKS cluster existence.
+1. Hosted zone: recruiterreply.com in Route 53
+2. Records:
+   1. dev.recruiterreply.com -> CloudFront DEV
+   2. test.recruiterreply.com -> CloudFront TEST
+   3. recruiterreply.com -> CloudFront PROD
+   4. api-dev.recruiterreply.com -> EC2 public IP or EIP
+   5. api-test.recruiterreply.com -> EC2 public IP or EIP
+   6. api.recruiterreply.com -> EC2 public IP or EIP
 
-## 3) Create GitHub OIDC Role
+### 3.2 EC2
 
-Run:
+Recommended start:
 
-chmod +x scripts/aws/create_github_oidc_role.sh
-scripts/aws/create_github_oidc_role.sh moojjoo recruiterreply us-east-1 recruiterreply-github-actions-role
+1. Instance: t3.small (simplest image compatibility)
+2. OS: Ubuntu 24.04 LTS
+3. Volume: 30-60 GB gp3
+4. Security group inbound:
+   1. 22 from your IP only
+   2. 80 from 0.0.0.0/0
+   3. 443 from 0.0.0.0/0
+   4. No public 5432
 
-This script creates or updates:
-- GitHub OIDC provider in IAM.
-- IAM role trust policy for your repository.
-- IAM permissions for ECR push, EKS describe, and Secrets Manager read.
+Install packages:
 
-Important:
-- You must also grant this IAM role Kubernetes access in EKS.
-- For bootstrap, map it to cluster-admin, then reduce to least privilege RBAC later.
+```bash
+sudo apt update && sudo apt -y upgrade
+sudo apt -y install docker.io docker-compose-v2 nginx certbot python3-certbot-nginx awscli
+sudo systemctl enable docker
+sudo usermod -aG docker ubuntu
+```
 
-## 4) Configure GitHub Repository Secrets
+Log out and log back in once.
 
-In GitHub repo settings for Actions secrets, add:
+### 3.3 ECR
 
-- AWS_ROLE_TO_ASSUME
-- AWS_REGION
-- EKS_CLUSTER_NAME
-- OPENAI_SECRET_ID
+```bash
+AWS_REGION=us-east-1
+aws ecr create-repository --repository-name recruiterreply-backend --region "$AWS_REGION" || true
+```
 
-Example OPENAI_SECRET_ID value:
-recruiterreply/dev/openai-api-key
+### 3.4 Frontend Buckets and CloudFront
 
-## 5) Apply DEV Manifests Locally Once
+Create three S3 buckets:
 
-The workflow can apply these each run, but do an initial apply to validate:
+1. recruiterreply-dev-frontend-<unique>
+2. recruiterreply-test-frontend-<unique>
+3. recruiterreply-prod-frontend-<unique>
 
-aws eks update-kubeconfig --name recruiterreply-dev --region us-east-1
-kubectl apply -k infra/k8s/dev
+For each bucket:
 
-Create real backend secret before app traffic:
+1. Keep bucket private
+2. Attach CloudFront with Origin Access Control (OAC)
+3. SPA behavior:
+   1. default root object: index.html
+   2. 403 -> /index.html (200)
+   3. 404 -> /index.html (200)
 
-kubectl -n recruiterreply-dev create secret generic recruiterreply-backend-secrets \
-	--from-literal=OpenAI__ApiKey=YOUR_REAL_OPENAI_KEY \
-	--dry-run=client -o yaml | kubectl apply -f -
+### 3.5 Enable Origin Access Control (OAC)
 
-## 6) Trigger Webhook Deployment
+Do this for dev, test, and prod frontend distributions.
 
-The workflow triggers on push to dev.
+1. CloudFront -> Security -> Origin access -> Create control setting
+2. Select origin type S3 and signing behavior Sign requests (recommended)
+3. Open your CloudFront distribution -> Origins -> select the S3 origin -> Edit
+4. Set Origin access to Origin access control settings and choose the OAC you created
+5. Save distribution changes
+6. Keep S3 Block Public Access enabled for the bucket
+7. Add bucket policy allowing only that CloudFront distribution ARN as SourceArn
 
-git checkout -b dev
-git push -u origin dev
+Use this bucket policy shape (replace account id, distribution id, and bucket name):
 
-For future deploys:
+{
+   "Version": "2012-10-17",
+   "Statement": [
+      {
+         "Sid": "AllowCloudFrontServicePrincipalReadOnly",
+         "Effect": "Allow",
+         "Principal": {
+            "Service": "cloudfront.amazonaws.com"
+         },
+         "Action": "s3:GetObject",
+         "Resource": "arn:aws:s3:::your-bucket-name/*",
+         "Condition": {
+            "StringEquals": {
+               "AWS:SourceArn": "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+            }
+         }
+      }
+   ]
+}
 
-git add .
-git commit -m "Deploy change"
-git push origin dev
+Validation checklist:
 
-## 7) Verify Deployment
+1. S3 object URL returns AccessDenied (expected)
+2. CloudFront URL for same object returns 200
+3. Website domain (dev.recruiterreply.com, test.recruiterreply.com, recruiterreply.com) loads correctly
 
-- Check GitHub Actions run success.
-- Check workloads:
-	kubectl -n recruiterreply-dev get deploy,svc,ingress,pods
-- Check rollout:
-	kubectl -n recruiterreply-dev rollout status deployment/recruiterreply-frontend
-	kubectl -n recruiterreply-dev rollout status deployment/recruiterreply-backend
+## 4) EC2 Runtime Layout
 
-## 8) Troubleshooting
+On EC2:
 
-- If AWS auth fails in workflow: validate AWS_ROLE_TO_ASSUME trust policy and repo name.
-- If kubectl apply fails from CI: map the IAM role to EKS access entry and RBAC.
-- If image pull fails: confirm ECR repo names and pushed image tags.
-- If frontend loads but API fails: verify ingress and backend service path /api.
+```bash
+mkdir -p /home/ubuntu/recruiterreply
+cd /home/ubuntu/recruiterreply
+```
+
+Copy these files from repo into the same paths on EC2:
+
+1. infra/aws/docker-compose.multi-env.yml
+2. infra/aws/nginx-api-multi-env.conf
+3. infra/aws/postgres-init/01-create-databases.sql
+
+Create .env from template:
+
+```bash
+cp infra/aws/.env.multi-env.example .env
+chmod 600 .env
+```
+
+Edit .env values:
+
+1. POSTGRES_SUPERPASS
+2. OPENAI_API_KEY
+3. JWT_KEY_DEV
+4. JWT_KEY_TEST
+5. JWT_KEY_PROD
+6. BACKEND_IMAGE_DEV
+7. BACKEND_IMAGE_TEST
+8. BACKEND_IMAGE_PROD
+
+## 5) Start Containers on EC2
+
+```bash
+cd /home/ubuntu/recruiterreply
+docker compose -f infra/aws/docker-compose.multi-env.yml up -d postgres
+docker compose -f infra/aws/docker-compose.multi-env.yml up -d backend-dev backend-test backend-prod
+```
+
+Expected internal ports:
+
+1. backend-dev -> 127.0.0.1:5001
+2. backend-test -> 127.0.0.1:5002
+3. backend-prod -> 127.0.0.1:5003
+
+## 6) Configure Nginx for 3 API Hostnames
+
+```bash
+sudo cp /home/ubuntu/recruiterreply/infra/aws/nginx-api-multi-env.conf /etc/nginx/sites-available/recruiterreply-api
+sudo ln -sf /etc/nginx/sites-available/recruiterreply-api /etc/nginx/sites-enabled/recruiterreply-api
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Issue certificates:
+
+```bash
+sudo certbot --nginx -d api-dev.recruiterreply.com -d api-test.recruiterreply.com -d api.recruiterreply.com
+```
+
+## 7) GitHub Environments and Variables
+
+Create GitHub environments:
+
+1. dev
+2. test
+3. prod
+
+For each environment, set variables:
+
+1. AWS_REGION
+2. AWS_ROLE_TO_ASSUME (or access key variables)
+3. ECR_REPO_BACKEND (default recruiterreply-backend)
+4. S3_FRONTEND_BUCKET (environment-specific)
+5. CLOUDFRONT_DISTRIBUTION_ID (environment-specific)
+6. EC2_HOST
+7. EC2_USER (usually ubuntu)
+8. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
+9. BACKEND_DOCKER_PLATFORM (linux/amd64 unless you do multi-arch)
+
+Secrets required per environment:
+
+1. EC2_SSH_PRIVATE_KEY
+
+Note: API/OpenAI/JWT/DB runtime secrets are read on EC2 from /home/ubuntu/recruiterreply/.env.
+
+## 8) Branch to Environment Mapping
+
+Current workflow triggers:
+
+1. dev branch -> deploy-dev.yml -> dev environment
+2. test branch -> deploy-test.yml -> test environment
+3. main branch -> deploy-prod.yml -> prod environment
+
+## 9) First Deployment Checklist
+
+1. Create AWS resources (EC2, ECR, 3x S3, 3x CloudFront, DNS)
+2. Configure EC2 runtime files and .env
+3. Start postgres + 3 backend containers once
+4. Configure Nginx and TLS certs
+5. Configure GitHub environments/variables/secrets
+6. Push to dev branch and verify:
+   1. https://dev.recruiterreply.com
+   2. https://api-dev.recruiterreply.com
+7. Repeat for test and prod
+
+## 10) Backups and Safety
+
+You are running one PostgreSQL container for all environments. Do these immediately:
+
+1. Nightly pg_dump backup to S3
+2. 14-30 day retention policy
+3. Monthly restore test into temporary DB
+
+Minimal backup example:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+TS=$(date +%Y%m%d-%H%M%S)
+OUT="/tmp/recruiterreply_${TS}.sql.gz"
+
+docker exec recruiterreply-postgres pg_dumpall -U postgres | gzip > "$OUT"
+aws s3 cp "$OUT" "s3://your-backup-bucket/postgres/"
+rm -f "$OUT"
+```
+
+## 11) Cost and Upgrade Path
+
+This is cost-optimized for launch. As traffic grows:
+
+1. Move prod backend to separate EC2 first
+2. Move Postgres to RDS next
+3. Keep frontend on S3 + CloudFront
+
+That progression keeps cost controlled while reducing operational risk.

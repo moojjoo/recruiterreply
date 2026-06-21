@@ -80,4 +80,18 @@ backend/artifacts/
 # -----------------------------
 !docs/**
 !frontend/package-lock.json
-!backend/RecruiterReply.csprojgit branch --set-upstream-to=origin/dev dev
+!backend/RecruiterReply.csproj
+
+# -----------------------------
+# Terraform local artifacts
+# -----------------------------
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

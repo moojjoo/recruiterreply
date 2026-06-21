@@ -1,5 +1,6 @@
 import React, { createContext, useState, useCallback, useEffect } from "react";
 import { User } from "../types/index";
+import { authService } from "../services/api/authService";
 
 export interface AuthContextType {
   user: User | null;
@@ -26,15 +27,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const token = localStorage.getItem("authToken");
         if (token) {
-          // Verify token is still valid
-          // For MVP, we'll just assume it's valid if it exists
-          const userData = localStorage.getItem("userData");
-          if (userData) {
-            setUser(JSON.parse(userData));
-          }
+          const response = await authService.getCurrentUser();
+          const currentUser = response.data;
+          setUser(currentUser);
+          localStorage.setItem("userData", JSON.stringify(currentUser));
         }
       } catch (error) {
         console.error("Auth check failed:", error);
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("userData");
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -43,19 +45,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     checkAuth();
   }, []);
 
-  const login = useCallback(async (email: string, _password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // MVP: Mock authentication
-      const mockUser: User = {
-        id: "1",
-        email,
-        name: email.split("@")[0],
-        createdAt: new Date(),
-      };
-      setUser(mockUser);
-      localStorage.setItem("authToken", "mock-token-" + Date.now());
-      localStorage.setItem("userData", JSON.stringify(mockUser));
+      const response = await authService.login(email, password);
+      const payload = response.data;
+      setUser(payload.user);
+      localStorage.setItem("authToken", payload.token);
+      localStorage.setItem("userData", JSON.stringify(payload.user));
     } catch (error) {
       throw new Error("Login failed");
     } finally {
@@ -64,19 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const register = useCallback(
-    async (email: string, _password: string, name: string) => {
+    async (email: string, password: string, name: string) => {
       setIsLoading(true);
       try {
-        // MVP: Mock registration
-        const mockUser: User = {
-          id: "1",
-          email,
-          name,
-          createdAt: new Date(),
-        };
-        setUser(mockUser);
-        localStorage.setItem("authToken", "mock-token-" + Date.now());
-        localStorage.setItem("userData", JSON.stringify(mockUser));
+        const response = await authService.register(email, password, name);
+        const payload = response.data;
+        setUser(payload.user);
+        localStorage.setItem("authToken", payload.token);
+        localStorage.setItem("userData", JSON.stringify(payload.user));
       } catch (error) {
         throw new Error("Registration failed");
       } finally {

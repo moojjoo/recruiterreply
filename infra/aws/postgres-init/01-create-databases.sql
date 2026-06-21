@@ -1,0 +1,3 @@
+CREATE DATABASE recruiterreply_dev;
+CREATE DATABASE recruiterreply_test;
+CREATE DATABASE recruiterreply_prod;

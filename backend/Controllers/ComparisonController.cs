@@ -1,11 +1,14 @@
 using RecruiterReply.Models;
 using RecruiterReply.Services;
+using RecruiterReply.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace RecruiterReply.Controllers;
 
 [ApiController]
 [Route("api")]
+[Authorize]
 public class ComparisonController : ControllerBase
 {
     private readonly IComparisonService _comparisonService;
@@ -22,7 +25,8 @@ public class ComparisonController : ControllerBase
     {
         try
         {
-            var result = await _comparisonService.CompareOffersAsync(request);
+            var userId = User.GetRequiredUserId();
+            var result = await _comparisonService.CompareOffersAsync(request, userId);
             return Ok(result);
         }
         catch (ArgumentException ex)
