@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: recruiterreply-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERPASS}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./infra/aws/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    networks:
+      - recruiterreply
+
+  backend-dev:
+    image: ${BACKEND_IMAGE_DEV}
+    container_name: recruiterreply-backend-dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:5000
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      Jwt__Key: ${JWT_KEY_DEV}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
+    ports:
+      - "127.0.0.1:5001:5000"
+    networks:
+      - recruiterreply
+
+  backend-test:
+    image: ${BACKEND_IMAGE_TEST}
+    container_name: recruiterreply-backend-test
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      ASPNETCORE_URLS: http://0.0.0.0:5000
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      Jwt__Key: ${JWT_KEY_TEST}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_test;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
+    ports:
+      - "127.0.0.1:5002:5000"
+    networks:
+      - recruiterreply
+
+  backend-prod:
+    image: ${BACKEND_IMAGE_PROD}
+    container_name: recruiterreply-backend-prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:5000
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      Jwt__Key: ${JWT_KEY_PROD}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_prod;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
+    ports:
+      - "127.0.0.1:5003:5000"
+    networks:
+      - recruiterreply
+
+networks:
+  recruiterreply:
+    name: recruiterreply

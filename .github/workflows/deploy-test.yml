@@ -1,8 +1,8 @@
-name: Deploy Dev (EC2 + S3)
+name: Deploy Test (EC2 + S3)
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["test"]
   workflow_dispatch:
 
 permissions:
@@ -10,11 +10,11 @@ permissions:
   contents: read
 
 env:
-  DEPLOY_ENV: dev
-  BACKEND_SERVICE: backend-dev
-  BACKEND_IMAGE_VAR: BACKEND_IMAGE_DEV
-  BACKEND_IMAGE_TAG: dev-latest
-  FRONTEND_API_BASE_URL: https://api-dev.recruiterreply.com
+  DEPLOY_ENV: test
+  BACKEND_SERVICE: backend-test
+  BACKEND_IMAGE_VAR: BACKEND_IMAGE_TEST
+  BACKEND_IMAGE_TAG: test-latest
+  FRONTEND_API_BASE_URL: https://api-test.recruiterreply.com
   ECR_REPO_BACKEND: ${{ vars.ECR_REPO_BACKEND || 'recruiterreply-backend' }}
   BACKEND_DOCKER_PLATFORM: ${{ vars.BACKEND_DOCKER_PLATFORM || 'linux/amd64' }}
   EC2_DEPLOY_PATH: ${{ vars.EC2_DEPLOY_PATH || '/home/ubuntu/recruiterreply' }}
@@ -23,7 +23,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: test
 
     steps:
       - name: Checkout
@@ -54,18 +54,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-${SECRET_ALIAS_FROM_SECRETS:-${SECRET_ALIAS_FROM_VARS:-}}}}"
           AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
 
-          ROLE_SET=false
-          ACCESS_KEY_SET=false
-          SECRET_KEY_SET=false
-          SESSION_TOKEN_SET=false
-
-          if [[ -n "$ROLE_TO_ASSUME" ]]; then ROLE_SET=true; fi
-          if [[ -n "$AWS_ACCESS_KEY_ID_VAL" ]]; then ACCESS_KEY_SET=true; fi
-          if [[ -n "$AWS_SECRET_ACCESS_KEY_VAL" ]]; then SECRET_KEY_SET=true; fi
-          if [[ -n "$AWS_SESSION_TOKEN_VAL" ]]; then SESSION_TOKEN_SET=true; fi
-
-          echo "AWS auth input presence: role=$ROLE_SET access_key_id=$ACCESS_KEY_SET secret_access_key=$SECRET_KEY_SET session_token=$SESSION_TOKEN_SET"
-
           if [[ -n "$ROLE_TO_ASSUME" ]]; then
             echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
             echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
@@ -82,8 +70,7 @@ jobs:
             exit 0
           fi
 
-          echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME (vars/secrets) or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets)."
-          echo "::error::Checked aliases too: AWS_ROLE_ARN, AWS_ACCESS_KEY, AWS_SECRET_KEY."
+          echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY."
           exit 1
 
       - name: Configure AWS credentials (OIDC role)
@@ -234,5 +221,5 @@ jobs:
         run: |
           echo "Environment: $DEPLOY_ENV"
           echo "Deployed commit: ${{ github.sha }}"
-          echo "Frontend URL: https://dev.recruiterreply.com"
-          echo "API URL: https://api-dev.recruiterreply.com"
+          echo "Frontend URL: https://test.recruiterreply.com"
+          echo "API URL: https://api-test.recruiterreply.com"
