@@ -18,10 +18,11 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ vars.DEPLOY_ENVIRONMENT || 'dev' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Resolve AWS auth inputs
         id: aws-auth
@@ -42,6 +43,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-}}"
           AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
 
+          ROLE_SET=false
+          ACCESS_KEY_SET=false
+          SECRET_KEY_SET=false
+          SESSION_TOKEN_SET=false
+
+          if [[ -n "$ROLE_TO_ASSUME" ]]; then ROLE_SET=true; fi
+          if [[ -n "$AWS_ACCESS_KEY_ID_VAL" ]]; then ACCESS_KEY_SET=true; fi
+          if [[ -n "$AWS_SECRET_ACCESS_KEY_VAL" ]]; then SECRET_KEY_SET=true; fi
+          if [[ -n "$AWS_SESSION_TOKEN_VAL" ]]; then SESSION_TOKEN_SET=true; fi
+
+          echo "AWS auth input presence: role=$ROLE_SET access_key_id=$ACCESS_KEY_SET secret_access_key=$SECRET_KEY_SET session_token=$SESSION_TOKEN_SET"
+
           if [[ -n "$ROLE_TO_ASSUME" ]]; then
             echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
             echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
@@ -58,7 +71,8 @@ jobs:
             exit 0
           fi
 
-          echo "Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME (vars/secrets) or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets)."
+          echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME (vars/secrets) or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets)."
+          echo "::error::If you configured Environment-level values, ensure DEPLOY_ENVIRONMENT points to that environment name (current: ${DEPLOY_ENVIRONMENT:-dev})."
           exit 1
 
       - name: Configure AWS credentials (OIDC role)
