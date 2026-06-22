@@ -33,6 +33,11 @@ public class ComparisonController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "OpenAI operation failed in CompareOffers");
+            return StatusCode(502, new { error = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in CompareOffers");

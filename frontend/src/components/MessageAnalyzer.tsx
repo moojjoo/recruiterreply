@@ -31,10 +31,11 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
       });
       onResult(result);
     } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          "Failed to analyze message. Check your OpenAI API key.",
-      );
+      const errorMessage =
+        err?.response?.data?.error ||
+        (err instanceof Error ? err.message : null) ||
+        "Failed to analyze message. Please check backend configuration.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

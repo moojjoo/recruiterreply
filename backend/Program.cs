@@ -66,6 +66,11 @@ builder.Services.AddDbContext<RecruiterReplyDbContext>(options =>
 var openAiKey = builder.Configuration["OpenAI:ApiKey"];
 if (string.IsNullOrWhiteSpace(openAiKey) || openAiKey == "sk-proj-YOUR_KEY_HERE")
 {
+    // Support common single-var naming in local shells and CI.
+    openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+}
+if (string.IsNullOrWhiteSpace(openAiKey))
+{
     openAiKey = "sk-proj-NOT_CONFIGURED";
 }
 builder.Services.AddSingleton<IOpenAIService>(sp =>
@@ -137,8 +142,15 @@ app.MapGet("/health/db", async (RecruiterReplyDbContext db, CancellationToken ct
 
 app.MapGet("/health/apis", () =>
 {
-    var hasOpenAiKey = !string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"])
-        && builder.Configuration["OpenAI:ApiKey"] != "sk-proj-YOUR_KEY_HERE";
+    var configuredOpenAiKey = builder.Configuration["OpenAI:ApiKey"];
+    if (string.IsNullOrWhiteSpace(configuredOpenAiKey) || configuredOpenAiKey == "sk-proj-YOUR_KEY_HERE")
+    {
+        configuredOpenAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+    }
+
+    var hasOpenAiKey = !string.IsNullOrWhiteSpace(configuredOpenAiKey)
+        && configuredOpenAiKey != "sk-proj-YOUR_KEY_HERE"
+        && configuredOpenAiKey != "sk-proj-NOT_CONFIGURED";
 
     return Results.Ok(new
     {

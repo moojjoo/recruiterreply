@@ -33,6 +33,11 @@ public class AnalysisController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "OpenAI operation failed in AnalyzeRecruiterMessage");
+            return StatusCode(502, new { error = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in AnalyzeRecruiterMessage");

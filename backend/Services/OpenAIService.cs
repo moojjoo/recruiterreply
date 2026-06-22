@@ -9,6 +9,7 @@ public class OpenAIService : IOpenAIService
     private readonly string _apiKey;
     private readonly ILogger<OpenAIService> _logger;
     private readonly HttpClient _httpClient;
+    private readonly bool _isConfigured;
     private const string OpenAIBaseUrl = "https://api.openai.com/v1";
     private const string Model = "gpt-4-turbo";
 
@@ -18,6 +19,7 @@ public class OpenAIService : IOpenAIService
             throw new ArgumentException("OpenAI API key cannot be empty", nameof(apiKey));
         
         _apiKey = apiKey;
+        _isConfigured = _apiKey != "sk-proj-NOT_CONFIGURED" && _apiKey != "sk-proj-YOUR_KEY_HERE";
         _logger = logger;
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
@@ -82,6 +84,11 @@ public class OpenAIService : IOpenAIService
 
     private async Task<string> CallOpenAIAsync(string prompt)
     {
+        if (!_isConfigured)
+        {
+            throw new InvalidOperationException("OpenAI API key is not configured. Set OpenAI:ApiKey or OPENAI_API_KEY and restart the backend.");
+        }
+
         var request = new OpenAIChatRequest
         {
             Model = Model,
@@ -94,11 +101,39 @@ public class OpenAIService : IOpenAIService
         };
 
         var response = await _httpClient.PostAsJsonAsync($"{OpenAIBaseUrl}/chat/completions", request);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            _logger.LogError("OpenAI request failed with status {StatusCode}: {ErrorBody}", (int)response.StatusCode, errorBody);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw new InvalidOperationException("OpenAI authentication failed. Verify your API key and project access.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                throw new InvalidOperationException("OpenAI rate limit or quota exceeded. Check usage and billing, then retry.");
+            }
+
+            if ((int)response.StatusCode == 400 && errorBody.Contains("model", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"OpenAI model '{Model}' is unavailable for this key/project.");
+            }
+
+            throw new InvalidOperationException("OpenAI request failed. Check API key, model access, and billing status.");
+        }
         
         var content = await response.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<OpenAIChatResponse>(content);
-        return result?.Choices[0].Message.Content ?? throw new InvalidOperationException("Empty response from OpenAI");
+
+        if (result?.Choices is null || result.Choices.Length == 0 || string.IsNullOrWhiteSpace(result.Choices[0].Message.Content))
+        {
+            throw new InvalidOperationException("OpenAI returned an empty response.");
+        }
+
+        return result.Choices[0].Message.Content;
     }
 
     private static string BuildAnalysisPrompt(string message, string? companyName, string? jobTitle)
