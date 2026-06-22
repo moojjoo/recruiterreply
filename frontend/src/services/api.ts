@@ -93,10 +93,10 @@ function handleApiError(error: any): Error {
     return new Error(error.response.data.error);
   }
   if (error.code === 'ECONNABORTED') {
-    return new Error('Request timeout. Is the backend running on port 5000?');
+    return new Error('Request timeout. Is the backend running on port 5002?');
   }
   if (!error.response) {
-    return new Error('Cannot connect to backend. Make sure it\'s running on http://localhost:5000');
+    return new Error('Cannot connect to backend. Make sure it\'s running on http://localhost:5002');
   }
   return error;
 }

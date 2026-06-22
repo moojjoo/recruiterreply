@@ -27,7 +27,11 @@ export const RegisterForm: React.FC = () => {
       showToast("Account created successfully!", "success");
       window.location.href = "/dashboard";
     } catch (error) {
-      showToast("Registration failed. Please try again.", "error");
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Registration failed. Please try again.";
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }

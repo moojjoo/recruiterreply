@@ -1,0 +1,36 @@
+     tablename     |             indexname              
+-------------------+------------------------------------
+ audit_logs        | audit_logs_pkey
+ audit_logs        | idx_audit_logs_created_at
+ audit_logs        | idx_audit_logs_user_created
+ audit_logs        | idx_audit_logs_user_id
+ comparison_items  | comparison_items_pkey
+ comparison_items  | idx_comparison_items_comparison
+ comparison_items  | idx_comparison_items_comparison_id
+ generated_replies | generated_replies_pkey
+ generated_replies | idx_generated_replies_analysis_id
+ generated_replies | idx_generated_replies_user_id
+ message_analyses  | idx_analyses_user_id_created
+ message_analyses  | idx_message_analyses_message_id
+ message_analyses  | idx_message_analyses_user_id
+ message_analyses  | message_analyses_pkey
+ messages          | idx_messages_created_at
+ messages          | idx_messages_user_id
+ messages          | idx_messages_user_id_created
+ messages          | messages_pkey
+ offer_comparisons | idx_offer_comparisons_user_id
+ offer_comparisons | offer_comparisons_pkey
+ opportunities     | idx_opportunities_created_at
+ opportunities     | idx_opportunities_status
+ opportunities     | idx_opportunities_user_id
+ opportunities     | idx_opportunities_user_status
+ opportunities     | opportunities_pkey
+ refresh_tokens    | idx_refresh_tokens_expires_at
+ refresh_tokens    | idx_refresh_tokens_user_id
+ refresh_tokens    | refresh_tokens_pkey
+ refresh_tokens    | refresh_tokens_token_hash_key
+ users             | idx_users_email
+ users             | users_email_key
+ users             | users_pkey
+(32 rows)
+
