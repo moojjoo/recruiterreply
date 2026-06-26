@@ -192,6 +192,12 @@ jobs:
             exit 1
           fi
 
+          ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
+          if [[ -z "${ECR_PASSWORD:-}" ]]; then
+            echo "Failed to get ECR login password from AWS on runner"
+            exit 1
+          fi
+
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
           ssh "$EC2_USER@$EC2_HOST" bash -s -- \
@@ -200,7 +206,8 @@ jobs:
             "$BACKEND_IMAGE" \
             "$BACKEND_SERVICE" \
             "$AWS_REGION" \
-            "$ECR_REGISTRY" << 'EOF'
+            "$ECR_REGISTRY" \
+            "$ECR_PASSWORD" << 'EOF'
           set -euo pipefail
 
           DEPLOY_PATH="$1"
@@ -209,10 +216,21 @@ jobs:
           BACKEND_SERVICE="$4"
           AWS_REGION="$5"
           ECR_REGISTRY="$6"
+          ECR_PASSWORD="$7"
+
+          if [[ ! -d "$DEPLOY_PATH" ]]; then
+            echo "Deploy path does not exist: $DEPLOY_PATH"
+            exit 1
+          fi
 
           cd "$DEPLOY_PATH"
 
-          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          if [[ ! -f infra/aws/docker-compose.multi-env.yml ]]; then
+            echo "Missing compose file: $DEPLOY_PATH/infra/aws/docker-compose.multi-env.yml"
+            exit 1
+          fi
+
+          printf '%s\n' "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
           touch .env
           if grep -q "^${IMAGE_VAR}=" .env; then
