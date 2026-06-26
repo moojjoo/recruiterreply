@@ -36,10 +36,10 @@ The following files now implement this architecture:
 
 For each environment (dev/test/prod):
 
-1. GitHub Actions builds backend image and pushes to ECR
+1. GitHub Actions builds backend image locally and transfers it to EC2 over SSH
 2. GitHub Actions builds frontend and uploads to that environment's S3 bucket
 3. GitHub Actions invalidates that environment's CloudFront distribution
-4. GitHub Actions SSHes into EC2 and updates exactly one backend service image
+4. GitHub Actions SSHes into EC2, loads the transferred image, and updates exactly one backend service
 5. Nginx routes each API hostname to the correct local backend port
 
 ## 3) AWS Resources to Create
@@ -79,12 +79,16 @@ sudo usermod -aG docker ubuntu
 
 Log out and log back in once.
 
-### 3.3 ECR
+### 3.3 Backend Image Delivery (No ECR)
 
-```bash
-AWS_REGION=us-east-1
-aws ecr create-repository --repository-name recruiterreply-backend --region "$AWS_REGION" || true
-```
+Backend images are not pushed to any registry.
+
+Per deployment run:
+
+1. GitHub Actions builds backend image from `./backend`
+2. GitHub Actions exports the image as a tar.gz archive
+3. GitHub Actions copies the archive to EC2 via SSH/SCP
+4. EC2 runs `docker load` and restarts only the target backend service
 
 ### 3.4 Frontend Buckets and CloudFront
 
@@ -172,17 +176,18 @@ Edit .env values:
 3. JWT_KEY_DEV
 4. JWT_KEY_TEST
 5. JWT_KEY_PROD
-6. BACKEND_IMAGE_DEV
-7. BACKEND_IMAGE_TEST
-8. BACKEND_IMAGE_PROD
+6. BACKEND_IMAGE_DEV (bootstrap local tag, workflow updates this automatically)
+7. BACKEND_IMAGE_TEST (bootstrap local tag, workflow updates this automatically)
+8. BACKEND_IMAGE_PROD (bootstrap local tag, workflow updates this automatically)
 
 ## 5) Start Containers on EC2
 
 ```bash
 cd /home/ubuntu/recruiterreply
 docker compose -f infra/aws/docker-compose.multi-env.yml up -d postgres
-docker compose -f infra/aws/docker-compose.multi-env.yml up -d backend-dev backend-test backend-prod
 ```
+
+Backends are started by GitHub Actions deploy workflows (dev/test/prod), which load and set the correct image tag per environment.
 
 Expected internal ports:
 
@@ -217,13 +222,11 @@ For each environment, set variables:
 
 1. AWS_REGION
 2. AWS_ROLE_TO_ASSUME (or access key variables)
-3. ECR_REPO_BACKEND (default recruiterreply-backend)
-4. S3_FRONTEND_BUCKET (environment-specific)
-5. CLOUDFRONT_DISTRIBUTION_ID (environment-specific)
-6. EC2_HOST
-7. EC2_USER (usually ubuntu)
-8. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
-9. BACKEND_DOCKER_PLATFORM (linux/amd64 unless you do multi-arch)
+3. S3_FRONTEND_BUCKET (environment-specific)
+4. CLOUDFRONT_DISTRIBUTION_ID (environment-specific)
+5. EC2_HOST
+6. EC2_USER (usually ubuntu)
+7. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
 
 Secrets required per environment:
 
@@ -241,9 +244,9 @@ Current workflow triggers:
 
 ## 9) First Deployment Checklist
 
-1. Create AWS resources (EC2, ECR, 3x S3, 3x CloudFront, DNS)
+1. Create AWS resources (EC2, 3x S3, 3x CloudFront, DNS)
 2. Configure EC2 runtime files and .env
-3. Start postgres + 3 backend containers once
+3. Start postgres container once
 4. Configure Nginx and TLS certs
 5. Configure GitHub environments/variables/secrets
 6. Push to dev branch and verify:

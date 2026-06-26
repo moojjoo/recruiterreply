@@ -13,10 +13,8 @@ env:
   DEPLOY_ENV: test
   BACKEND_SERVICE: backend-test
   BACKEND_IMAGE_VAR: BACKEND_IMAGE_TEST
-  BACKEND_IMAGE_TAG: test-latest
+  BACKEND_IMAGE_NAME: recruiterreply-backend
   FRONTEND_API_BASE_URL: https://api-test.recruiterreply.com
-  ECR_REPO_BACKEND: ${{ vars.ECR_REPO_BACKEND || 'recruiterreply-backend' }}
-  BACKEND_DOCKER_PLATFORM: ${{ vars.BACKEND_DOCKER_PLATFORM || 'linux/amd64' }}
   EC2_DEPLOY_PATH: ${{ vars.EC2_DEPLOY_PATH || '/home/ubuntu/recruiterreply' }}
   AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}
 
@@ -89,31 +87,13 @@ jobs:
           aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push backend image
+      - name: Build backend image
         id: build-backend
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          IMAGE_URI_SHA="$REGISTRY/$ECR_REPO_BACKEND:$IMAGE_SHA"
-          IMAGE_URI_LATEST="$REGISTRY/$ECR_REPO_BACKEND:$BACKEND_IMAGE_TAG"
-
-          docker buildx build \
-            --platform "$BACKEND_DOCKER_PLATFORM" \
-            --push \
-            -t "$IMAGE_URI_SHA" \
-            -t "$IMAGE_URI_LATEST" \
-            ./backend
-
-          echo "backend_image=$IMAGE_URI_SHA" >> "$GITHUB_OUTPUT"
+          BACKEND_IMAGE="$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
+          docker build -t "$BACKEND_IMAGE" ./backend
+          echo "backend_image=$BACKEND_IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -175,7 +155,6 @@ jobs:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
           BACKEND_IMAGE: ${{ steps.build-backend.outputs.backend_image }}
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           set -euo pipefail
           if [[ -z "${EC2_HOST:-}" ]]; then
@@ -183,31 +162,23 @@ jobs:
             exit 1
           fi
 
-          ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
-          if [[ -z "${ECR_PASSWORD:-}" ]]; then
-            echo "Failed to get ECR login password from AWS on runner"
-            exit 1
-          fi
+          IMAGE_ARCHIVE="/tmp/${BACKEND_SERVICE}-${GITHUB_SHA}.tar.gz"
+          docker save "$BACKEND_IMAGE" | gzip > "$IMAGE_ARCHIVE"
 
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          scp "$IMAGE_ARCHIVE" "$EC2_USER@$EC2_HOST:/tmp/backend-image.tar.gz"
 
           ssh "$EC2_USER@$EC2_HOST" bash -s -- \
             "$EC2_DEPLOY_PATH" \
             "$BACKEND_IMAGE_VAR" \
             "$BACKEND_IMAGE" \
-            "$BACKEND_SERVICE" \
-            "$AWS_REGION" \
-            "$ECR_REGISTRY" \
-            "$ECR_PASSWORD" << 'EOF'
+            "$BACKEND_SERVICE" << 'EOF'
           set -euo pipefail
 
           DEPLOY_PATH="$1"
           IMAGE_VAR="$2"
           BACKEND_IMAGE="$3"
           BACKEND_SERVICE="$4"
-          AWS_REGION="$5"
-          ECR_REGISTRY="$6"
-          ECR_PASSWORD="$7"
 
           if [[ ! -d "$DEPLOY_PATH" ]]; then
             echo "Deploy path does not exist: $DEPLOY_PATH"
@@ -221,7 +192,8 @@ jobs:
             exit 1
           fi
 
-          printf '%s\n' "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          gunzip -c /tmp/backend-image.tar.gz | docker load
+          rm -f /tmp/backend-image.tar.gz
 
           touch .env
           if grep -q "^${IMAGE_VAR}=" .env; then
@@ -230,10 +202,11 @@ jobs:
             echo "${IMAGE_VAR}=${BACKEND_IMAGE}" >> .env
           fi
 
-          docker compose -f infra/aws/docker-compose.multi-env.yml pull "$BACKEND_SERVICE"
           docker compose -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
           docker image prune -f
           EOF
+
+          rm -f "$IMAGE_ARCHIVE"
 
       - name: Deployment summary
         run: |
