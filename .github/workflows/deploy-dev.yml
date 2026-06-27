@@ -289,12 +289,21 @@ jobs:
           gunzip -c /tmp/backend-image.tar.gz | sudo docker load
           rm -f /tmp/backend-image.tar.gz
 
-          touch .env
-          if grep -q "^${IMAGE_VAR}=" .env; then
-            sed -i "s|^${IMAGE_VAR}=.*|${IMAGE_VAR}=${BACKEND_IMAGE}|" .env
+          sudo touch .env
+          sudo chmod 600 .env
+          if sudo grep -q "^${IMAGE_VAR}=" .env; then
+            sudo sed -i "s|^${IMAGE_VAR}=.*|${IMAGE_VAR}=${BACKEND_IMAGE}|" .env
           else
-            echo "${IMAGE_VAR}=${BACKEND_IMAGE}" >> .env
+            echo "${IMAGE_VAR}=${BACKEND_IMAGE}" | sudo tee -a .env >/dev/null
           fi
+
+          if ! sudo grep -q "^${IMAGE_VAR}=${BACKEND_IMAGE}$" .env; then
+            echo "Failed to set ${IMAGE_VAR} in $DEPLOY_PATH/.env"
+            exit 1
+          fi
+
+          echo "Resolved ${IMAGE_VAR} in .env:"
+          sudo grep "^${IMAGE_VAR}=" .env
 
           sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
           sudo docker image prune -f
