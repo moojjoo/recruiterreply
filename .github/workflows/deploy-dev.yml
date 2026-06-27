@@ -241,8 +241,15 @@ jobs:
 
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
+          # Ensure docker exists on EC2 before attempting streamed image load.
+          ssh "$EC2_USER@$EC2_HOST" 'if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi'
+
           # Stream image directly to EC2 to avoid temp-file/scp failures.
-          STREAM_LOAD_OUTPUT=$(docker save "$BACKEND_IMAGE" | gzip | ssh "$EC2_USER@$EC2_HOST" 'gunzip | sudo docker load' 2>&1)
+          if ! STREAM_LOAD_OUTPUT=$(docker save "$BACKEND_IMAGE" | gzip | ssh "$EC2_USER@$EC2_HOST" 'gunzip | sudo docker load' 2>&1); then
+            echo "$STREAM_LOAD_OUTPUT"
+            echo "Streamed docker load failed for image: $BACKEND_IMAGE"
+            exit 1
+          fi
           echo "$STREAM_LOAD_OUTPUT"
           LOADED_IMAGE_REF=$(printf '%s\n' "$STREAM_LOAD_OUTPUT" | sed -n 's/^Loaded image: //p' | tail -1)
 
