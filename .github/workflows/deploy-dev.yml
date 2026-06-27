@@ -286,8 +286,23 @@ jobs:
             exit 1
           fi
 
-          gunzip -c /tmp/backend-image.tar.gz | sudo docker load
+          LOAD_OUTPUT=$(gunzip -c /tmp/backend-image.tar.gz | sudo docker load)
+          echo "$LOAD_OUTPUT"
           rm -f /tmp/backend-image.tar.gz
+
+          if ! sudo docker image inspect "$BACKEND_IMAGE" >/dev/null 2>&1; then
+            LOADED_REF=$(printf '%s\n' "$LOAD_OUTPUT" | sed -n 's/^Loaded image: //p' | tail -1)
+            if [[ -n "$LOADED_REF" ]]; then
+              echo "Retagging loaded image '$LOADED_REF' as '$BACKEND_IMAGE'"
+              sudo docker tag "$LOADED_REF" "$BACKEND_IMAGE"
+            fi
+          fi
+
+          if ! sudo docker image inspect "$BACKEND_IMAGE" >/dev/null 2>&1; then
+            echo "Loaded image tag not found after docker load: $BACKEND_IMAGE"
+            sudo docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}' | sed -n '1,40p'
+            exit 1
+          fi
 
           sudo touch .env
           sudo chmod 600 .env
