@@ -256,12 +256,12 @@ jobs:
             sudo systemctl enable --now docker
           fi
 
-          if ! docker compose version >/dev/null 2>&1; then
+          if ! sudo docker compose version >/dev/null 2>&1; then
             echo "docker compose plugin missing after install"
             exit 1
           fi
 
-          gunzip -c /tmp/backend-image.tar.gz | docker load
+          gunzip -c /tmp/backend-image.tar.gz | sudo docker load
           rm -f /tmp/backend-image.tar.gz
 
           touch .env
@@ -271,8 +271,8 @@ jobs:
             echo "${IMAGE_VAR}=${BACKEND_IMAGE}" >> .env
           fi
 
-          docker compose -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
-          docker image prune -f
+          sudo docker compose -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
+          sudo docker image prune -f
           EOF
 
           rm -f "$IMAGE_ARCHIVE"
