@@ -245,9 +245,15 @@ jobs:
           ssh "$EC2_USER@$EC2_HOST" 'if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi'
 
           # Stream image directly to EC2 to avoid temp-file/scp failures.
-          if ! STREAM_LOAD_OUTPUT=$(docker save "$BACKEND_IMAGE" | gzip | ssh "$EC2_USER@$EC2_HOST" 'gunzip | sudo docker load' 2>&1); then
+          set +e
+          STREAM_LOAD_OUTPUT=$({
+            docker save "$BACKEND_IMAGE" | gzip | ssh "$EC2_USER@$EC2_HOST" 'gunzip | sudo docker load'
+          } 2>&1)
+          STREAM_LOAD_STATUS=$?
+          set -e
+          if [[ "$STREAM_LOAD_STATUS" -ne 0 ]]; then
             echo "$STREAM_LOAD_OUTPUT"
-            echo "Streamed docker load failed for image: $BACKEND_IMAGE"
+            echo "Streamed docker load failed for image: $BACKEND_IMAGE (exit=$STREAM_LOAD_STATUS)"
             exit 1
           fi
           echo "$STREAM_LOAD_OUTPUT"
@@ -260,6 +266,7 @@ jobs:
             "$BACKEND_SERVICE" \
             "$LOADED_IMAGE_REF" << 'EOF'
           set -euo pipefail
+          set -x
 
           DEPLOY_PATH="$1"
           IMAGE_VAR="$2"
