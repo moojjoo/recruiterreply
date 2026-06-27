@@ -261,6 +261,11 @@ jobs:
             exit 1
           fi
 
+          if [[ ! -f .env ]]; then
+            echo "Missing env file: $DEPLOY_PATH/.env"
+            exit 1
+          fi
+
           gunzip -c /tmp/backend-image.tar.gz | sudo docker load
           rm -f /tmp/backend-image.tar.gz
 
@@ -271,7 +276,7 @@ jobs:
             echo "${IMAGE_VAR}=${BACKEND_IMAGE}" >> .env
           fi
 
-          sudo docker compose -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
+          sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
           sudo docker image prune -f
           EOF
 
