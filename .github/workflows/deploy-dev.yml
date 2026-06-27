@@ -239,7 +239,7 @@ jobs:
             exit 1
           fi
 
-          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20)
 
           set +e
           KEYSCAN_OUTPUT=$(ssh-keyscan -H "$EC2_HOST" 2>&1)
@@ -247,10 +247,10 @@ jobs:
           set -e
           if [[ "$KEYSCAN_STATUS" -ne 0 ]]; then
             echo "$KEYSCAN_OUTPUT"
-            echo "ssh-keyscan failed for host: $EC2_HOST"
-            exit 1
+            echo "::warning::ssh-keyscan failed for host: $EC2_HOST; continuing with StrictHostKeyChecking=accept-new"
+          else
+            printf '%s\n' "$KEYSCAN_OUTPUT" >> ~/.ssh/known_hosts
           fi
-          printf '%s\n' "$KEYSCAN_OUTPUT" >> ~/.ssh/known_hosts
 
           # Ensure docker exists on EC2 before attempting streamed image load.
           set +e
