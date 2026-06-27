@@ -27,6 +27,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Validate AWS auth input shape
+        env:
+          ROLE_INPUT: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          ACCESS_KEY_INPUT: ${{ vars.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID || vars.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ACCESS_KEY_INPUT:-}" && "${ACCESS_KEY_INPUT}" == arn:aws:iam::* ]]; then
+            echo "::error::AWS_ACCESS_KEY_ID is set to an IAM role ARN. Move this value to AWS_ROLE_TO_ASSUME (vars or secrets) and remove it from AWS_ACCESS_KEY_ID."
+            exit 1
+          fi
+          if [[ -z "${ROLE_INPUT:-}" && -z "${ACCESS_KEY_INPUT:-}" ]]; then
+            echo "::error::No AWS auth input found. Set AWS_ROLE_TO_ASSUME (vars/secrets) for OIDC, or set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets) for static-key auth."
+            exit 1
+          fi
+
       - name: Resolve AWS auth inputs
         id: aws-auth
         env:
