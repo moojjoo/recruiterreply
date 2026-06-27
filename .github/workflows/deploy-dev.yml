@@ -13,10 +13,8 @@ env:
   DEPLOY_ENV: dev
   BACKEND_SERVICE: backend-dev
   BACKEND_IMAGE_VAR: BACKEND_IMAGE_DEV
-  BACKEND_IMAGE_TAG: dev-latest
+  BACKEND_IMAGE_NAME: recruiterreply-backend
   FRONTEND_API_BASE_URL: https://api-dev.recruiterreply.com
-  ECR_REPO_BACKEND: ${{ vars.ECR_REPO_BACKEND || 'recruiterreply-backend' }}
-  BACKEND_DOCKER_PLATFORM: ${{ vars.BACKEND_DOCKER_PLATFORM || 'linux/amd64' }}
   EC2_DEPLOY_PATH: ${{ vars.EC2_DEPLOY_PATH || '/home/ubuntu/recruiterreply' }}
   AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}
 
@@ -28,6 +26,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Validate AWS auth input shape
+        env:
+          ROLE_INPUT: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          ACCESS_KEY_INPUT: ${{ vars.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID || vars.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ACCESS_KEY_INPUT:-}" && "${ACCESS_KEY_INPUT}" == arn:aws:iam::* ]]; then
+            echo "::error::AWS_ACCESS_KEY_ID is set to an IAM role ARN. Move this value to AWS_ROLE_TO_ASSUME (vars or secrets) and remove it from AWS_ACCESS_KEY_ID."
+            exit 1
+          fi
+          if [[ -z "${ROLE_INPUT:-}" && -z "${ACCESS_KEY_INPUT:-}" ]]; then
+            echo "::error::No AWS auth input found. Set AWS_ROLE_TO_ASSUME (vars/secrets) for OIDC, or set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (vars/secrets) for static-key auth."
+            exit 1
+          fi
 
       - name: Resolve AWS auth inputs
         id: aws-auth
@@ -102,31 +115,35 @@ jobs:
           aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push backend image
+      - name: Build backend image
         id: build-backend
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          IMAGE_URI_SHA="$REGISTRY/$ECR_REPO_BACKEND:$IMAGE_SHA"
-          IMAGE_URI_LATEST="$REGISTRY/$ECR_REPO_BACKEND:$BACKEND_IMAGE_TAG"
+          LOCAL_BACKEND_IMAGE="$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
+          docker build -t "$LOCAL_BACKEND_IMAGE" ./backend
+          echo "local_backend_image=$LOCAL_BACKEND_IMAGE" >> "$GITHUB_OUTPUT"
 
-          docker buildx build \
-            --platform "$BACKEND_DOCKER_PLATFORM" \
-            --push \
-            -t "$IMAGE_URI_SHA" \
-            -t "$IMAGE_URI_LATEST" \
-            ./backend
+      - name: Push backend image to ECR
+        id: push-backend
+        env:
+          LOCAL_BACKEND_IMAGE: ${{ steps.build-backend.outputs.local_backend_image }}
+          ECR_BACKEND_REPOSITORY: ${{ vars.ECR_BACKEND_REPOSITORY || 'recruiterreply-backend' }}
+        run: |
+          set -euo pipefail
 
-          echo "backend_image=$IMAGE_URI_SHA" >> "$GITHUB_OUTPUT"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          ECR_IMAGE="$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:${GITHUB_SHA}"
+
+          if ! aws ecr describe-repositories --repository-names "$ECR_BACKEND_REPOSITORY" >/dev/null 2>&1; then
+            aws ecr create-repository --repository-name "$ECR_BACKEND_REPOSITORY" >/dev/null
+          fi
+
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker tag "$LOCAL_BACKEND_IMAGE" "$ECR_IMAGE"
+          docker push "$ECR_IMAGE"
+
+          echo "backend_image=$ECR_IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -142,6 +159,28 @@ jobs:
           npm ci
           VITE_API_BASE_URL="$FRONTEND_API_BASE_URL" npm run build
 
+      - name: Verify frontend build artifacts
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f frontend/dist/index.html ]]; then
+            echo "::error::Missing frontend/dist/index.html after build"
+            exit 1
+          fi
+
+          if [[ ! -d frontend/dist/assets ]]; then
+            echo "::error::Missing frontend/dist/assets after build"
+            exit 1
+          fi
+
+          ASSET_COUNT=$(find frontend/dist/assets -type f | wc -l | xargs)
+          if [[ "$ASSET_COUNT" -eq 0 ]]; then
+            echo "::error::No frontend assets were generated"
+            exit 1
+          fi
+
+          echo "Frontend artifact check passed: assets=$ASSET_COUNT"
+
       - name: Upload frontend to S3
         env:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
@@ -152,7 +191,38 @@ jobs:
             exit 1
           fi
 
+          echo "Syncing frontend artifacts to s3://$S3_FRONTEND_BUCKET"
           aws s3 sync frontend/dist/ "s3://$S3_FRONTEND_BUCKET" --delete
+
+          OBJECT_COUNT=$(aws s3 ls "s3://$S3_FRONTEND_BUCKET/" --recursive | wc -l | xargs)
+          if [[ "$OBJECT_COUNT" -eq 0 ]]; then
+            echo "::error::S3 bucket is empty after sync: s3://$S3_FRONTEND_BUCKET"
+            exit 1
+          fi
+
+          aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key index.html >/dev/null
+          echo "S3 object verification passed: count=$OBJECT_COUNT"
+
+      - name: Verify CloudFront origin matches S3 bucket
+        if: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        env:
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+
+          ORIGIN_DOMAIN=$(aws cloudfront get-distribution \
+            --id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --query 'Distribution.DistributionConfig.Origins.Items[0].DomainName' \
+            --output text)
+
+          echo "CloudFront origin domain: $ORIGIN_DOMAIN"
+          if [[ "$ORIGIN_DOMAIN" != *"$S3_FRONTEND_BUCKET"* ]]; then
+            echo "::error::CloudFront origin does not reference S3_FRONTEND_BUCKET"
+            echo "::error::Expected bucket: $S3_FRONTEND_BUCKET"
+            echo "::error::Actual origin domain: $ORIGIN_DOMAIN"
+            exit 1
+          fi
 
       - name: Invalidate CloudFront cache
         if: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID != '' }}
@@ -164,67 +234,81 @@ jobs:
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths '/*'
 
-      - name: Configure SSH key
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${EC2_SSH_PRIVATE_KEY:-}" ]]; then
-            echo "EC2_SSH_PRIVATE_KEY secret is required"
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-
       - name: Deploy backend container on EC2
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
-          EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
-          BACKEND_IMAGE: ${{ steps.build-backend.outputs.backend_image }}
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
+          BACKEND_IMAGE: ${{ steps.push-backend.outputs.backend_image }}
         run: |
           set -euo pipefail
-          if [[ -z "${EC2_HOST:-}" ]]; then
-            echo "EC2_HOST variable is required"
+          if [[ -z "${EC2_INSTANCE_ID:-}" ]]; then
+            echo "EC2_INSTANCE_ID variable is required"
             exit 1
           fi
 
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
-
-          ssh "$EC2_USER@$EC2_HOST" bash -s -- \
-            "$EC2_DEPLOY_PATH" \
-            "$BACKEND_IMAGE_VAR" \
-            "$BACKEND_IMAGE" \
-            "$BACKEND_SERVICE" \
-            "$AWS_REGION" \
-            "$ECR_REGISTRY" << 'EOF'
-          set -euo pipefail
-
-          DEPLOY_PATH="$1"
-          IMAGE_VAR="$2"
-          BACKEND_IMAGE="$3"
-          BACKEND_SERVICE="$4"
-          AWS_REGION="$5"
-          ECR_REGISTRY="$6"
-
-          cd "$DEPLOY_PATH"
-
-          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-
-          touch .env
-          if grep -q "^${IMAGE_VAR}=" .env; then
-            sed -i "s|^${IMAGE_VAR}=.*|${IMAGE_VAR}=${BACKEND_IMAGE}|" .env
-          else
-            echo "${IMAGE_VAR}=${BACKEND_IMAGE}" >> .env
+          if [[ -z "${BACKEND_IMAGE:-}" ]]; then
+            echo "BACKEND_IMAGE output is empty"
+            exit 1
           fi
 
-          docker compose -f infra/aws/docker-compose.multi-env.yml pull "$BACKEND_SERVICE"
-          docker compose -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
-          docker image prune -f
-          EOF
+          ECR_REGISTRY="${BACKEND_IMAGE%%/*}"
+          ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
+
+          COMMANDS_JSON=$(jq -n \
+            --arg deploy_path "$EC2_DEPLOY_PATH" \
+            --arg image_var "$BACKEND_IMAGE_VAR" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg backend_service "$BACKEND_SERVICE" \
+            --arg ecr_registry "$ECR_REGISTRY" \
+            --arg ecr_password "$ECR_PASSWORD" \
+            '{
+              commands: [
+                "set -eu",
+                "cd \($deploy_path)",
+                "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
+                "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
+                "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
+                "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
+                "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
+                "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env >/dev/null; fi",
+                "sudo grep \"^\($image_var)=\" .env",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service)",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service)",
+                "sudo docker image prune -f"
+              ]
+            }')
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy $DEPLOY_ENV $GITHUB_SHA" \
+            --parameters "$COMMANDS_JSON" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          set +e
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID"
+          WAIT_STATUS=$?
+          set -e
+
+          INVOCATION_JSON=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID")
+          INVOCATION_STATUS=$(printf '%s' "$INVOCATION_JSON" | jq -r '.Status')
+          STDOUT_CONTENT=$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardOutputContent')
+          STDERR_CONTENT=$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardErrorContent')
+
+          echo "$STDOUT_CONTENT"
+          if [[ -n "$STDERR_CONTENT" && "$STDERR_CONTENT" != "null" ]]; then
+            echo "$STDERR_CONTENT"
+          fi
+
+          if [[ "$INVOCATION_STATUS" != "Success" ]]; then
+            echo "SSM deploy command failed with status: $INVOCATION_STATUS"
+            exit 1
+          fi
+
+          if [[ "$WAIT_STATUS" -ne 0 ]]; then
+            echo "SSM waiter returned non-zero status: $WAIT_STATUS"
+            exit 1
+          fi
 
       - name: Deployment summary
         run: |

@@ -18,7 +18,7 @@ services:
       - recruiterreply
 
   backend-dev:
-    image: ${BACKEND_IMAGE_DEV}
+    image: ${BACKEND_IMAGE_DEV:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:dev-latest}
     container_name: recruiterreply-backend-dev
     restart: unless-stopped
     depends_on:
@@ -36,7 +36,7 @@ services:
       - recruiterreply
 
   backend-test:
-    image: ${BACKEND_IMAGE_TEST}
+    image: ${BACKEND_IMAGE_TEST:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:test-latest}
     container_name: recruiterreply-backend-test
     restart: unless-stopped
     depends_on:
@@ -54,7 +54,7 @@ services:
       - recruiterreply
 
   backend-prod:
-    image: ${BACKEND_IMAGE_PROD}
+    image: ${BACKEND_IMAGE_PROD:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:prod-latest}
     container_name: recruiterreply-backend-prod
     restart: unless-stopped
     depends_on:
