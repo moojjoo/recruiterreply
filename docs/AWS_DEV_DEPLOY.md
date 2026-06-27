@@ -224,15 +224,12 @@ For each environment, set variables:
 2. AWS_ROLE_TO_ASSUME (or access key variables)
 3. S3_FRONTEND_BUCKET (environment-specific)
 4. CLOUDFRONT_DISTRIBUTION_ID (environment-specific)
-5. EC2_HOST
-6. EC2_USER (usually ubuntu)
-7. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
-
-Secrets required per environment:
-
-1. EC2_SSH_PRIVATE_KEY
+5. EC2_INSTANCE_ID
+6. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
+7. ECR_BACKEND_REPOSITORY (optional, default: recruiterreply-backend)
 
 Note: API/OpenAI/JWT/DB runtime secrets are read on EC2 from /home/ubuntu/recruiterreply/.env.
+Note: Deploy now uses AWS SSM Run Command and does not require inbound SSH from GitHub runners.
 
 ## 8) Branch to Environment Mapping
 

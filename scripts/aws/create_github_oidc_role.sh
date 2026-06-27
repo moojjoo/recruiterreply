@@ -66,7 +66,31 @@ cat > "$PERMISSION_POLICY_FILE" <<EOF
         "ecr:CompleteLayerUpload",
         "ecr:PutImage",
         "ecr:BatchGetImage",
-        "ecr:DescribeRepositories"
+        "ecr:DescribeRepositories",
+        "ecr:CreateRepository"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FrontendArtifactsAndCdn",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "cloudfront:GetDistribution",
+        "cloudfront:CreateInvalidation"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SsmEc2Deploy",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:SendCommand",
+        "ssm:GetCommandInvocation",
+        "ssm:ListCommandInvocations"
       ],
       "Resource": "*"
     },
