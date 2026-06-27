@@ -257,10 +257,10 @@ jobs:
             --arg backend_service "$BACKEND_SERVICE" \
             '{
               commands: [
-                "set -euo pipefail",
+                "set -eu",
                 "cd \($deploy_path)",
-                "if [[ ! -f infra/aws/docker-compose.multi-env.yml ]]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
-                "if [[ ! -f .env ]]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
+                "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
+                "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
                 "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
                 "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env >/dev/null; fi",
