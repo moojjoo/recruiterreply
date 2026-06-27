@@ -91,9 +91,31 @@ jobs:
         id: build-backend
         run: |
           set -euo pipefail
-          BACKEND_IMAGE="$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
-          docker build -t "$BACKEND_IMAGE" ./backend
-          echo "backend_image=$BACKEND_IMAGE" >> "$GITHUB_OUTPUT"
+          LOCAL_BACKEND_IMAGE="$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
+          docker build -t "$LOCAL_BACKEND_IMAGE" ./backend
+          echo "local_backend_image=$LOCAL_BACKEND_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Push backend image to ECR
+        id: push-backend
+        env:
+          LOCAL_BACKEND_IMAGE: ${{ steps.build-backend.outputs.local_backend_image }}
+          ECR_BACKEND_REPOSITORY: ${{ vars.ECR_BACKEND_REPOSITORY || 'recruiterreply-backend' }}
+        run: |
+          set -euo pipefail
+
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          ECR_IMAGE="$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:${GITHUB_SHA}"
+
+          if ! aws ecr describe-repositories --repository-names "$ECR_BACKEND_REPOSITORY" >/dev/null 2>&1; then
+            aws ecr create-repository --repository-name "$ECR_BACKEND_REPOSITORY" >/dev/null
+          fi
+
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker tag "$LOCAL_BACKEND_IMAGE" "$ECR_IMAGE"
+          docker push "$ECR_IMAGE"
+
+          echo "backend_image=$ECR_IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -192,95 +214,81 @@ jobs:
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths '/*'
 
-      - name: Configure SSH key
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${EC2_SSH_PRIVATE_KEY:-}" ]]; then
-            echo "EC2_SSH_PRIVATE_KEY secret is required"
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-
       - name: Deploy backend container on EC2
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
-          EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
-          BACKEND_IMAGE: ${{ steps.build-backend.outputs.backend_image }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
+          BACKEND_IMAGE: ${{ steps.push-backend.outputs.backend_image }}
         run: |
           set -euo pipefail
-          if [[ -z "${EC2_HOST:-}" ]]; then
-            echo "EC2_HOST variable is required"
+          if [[ -z "${EC2_INSTANCE_ID:-}" ]]; then
+            echo "EC2_INSTANCE_ID variable is required"
             exit 1
           fi
 
-          IMAGE_ARCHIVE="/tmp/${BACKEND_SERVICE}-${GITHUB_SHA}.tar.gz"
-          docker save "$BACKEND_IMAGE" | gzip > "$IMAGE_ARCHIVE"
-
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
-          scp "$IMAGE_ARCHIVE" "$EC2_USER@$EC2_HOST:/tmp/backend-image.tar.gz"
-
-          ssh "$EC2_USER@$EC2_HOST" bash -s -- \
-            "$EC2_DEPLOY_PATH" \
-            "$BACKEND_IMAGE_VAR" \
-            "$BACKEND_IMAGE" \
-            "$BACKEND_SERVICE" << 'EOF'
-          set -euo pipefail
-
-          DEPLOY_PATH="$1"
-          IMAGE_VAR="$2"
-          BACKEND_IMAGE="$3"
-          BACKEND_SERVICE="$4"
-
-          if [[ ! -d "$DEPLOY_PATH" ]]; then
-            echo "Deploy path does not exist: $DEPLOY_PATH"
+          if [[ -z "${BACKEND_IMAGE:-}" ]]; then
+            echo "BACKEND_IMAGE output is empty"
             exit 1
           fi
 
-          cd "$DEPLOY_PATH"
+          ECR_REGISTRY="${BACKEND_IMAGE%%/*}"
+          ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
 
-          if [[ ! -f infra/aws/docker-compose.multi-env.yml ]]; then
-            echo "Missing compose file: $DEPLOY_PATH/infra/aws/docker-compose.multi-env.yml"
+          COMMANDS_JSON=$(jq -n \
+            --arg deploy_path "$EC2_DEPLOY_PATH" \
+            --arg image_var "$BACKEND_IMAGE_VAR" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg backend_service "$BACKEND_SERVICE" \
+            --arg ecr_registry "$ECR_REGISTRY" \
+            --arg ecr_password "$ECR_PASSWORD" \
+            '{
+              commands: [
+                "set -eu",
+                "cd \($deploy_path)",
+                "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
+                "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
+                "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
+                "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
+                "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
+                "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env >/dev/null; fi",
+                "sudo grep \"^\($image_var)=\" .env",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service)",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service)",
+                "sudo docker image prune -f"
+              ]
+            }')
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy $DEPLOY_ENV $GITHUB_SHA" \
+            --parameters "$COMMANDS_JSON" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          set +e
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID"
+          WAIT_STATUS=$?
+          set -e
+
+          INVOCATION_JSON=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID")
+          INVOCATION_STATUS=$(printf '%s' "$INVOCATION_JSON" | jq -r '.Status')
+          STDOUT_CONTENT=$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardOutputContent')
+          STDERR_CONTENT=$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardErrorContent')
+
+          echo "$STDOUT_CONTENT"
+          if [[ -n "$STDERR_CONTENT" && "$STDERR_CONTENT" != "null" ]]; then
+            echo "$STDERR_CONTENT"
+          fi
+
+          if [[ "$INVOCATION_STATUS" != "Success" ]]; then
+            echo "SSM deploy command failed with status: $INVOCATION_STATUS"
             exit 1
           fi
 
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "docker not found; installing docker.io and docker-compose-v2"
-            sudo apt-get update
-            sudo apt-get install -y docker.io docker-compose-v2
-            sudo systemctl enable --now docker
-          fi
-
-          if ! sudo docker compose version >/dev/null 2>&1; then
-            echo "docker compose plugin missing after install"
+          if [[ "$WAIT_STATUS" -ne 0 ]]; then
+            echo "SSM waiter returned non-zero status: $WAIT_STATUS"
             exit 1
           fi
-
-          if [[ ! -f .env ]]; then
-            echo "Missing env file: $DEPLOY_PATH/.env"
-            exit 1
-          fi
-
-          gunzip -c /tmp/backend-image.tar.gz | sudo docker load
-          rm -f /tmp/backend-image.tar.gz
-
-          touch .env
-          if grep -q "^${IMAGE_VAR}=" .env; then
-            sed -i "s|^${IMAGE_VAR}=.*|${IMAGE_VAR}=${BACKEND_IMAGE}|" .env
-          else
-            echo "${IMAGE_VAR}=${BACKEND_IMAGE}" >> .env
-          fi
-
-          sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d "$BACKEND_SERVICE"
-          sudo docker image prune -f
-          EOF
-
-          rm -f "$IMAGE_ARCHIVE"
 
       - name: Deployment summary
         run: |
