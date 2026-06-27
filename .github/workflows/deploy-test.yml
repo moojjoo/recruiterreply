@@ -109,6 +109,28 @@ jobs:
           npm ci
           VITE_API_BASE_URL="$FRONTEND_API_BASE_URL" npm run build
 
+      - name: Verify frontend build artifacts
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f frontend/dist/index.html ]]; then
+            echo "::error::Missing frontend/dist/index.html after build"
+            exit 1
+          fi
+
+          if [[ ! -d frontend/dist/assets ]]; then
+            echo "::error::Missing frontend/dist/assets after build"
+            exit 1
+          fi
+
+          ASSET_COUNT=$(find frontend/dist/assets -type f | wc -l | xargs)
+          if [[ "$ASSET_COUNT" -eq 0 ]]; then
+            echo "::error::No frontend assets were generated"
+            exit 1
+          fi
+
+          echo "Frontend artifact check passed: assets=$ASSET_COUNT"
+
       - name: Upload frontend to S3
         env:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
@@ -119,7 +141,42 @@ jobs:
             exit 1
           fi
 
+          echo "Syncing frontend artifacts to s3://$S3_FRONTEND_BUCKET"
           aws s3 sync frontend/dist/ "s3://$S3_FRONTEND_BUCKET" --delete
+
+          OBJECT_COUNT=$(aws s3 ls "s3://$S3_FRONTEND_BUCKET/" --recursive | wc -l | xargs)
+          if [[ "$OBJECT_COUNT" -eq 0 ]]; then
+            echo "::error::S3 bucket is empty after sync: s3://$S3_FRONTEND_BUCKET"
+            exit 1
+          fi
+
+          aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key index.html >/dev/null
+          echo "S3 object verification passed: count=$OBJECT_COUNT"
+
+      - name: Verify CloudFront origin matches S3 bucket
+        env:
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${CLOUDFRONT_DISTRIBUTION_ID:-}" ]]; then
+            echo "CLOUDFRONT_DISTRIBUTION_ID variable is required"
+            exit 1
+          fi
+
+          ORIGIN_DOMAIN=$(aws cloudfront get-distribution \
+            --id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --query 'Distribution.DistributionConfig.Origins.Items[0].DomainName' \
+            --output text)
+
+          echo "CloudFront origin domain: $ORIGIN_DOMAIN"
+          if [[ "$ORIGIN_DOMAIN" != *"$S3_FRONTEND_BUCKET"* ]]; then
+            echo "::error::CloudFront origin does not reference S3_FRONTEND_BUCKET"
+            echo "::error::Expected bucket: $S3_FRONTEND_BUCKET"
+            echo "::error::Actual origin domain: $ORIGIN_DOMAIN"
+            exit 1
+          fi
 
       - name: Invalidate CloudFront cache
         env:
@@ -189,6 +246,18 @@ jobs:
 
           if [[ ! -f infra/aws/docker-compose.multi-env.yml ]]; then
             echo "Missing compose file: $DEPLOY_PATH/infra/aws/docker-compose.multi-env.yml"
+            exit 1
+          fi
+
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "docker not found; installing docker.io and docker-compose-v2"
+            sudo apt-get update
+            sudo apt-get install -y docker.io docker-compose-v2
+            sudo systemctl enable --now docker
+          fi
+
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "docker compose plugin missing after install"
             exit 1
           fi
 
