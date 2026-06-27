@@ -242,19 +242,23 @@ jobs:
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
           # Stream image directly to EC2 to avoid temp-file/scp failures.
-          docker save "$BACKEND_IMAGE" | gzip | ssh "$EC2_USER@$EC2_HOST" 'gunzip | sudo docker load'
+          STREAM_LOAD_OUTPUT=$(docker save "$BACKEND_IMAGE" | gzip | ssh "$EC2_USER@$EC2_HOST" 'gunzip | sudo docker load' 2>&1)
+          echo "$STREAM_LOAD_OUTPUT"
+          LOADED_IMAGE_REF=$(printf '%s\n' "$STREAM_LOAD_OUTPUT" | sed -n 's/^Loaded image: //p' | tail -1)
 
           ssh "$EC2_USER@$EC2_HOST" bash -s -- \
             "$EC2_DEPLOY_PATH" \
             "$BACKEND_IMAGE_VAR" \
             "$BACKEND_IMAGE" \
-            "$BACKEND_SERVICE" << 'EOF'
+            "$BACKEND_SERVICE" \
+            "$LOADED_IMAGE_REF" << 'EOF'
           set -euo pipefail
 
           DEPLOY_PATH="$1"
           IMAGE_VAR="$2"
           BACKEND_IMAGE="$3"
           BACKEND_SERVICE="$4"
+          LOADED_IMAGE_REF="$5"
 
           if [[ ! -d "$DEPLOY_PATH" ]]; then
             echo "Deploy path does not exist: $DEPLOY_PATH"
@@ -283,6 +287,13 @@ jobs:
           if [[ ! -f .env ]]; then
             echo "Missing env file: $DEPLOY_PATH/.env"
             exit 1
+          fi
+
+          if ! sudo docker image inspect "$BACKEND_IMAGE" >/dev/null 2>&1; then
+            if [[ -n "$LOADED_IMAGE_REF" ]] && sudo docker image inspect "$LOADED_IMAGE_REF" >/dev/null 2>&1; then
+              echo "Retagging loaded image '$LOADED_IMAGE_REF' to '$BACKEND_IMAGE'"
+              sudo docker tag "$LOADED_IMAGE_REF" "$BACKEND_IMAGE"
+            fi
           fi
 
           if ! sudo docker image inspect "$BACKEND_IMAGE" >/dev/null 2>&1; then
