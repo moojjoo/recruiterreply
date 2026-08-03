@@ -42,3 +42,13 @@ output "frontend_buckets" {
   description = "Frontend S3 buckets keyed by label."
   value       = module.frontend.bucket_names
 }
+
+output "backend_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding backend runtime config."
+  value       = module.secrets.secret_arn
+}
+
+output "backend_secret_name" {
+  description = "Name of the Secrets Manager secret holding backend runtime config. Set AWS_SECRETS_MANAGER_SECRET_NAME to this on the backend host."
+  value       = module.secrets.secret_name
+}

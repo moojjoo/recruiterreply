@@ -61,6 +61,9 @@ backend/obj/
 backend/TestResults/
 backend/artifacts/
 
+# Local Data Protection key ring (encrypts stored Gmail OAuth tokens) — never commit
+backend/keys/
+
 # User-specific / tooling
 *.user
 *.rsuser
@@ -95,3 +98,8 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# -----------------------------
+# Terraform local artifacts
+# -----------------------------
+.claude/

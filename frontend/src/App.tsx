@@ -16,6 +16,7 @@ import { AnalysisPage } from "./pages/AnalysisPage";
 import { ReplyPage } from "./pages/ReplyPage";
 import { ComparisonPage } from "./pages/ComparisonPage";
 import { Profile } from "./pages/Profile";
+import { GmailCallback } from "./pages/GmailCallback";
 import { Opportunities } from "./pages/Opportunities";
 import { NotFound } from "./pages/NotFound";
 
@@ -78,6 +79,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Opportunities />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/gmail/connected"
+                  element={
+                    <ProtectedRoute>
+                      <GmailCallback />
                     </ProtectedRoute>
                   }
                 />

@@ -1,3 +1,8 @@
+-- SUPERSEDED: schema is now managed via EF Core Migrations (see backend/Migrations/).
+-- Kept for historical reference / disaster-recovery fallback only — do not add new
+-- tables/columns here. bootstrap_local_postgres.sh still uses this script; switching
+-- it to `dotnet ef database update` is a deliberate follow-up, not done here.
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
