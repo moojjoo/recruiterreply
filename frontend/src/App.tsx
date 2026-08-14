@@ -17,6 +17,7 @@ import { ReplyPage } from "./pages/ReplyPage";
 import { ComparisonPage } from "./pages/ComparisonPage";
 import { Profile } from "./pages/Profile";
 import { GmailCallback } from "./pages/GmailCallback";
+import { GoogleCallback } from "./pages/GoogleCallback";
 import { Opportunities } from "./pages/Opportunities";
 import { NotFound } from "./pages/NotFound";
 
@@ -90,6 +91,7 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
                 {/* Catch-all */}
                 <Route path="/404" element={<NotFound />} />

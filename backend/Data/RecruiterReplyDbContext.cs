@@ -31,11 +31,14 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.FirstName).HasColumnName("first_name").HasMaxLength(100);
             entity.Property(e => e.LastName).HasColumnName("last_name").HasMaxLength(100);
             entity.Property(e => e.ProfilePictureUrl).HasColumnName("profile_picture_url").HasMaxLength(500);
+            entity.Property(e => e.AuthProvider).HasColumnName("auth_provider").HasMaxLength(50).HasDefaultValue("email");
+            entity.Property(e => e.ProviderUserId).HasColumnName("provider_user_id").HasMaxLength(255);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.Property(e => e.LastLogin).HasColumnName("last_login");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
             entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => new { e.AuthProvider, e.ProviderUserId }).IsUnique();
         });
 
         modelBuilder.Entity<MessageEntity>(entity =>

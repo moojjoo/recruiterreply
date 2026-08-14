@@ -4,11 +4,13 @@ import { useToast } from "../../hooks/useToast";
 import { Input } from "../common/Input";
 import { Button } from "../common/Button";
 import { Card } from "../common/Card";
+import { authService } from "../../services/api/authService";
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { login } = useAuth();
   const { showToast } = useToast();
 
@@ -23,6 +25,17 @@ export const LoginForm: React.FC = () => {
       showToast("Login failed. Please try again.", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      const response = await authService.googleLoginStart();
+      window.location.href = response.data.redirectUrl;
+    } catch (error) {
+      showToast("Google login is currently unavailable.", "error");
+      setGoogleLoading(false);
     }
   };
 
@@ -50,6 +63,19 @@ export const LoginForm: React.FC = () => {
           Sign In
         </Button>
       </form>
+
+      <div className="mt-4">
+        <Button
+          type="button"
+          variant="secondary"
+          isLoading={googleLoading}
+          className="w-full"
+          onClick={handleGoogleLogin}
+        >
+          Continue with Google
+        </Button>
+      </div>
+
       <p className="text-sm text-gray-600 mt-4">
         Don't have an account?{" "}
         <a

@@ -12,6 +12,8 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 
+*.env
+
 .idea/
 *.sln.iml
 
