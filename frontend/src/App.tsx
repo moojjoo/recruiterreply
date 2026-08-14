@@ -20,6 +20,8 @@ import { GmailCallback } from "./pages/GmailCallback";
 import { GoogleCallback } from "./pages/GoogleCallback";
 import { Opportunities } from "./pages/Opportunities";
 import { NotFound } from "./pages/NotFound";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
+import { Terms } from "./pages/Terms";
 
 function App() {
   return (
@@ -33,6 +35,8 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<Terms />} />
 
                 {/* Protected Routes */}
                 <Route
