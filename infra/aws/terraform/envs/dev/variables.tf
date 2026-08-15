@@ -10,7 +10,7 @@ variable "app_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment name (development, staging, production)."
+  description = "Deployment environment name for this root (e.g. development, test, production)."
   type        = string
 }
 
@@ -23,7 +23,6 @@ variable "tags" {
 variable "vpc_cidr" {
   description = "CIDR block for the VPC."
   type        = string
-  default     = "10.30.0.0/16"
 }
 
 variable "availability_zones" {
@@ -147,16 +146,4 @@ variable "db_engine_version" {
   description = "PostgreSQL engine version for RDS."
   type        = string
   default     = "16.3"
-}
-
-variable "create_frontend_buckets" {
-  description = "Whether to create frontend S3 buckets for static app hosting."
-  type        = bool
-  default     = true
-}
-
-variable "frontend_bucket_names" {
-  description = "Map of environment label to S3 bucket name for frontend builds."
-  type        = map(string)
-  default     = {}
 }

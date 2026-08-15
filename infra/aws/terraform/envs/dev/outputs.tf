@@ -38,11 +38,6 @@ output "rds_port" {
   value       = var.enable_rds ? module.database[0].port : null
 }
 
-output "frontend_buckets" {
-  description = "Frontend S3 buckets keyed by label."
-  value       = module.frontend.bucket_names
-}
-
 output "backend_secret_arn" {
   description = "ARN of the Secrets Manager secret holding backend runtime config."
   value       = module.secrets.secret_arn

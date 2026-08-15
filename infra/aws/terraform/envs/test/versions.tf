@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket       = "recruiterreply-terraform-state-178522450316"
-    key          = "recruiterreply/terraform.tfstate"
+    key          = "recruiterreply/test/terraform.tfstate"
     region       = "us-east-1"
     use_lockfile = true
     encrypt      = true
@@ -12,7 +12,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.58"
     }
     random = {
       source  = "hashicorp/random"
