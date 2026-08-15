@@ -2,7 +2,7 @@ name: Deploy Prod (EC2 + S3)
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
