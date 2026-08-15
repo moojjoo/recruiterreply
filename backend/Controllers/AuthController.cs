@@ -16,15 +16,21 @@ public class AuthController : ControllerBase
     private readonly RecruiterReplyDbContext _db;
     private readonly IPasswordHashService _passwordHashService;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IGoogleAuthService _googleAuthService;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
         RecruiterReplyDbContext db,
         IPasswordHashService passwordHashService,
-        IJwtTokenService jwtTokenService)
+        IJwtTokenService jwtTokenService,
+        IGoogleAuthService googleAuthService,
+        IConfiguration configuration)
     {
         _db = db;
         _passwordHashService = passwordHashService;
         _jwtTokenService = jwtTokenService;
+        _googleAuthService = googleAuthService;
+        _configuration = configuration;
     }
 
     [HttpPost("register")]
@@ -86,6 +92,44 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         return Ok(CreateAuthResponse(user));
+    }
+
+    [HttpGet("google/start")]
+    [AllowAnonymous]
+    public IActionResult GoogleStart()
+    {
+        try
+        {
+            var redirectUrl = _googleAuthService.BuildAuthorizationUrl();
+            return Ok(new { redirectUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("google/callback")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GoogleCallback([FromQuery] string code, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            return Redirect($"{frontendBase}/login?error=google_auth_failed");
+        }
+
+        try
+        {
+            var result = await _googleAuthService.ExchangeCodeForTokenAsync(code, ct);
+            var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            return Redirect($"{frontendBase}/auth/google/callback?token={Uri.EscapeDataString(result.Token)}");
+        }
+        catch
+        {
+            var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            return Redirect($"{frontendBase}/login?error=google_auth_failed");
+        }
     }
 
     [HttpGet("me")]

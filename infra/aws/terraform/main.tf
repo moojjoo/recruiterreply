@@ -8,6 +8,16 @@ module "network" {
   private_subnet_cidrs = var.private_subnet_cidrs
 }
 
+data "aws_caller_identity" "current" {}
+
+module "github_oidc" {
+  source = "./modules/github_oidc"
+
+  name_prefix    = var.app_name
+  github_repo    = "moojjoo/recruiterreply"
+  aws_account_id = data.aws_caller_identity.current.account_id
+}
+
 module "security" {
   source = "./modules/security"
 
@@ -20,15 +30,15 @@ module "security" {
 module "compute" {
   source = "./modules/compute"
 
-  name_prefix          = local.name_prefix
-  subnet_id            = module.network.public_subnet_ids[0]
+  name_prefix           = local.name_prefix
+  subnet_id             = module.network.public_subnet_ids[0]
   ec2_security_group_id = module.security.ec2_security_group_id
-  instance_type        = var.instance_type
-  ami_id               = var.ami_id
-  key_name             = var.key_name
-  root_volume_size     = var.ec2_root_volume_size
-  user_data            = local.ec2_user_data
-  enable_public_ip     = true
+  instance_type         = var.instance_type
+  ami_id                = var.ami_id
+  key_name              = var.key_name
+  root_volume_size      = var.ec2_root_volume_size
+  user_data             = local.ec2_user_data
+  enable_public_ip      = true
 }
 
 module "secrets" {
@@ -42,21 +52,21 @@ module "database" {
   count  = var.enable_rds ? 1 : 0
   source = "./modules/database"
 
-  name_prefix                = local.name_prefix
-  private_subnet_ids         = module.network.private_subnet_ids
-  rds_security_group_id      = module.security.rds_security_group_id
-  db_name                    = var.db_name
-  db_username                = var.db_username
-  db_password                = var.db_password
-  db_instance_class          = var.db_instance_class
-  allocated_storage          = var.db_allocated_storage
-  max_allocated_storage      = var.db_max_allocated_storage
-  backup_retention_period    = var.db_backup_retention_period
-  multi_az                   = var.db_multi_az
-  publicly_accessible        = false
-  deletion_protection        = var.db_deletion_protection
-  skip_final_snapshot        = var.db_skip_final_snapshot
-  engine_version             = var.db_engine_version
+  name_prefix             = local.name_prefix
+  private_subnet_ids      = module.network.private_subnet_ids
+  rds_security_group_id   = module.security.rds_security_group_id
+  db_name                 = var.db_name
+  db_username             = var.db_username
+  db_password             = var.db_password
+  db_instance_class       = var.db_instance_class
+  allocated_storage       = var.db_allocated_storage
+  max_allocated_storage   = var.db_max_allocated_storage
+  backup_retention_period = var.db_backup_retention_period
+  multi_az                = var.db_multi_az
+  publicly_accessible     = false
+  deletion_protection     = var.db_deletion_protection
+  skip_final_snapshot     = var.db_skip_final_snapshot
+  engine_version          = var.db_engine_version
 }
 
 module "frontend" {
@@ -64,4 +74,5 @@ module "frontend" {
 
   create_buckets        = var.create_frontend_buckets
   frontend_bucket_names = var.frontend_bucket_names
+  aws_account_id        = data.aws_caller_identity.current.account_id
 }

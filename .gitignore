@@ -12,6 +12,8 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 
+*.env
+
 .idea/
 *.sln.iml
 
@@ -35,6 +37,7 @@ pnpm-debug.log*
 !backend/.env.example
 
 # Local appsettings overrides / secrets
+backend/appsettings.json
 backend/appsettings.Development.json
 backend/appsettings.local.json
 
