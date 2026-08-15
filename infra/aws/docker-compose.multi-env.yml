@@ -65,6 +65,11 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:5000
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_PROD}
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
+      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      Google__RedirectUri: https://api.recruiterreply.com/api/auth/google/callback
+      Frontend__BaseUrl: https://recruiterreply.com
+      Cors__AllowedOrigins__0: https://recruiterreply.com
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_prod;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5003:5000"
