@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket       = "recruiterreply-terraform-state-178522450316"
-    key          = "recruiterreply/terraform.tfstate"
+    key          = "recruiterreply/test/terraform.tfstate"
     region       = "us-east-1"
     use_lockfile = true
     encrypt      = true
