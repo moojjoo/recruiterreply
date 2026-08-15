@@ -14,6 +14,6 @@ export const authService = {
       password,
       name,
     }),
-
+  googleLoginStart: () => apiClient.get<{ redirectUrl: string }>('/auth/google/start'),
   getCurrentUser: () => apiClient.get<User>("/auth/me"),
 };

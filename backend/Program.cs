@@ -10,6 +10,22 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
+var envCandidates = new[]
+{
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "docs", ".env")
+};
+
+foreach (var envPath in envCandidates.Distinct())
+{
+    if (File.Exists(envPath))
+    {
+        DotNetEnv.Env.Load(envPath);
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Load secrets from AWS Secrets Manager when deployed. No-op locally: only runs if
@@ -26,6 +42,7 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -96,6 +113,7 @@ builder.Services.AddScoped<IReplyService, ReplyService>();
 builder.Services.AddScoped<IComparisonService, ComparisonService>();
 builder.Services.AddScoped<IPasswordHashService, PasswordHashService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IDefaultUserService, DefaultUserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
