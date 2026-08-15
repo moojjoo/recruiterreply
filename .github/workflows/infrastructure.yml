@@ -1,0 +1,184 @@
+name: "Deploy Infrastructure (Terraform)"
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/infrastructure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TERRAFORM_VERSION: "1.6.0"
+  AWS_REGION: us-east-1
+
+jobs:
+  terraform-plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    
+    outputs:
+      tf_env: ${{ steps.set-env.outputs.environment }}
+      plan_exists: ${{ steps.tf-plan.outputs.plan_exists }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine target environment
+        id: set-env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            case "${{ github.ref_name }}" in
+              main|prod)
+                ENV="prod"
+                ;;
+              *)
+                ENV="dev"
+                ;;
+            esac
+          fi
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Target environment: $ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        id: init
+        working-directory: infra/aws/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ steps.set-env.outputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+
+      - name: Terraform Validate
+        id: validate
+        working-directory: infra/aws/terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: tf-plan
+        working-directory: infra/aws/terraform
+        run: |
+          terraform plan \
+            -var-file="environments/${{ steps.set-env.outputs.environment }}.tfvars" \
+            -out=tfplan \
+            -lock=false
+          
+          if [[ -f tfplan ]]; then
+            echo "plan_exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save plan artifact
+        if: steps.tf-plan.outputs.plan_exists == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan-${{ steps.set-env.outputs.environment }}-${{ github.run_number }}
+          path: infra/aws/terraform/tfplan
+          retention-days: 1
+
+  terraform-apply:
+    name: "Terraform Apply"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    environment:
+      name: ${{ needs.terraform-plan.outputs.tf_env }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        working-directory: infra/aws/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ needs.terraform-plan.outputs.tf_env }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+
+      - name: Download plan artifact
+        if: needs.terraform-plan.outputs.plan_exists == 'true'
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan-${{ needs.terraform-plan.outputs.tf_env }}-${{ github.run_number }}
+          path: infra/aws/terraform
+
+      - name: Terraform Apply
+        working-directory: infra/aws/terraform
+        if: needs.terraform-plan.outputs.plan_exists == 'true'
+        run: |
+          terraform apply \
+            -auto-approve \
+            -lock-timeout=5m \
+            tfplan
+
+      - name: Export Terraform Outputs
+        id: tf-output
+        working-directory: infra/aws/terraform
+        run: |
+          echo "vpc_id=$(terraform output -raw vpc_id)" >> "$GITHUB_OUTPUT"
+          echo "ec2_public_ip=$(terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
+          echo "public_subnet_ids=$(terraform output -json public_subnet_ids)" >> "$GITHUB_OUTPUT"
+          echo "private_subnet_ids=$(terraform output -json private_subnet_ids)" >> "$GITHUB_OUTPUT"
+
+      - name: Store infrastructure outputs
+        run: |
+          cat > infrastructure-outputs.json <<EOF
+          {
+            "environment": "${{ needs.terraform-plan.outputs.tf_env }}",
+            "vpc_id": "${{ steps.tf-output.outputs.vpc_id }}",
+            "ec2_public_ip": "${{ steps.tf-output.outputs.ec2_public_ip }}",
+            "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+          cat infrastructure-outputs.json
+
+      - name: Upload infrastructure outputs
+        uses: actions/upload-artifact@v3
+        with:
+          name: infrastructure-outputs-${{ needs.terraform-plan.outputs.tf_env }}
+          path: infrastructure-outputs.json
+          retention-days: 30

@@ -37,6 +37,7 @@ pnpm-debug.log*
 !backend/.env.example
 
 # Local appsettings overrides / secrets
+backend/appsettings.json
 backend/appsettings.Development.json
 backend/appsettings.local.json
 
