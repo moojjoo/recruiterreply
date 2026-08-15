@@ -12,6 +12,8 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 
+*.env
+
 .idea/
 *.sln.iml
 
@@ -35,6 +37,7 @@ pnpm-debug.log*
 !backend/.env.example
 
 # Local appsettings overrides / secrets
+backend/appsettings.json
 backend/appsettings.Development.json
 backend/appsettings.local.json
 
@@ -60,6 +63,9 @@ backend/bin/
 backend/obj/
 backend/TestResults/
 backend/artifacts/
+
+# Local Data Protection key ring (encrypts stored Gmail OAuth tokens) — never commit
+backend/keys/
 
 # User-specific / tooling
 *.user
@@ -95,3 +101,8 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# -----------------------------
+# Terraform local artifacts
+# -----------------------------
+.claude/

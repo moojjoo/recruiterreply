@@ -9,3 +9,11 @@ output "public_ip" {
 output "public_dns" {
   value = aws_instance.this.public_dns
 }
+
+output "role_name" {
+  value = aws_iam_role.ec2.name
+}
+
+output "role_arn" {
+  value = aws_iam_role.ec2.arn
+}

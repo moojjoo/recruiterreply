@@ -31,6 +31,13 @@ module "compute" {
   enable_public_ip     = true
 }
 
+module "secrets" {
+  source = "./modules/secrets"
+
+  name_prefix   = local.name_prefix
+  ec2_role_name = module.compute.role_name
+}
+
 module "database" {
   count  = var.enable_rds ? 1 : 0
   source = "./modules/database"

@@ -16,8 +16,12 @@ import { AnalysisPage } from "./pages/AnalysisPage";
 import { ReplyPage } from "./pages/ReplyPage";
 import { ComparisonPage } from "./pages/ComparisonPage";
 import { Profile } from "./pages/Profile";
+import { GmailCallback } from "./pages/GmailCallback";
+import { GoogleCallback } from "./pages/GoogleCallback";
 import { Opportunities } from "./pages/Opportunities";
 import { NotFound } from "./pages/NotFound";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
+import { Terms } from "./pages/Terms";
 
 function App() {
   return (
@@ -31,6 +35,8 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<Terms />} />
 
                 {/* Protected Routes */}
                 <Route
@@ -81,6 +87,15 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/gmail/connected"
+                  element={
+                    <ProtectedRoute>
+                      <GmailCallback />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
                 {/* Catch-all */}
                 <Route path="/404" element={<NotFound />} />

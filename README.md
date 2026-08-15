@@ -49,7 +49,18 @@ recruiterreply/
 - **AI**: OpenAI API (GPT-4)
 - **Build Tools**: Vite, npm
 
-## 📋 Prerequisites
+## 🚀 Deployment to AWS
+
+Infrastructure (VPC, EC2, S3, IAM/SSM role) is already provisioned via Terraform in `infra/aws/terraform/`. Deployment to AWS is fully automated via GitHub Actions using OIDC auth (no static AWS keys):
+
+- **`.github/workflows/deploy-dev.yml`** - runs on push to `dev`, builds backend Docker image → ECR, builds frontend → S3, deploys to EC2 via SSM
+- **`.github/workflows/deploy-prod.yml`** - same flow for the `prod` environment, includes CloudFront invalidation
+
+GitHub `dev`/`prod` environments already have the required secrets/variables configured (`AWS_ROLE_TO_ASSUME`, `EC2_HOST`, `EC2_DEPLOY_PATH`, `S3_FRONTEND_BUCKET`, `EC2_SSH_PRIVATE_KEY`, etc.) — just push to `dev` or `main`/`prod` to deploy, or trigger a workflow manually via `workflow_dispatch`.
+
+---
+
+## 📋 Local Development Prerequisites
 
 1. **Install .NET 10 SDK**
    - Download: https://dotnet.microsoft.com/download/dotnet/10.0

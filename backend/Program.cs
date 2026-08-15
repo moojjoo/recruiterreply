@@ -3,15 +3,46 @@ using Microsoft.EntityFrameworkCore;
 using RecruiterReply.Data;
 using RecruiterReply.Entities;
 using RecruiterReply.Middleware;
+using RecruiterReply.Models;
 using RecruiterReply.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
+var envCandidates = new[]
+{
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "docs", ".env")
+};
+
+foreach (var envPath in envCandidates.Distinct())
+{
+    if (File.Exists(envPath))
+    {
+        DotNetEnv.Env.Load(envPath);
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Load secrets from AWS Secrets Manager when deployed. No-op locally: only runs if
+// Aws:SecretsManager:SecretName (or AWS_SECRETS_MANAGER_SECRET_NAME) is set. Added last so it
+// overrides appsettings.json, user-secrets, and plain env vars — Secrets Manager is
+// authoritative wherever it's configured. Uses the EC2 instance's IAM role automatically.
+var secretsManagerSecretName = builder.Configuration["Aws:SecretsManager:SecretName"]
+    ?? Environment.GetEnvironmentVariable("AWS_SECRETS_MANAGER_SECRET_NAME");
+if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
+{
+    var secretValues = AwsSecretsLoader.FetchFlattenedSecretsAsync(secretsManagerSecretName).GetAwaiter().GetResult();
+    builder.Configuration.AddInMemoryCollection(secretValues);
+}
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -82,20 +113,44 @@ builder.Services.AddScoped<IReplyService, ReplyService>();
 builder.Services.AddScoped<IComparisonService, ComparisonService>();
 builder.Services.AddScoped<IPasswordHashService, PasswordHashService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IDefaultUserService, DefaultUserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IOpportunityRepository, OpportunityRepository>();
 
+// Add Gmail recruiting agent services
+builder.Services.Configure<GmailOptions>(builder.Configuration.GetSection("Gmail"));
+builder.Services.Configure<RecruiterRulesOptions>(builder.Configuration.GetSection("RecruiterRules"));
+
+var dataProtectionKeysPath = builder.Configuration["Gmail:DataProtectionKeysPath"];
+if (string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    dataProtectionKeysPath = "keys";
+}
+// NOTE: for a real deploy this must be an absolute path outside the app's own deploy
+// directory (e.g. /etc/recruiterreply/keys), or a redeploy that replaces the app directory
+// will silently strand every stored Gmail token. Relative "keys" is dev-only.
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("RecruiterReply");
+
+builder.Services.AddScoped<IGmailConnectionRepository, GmailConnectionRepository>();
+builder.Services.AddScoped<IGmailOAuthService, GmailOAuthService>();
+builder.Services.AddScoped<IGmailApiClient, GmailApiClient>();
+builder.Services.AddScoped<IGmailSyncService, GmailSyncService>();
+builder.Services.AddHostedService<GmailPollingBackgroundService>();
+
 var app = builder.Build();
 
-var shouldAutoCreateSchema = builder.Configuration.GetValue<bool>("Database:AutoCreateSchema");
-if (shouldAutoCreateSchema)
+var shouldAutoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate");
+if (shouldAutoMigrate)
 {
-    // Keep local/dev schema in sync for non-migration bootstrap environments.
+    // Applies pending EF Core migrations on startup. Intended for dev/test; prod
+    // migrations should be run as a deliberate step alongside the deploy instead.
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<RecruiterReplyDbContext>();
-    dbContext.Database.EnsureCreated();
+    dbContext.Database.Migrate();
 }
 
 // Configure the HTTP request pipeline
@@ -161,6 +216,27 @@ app.MapGet("/health/apis", () =>
             analysisApi = true,
             replyApi = true,
             comparisonApi = true
+        }
+    });
+});
+
+app.MapGet("/health/gmail", async (RecruiterReplyDbContext db, CancellationToken ct) =>
+{
+    var gmailClientId = builder.Configuration["Gmail:ClientId"];
+    var gmailClientSecret = builder.Configuration["Gmail:ClientSecret"];
+    var isConfigured = !string.IsNullOrWhiteSpace(gmailClientId) && !string.IsNullOrWhiteSpace(gmailClientSecret);
+
+    var activeConnections = await db.GmailConnections.CountAsync(c => c.Status == "active", ct);
+    var errorConnections = await db.GmailConnections.CountAsync(c => c.Status == "error", ct);
+
+    return Results.Ok(new
+    {
+        status = "healthy",
+        gmail = new
+        {
+            configured = isConfigured,
+            activeConnections,
+            errorConnections
         }
     });
 });

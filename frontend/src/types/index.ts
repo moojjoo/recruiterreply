@@ -95,6 +95,16 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+// Gmail Recruiting Agent Types
+export interface GmailStatus {
+  isConnected: boolean;
+  googleAccountEmail?: string;
+  status?: string;
+  lastSyncedAt?: string;
+  lastSyncStatus?: string;
+  lastSyncError?: string;
+}
+
 export interface ApiError {
   message: string;
   status: number;
