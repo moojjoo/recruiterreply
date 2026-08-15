@@ -1,5 +1,5 @@
 module "network" {
-  source = "./modules/network"
+  source = "../../modules/network"
 
   name_prefix          = local.name_prefix
   vpc_cidr             = var.vpc_cidr
@@ -8,18 +8,8 @@ module "network" {
   private_subnet_cidrs = var.private_subnet_cidrs
 }
 
-data "aws_caller_identity" "current" {}
-
-module "github_oidc" {
-  source = "./modules/github_oidc"
-
-  name_prefix    = var.app_name
-  github_repo    = "moojjoo/recruiterreply"
-  aws_account_id = data.aws_caller_identity.current.account_id
-}
-
 module "security" {
-  source = "./modules/security"
+  source = "../../modules/security"
 
   name_prefix          = local.name_prefix
   vpc_id               = module.network.vpc_id
@@ -28,7 +18,7 @@ module "security" {
 }
 
 module "compute" {
-  source = "./modules/compute"
+  source = "../../modules/compute"
 
   name_prefix           = local.name_prefix
   subnet_id             = module.network.public_subnet_ids[0]
@@ -42,7 +32,7 @@ module "compute" {
 }
 
 module "secrets" {
-  source = "./modules/secrets"
+  source = "../../modules/secrets"
 
   name_prefix   = local.name_prefix
   ec2_role_name = module.compute.role_name
@@ -50,7 +40,7 @@ module "secrets" {
 
 module "database" {
   count  = var.enable_rds ? 1 : 0
-  source = "./modules/database"
+  source = "../../modules/database"
 
   name_prefix             = local.name_prefix
   private_subnet_ids      = module.network.private_subnet_ids
@@ -67,12 +57,4 @@ module "database" {
   deletion_protection     = var.db_deletion_protection
   skip_final_snapshot     = var.db_skip_final_snapshot
   engine_version          = var.db_engine_version
-}
-
-module "frontend" {
-  source = "./modules/frontend"
-
-  create_buckets        = var.create_frontend_buckets
-  frontend_bucket_names = var.frontend_bucket_names
-  aws_account_id        = data.aws_caller_identity.current.account_id
 }
