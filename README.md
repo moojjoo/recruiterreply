@@ -49,38 +49,14 @@ recruiterreply/
 - **AI**: OpenAI API (GPT-4)
 - **Build Tools**: Vite, npm
 
-## � Deployment to AWS
+## 🚀 Deployment to AWS
 
-RecruiterReply includes a complete automated CI/CD pipeline for deploying to AWS:
+Infrastructure (VPC, EC2, S3, IAM/SSM role) is already provisioned via Terraform in `infra/aws/terraform/`. Deployment to AWS is fully automated via GitHub Actions using OIDC auth (no static AWS keys):
 
-- **GitHub Actions Workflows**: Automated build, test, and deploy pipelines
-- **Terraform Infrastructure**: Infrastructure-as-Code for reproducible deployments
-- **Multi-Environment**: Dev, staging, and production environments
-- **Keyless Auth**: OIDC integration (no API keys in GitHub)
+- **`.github/workflows/deploy-dev.yml`** - runs on push to `dev`, builds backend Docker image → ECR, builds frontend → S3, deploys to EC2 via SSM
+- **`.github/workflows/deploy-prod.yml`** - same flow for the `prod` environment, includes CloudFront invalidation
 
-### Quick Start
-
-```bash
-# 1. Setup AWS account (one-time)
-bash scripts/setup-aws-deployment.sh
-
-# 2. Configure GitHub secrets (see DEPLOYMENT_QUICKSTART.md)
-# Settings → Secrets and variables → Actions
-
-# 3. Deploy infrastructure
-git push origin dev
-# Watch: GitHub Actions → Deploy Infrastructure (Terraform)
-
-# 4. Deploy application
-git push origin dev
-# Automatic deployment via GitHub Actions
-```
-
-**📚 Full Documentation:**
-- [Deployment Quick Start](DEPLOYMENT_QUICKSTART.md) - 5-minute setup
-- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Complete step-by-step
-- [GitHub Actions Setup](docs/GITHUB_ACTIONS_SETUP.md) - Configuration checklist
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues & solutions
+GitHub `dev`/`prod` environments already have the required secrets/variables configured (`AWS_ROLE_TO_ASSUME`, `EC2_HOST`, `EC2_DEPLOY_PATH`, `S3_FRONTEND_BUCKET`, `EC2_SSH_PRIVATE_KEY`, etc.) — just push to `dev` or `main`/`prod` to deploy, or trigger a workflow manually via `workflow_dispatch`.
 
 ---
 
