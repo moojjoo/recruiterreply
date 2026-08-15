@@ -10,6 +10,14 @@ module "network" {
 
 data "aws_caller_identity" "current" {}
 
+module "github_oidc" {
+  source = "./modules/github_oidc"
+
+  name_prefix    = var.app_name
+  github_repo    = "moojjoo/recruiterreply"
+  aws_account_id = data.aws_caller_identity.current.account_id
+}
+
 module "security" {
   source = "./modules/security"
 

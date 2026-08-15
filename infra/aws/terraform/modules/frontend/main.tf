@@ -1,25 +1,19 @@
 locals {
   buckets = var.create_buckets ? var.frontend_bucket_names : {}
 
-  # prod's live CloudFront origin is a differently-named bucket than frontend_bucket_names["prod"]
-  # (that one is an orphaned/empty leftover); override so we manage the bucket actually in use.
-  origin_bucket_overrides = {
-    prod = "recruiterreply-prod-frontend-4d2e1c61dac86c486324f7f490"
-  }
-
   origin_bucket_names = {
     for key, bucket in aws_s3_bucket.this :
-    key => lookup(local.origin_bucket_overrides, key, bucket.id)
+    key => bucket.id
   }
 
   origin_bucket_domains = {
     for key, bucket in aws_s3_bucket.this :
-    key => contains(keys(local.origin_bucket_overrides), key) ? "${local.origin_bucket_overrides[key]}.s3.us-east-1.amazonaws.com" : bucket.bucket_regional_domain_name
+    key => bucket.bucket_regional_domain_name
   }
 
   origin_bucket_arns = {
     for key, bucket in aws_s3_bucket.this :
-    key => contains(keys(local.origin_bucket_overrides), key) ? "arn:aws:s3:::${local.origin_bucket_overrides[key]}" : bucket.arn
+    key => bucket.arn
   }
 
   # prod's distribution predates the CachePolicyId API and still uses legacy ForwardedValues.

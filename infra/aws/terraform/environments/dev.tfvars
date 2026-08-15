@@ -20,5 +20,5 @@ create_frontend_buckets = true
 frontend_bucket_names = {
   dev  = "recruiterreply-dev-frontend-178522450316"
   test = "recruiterreply-test-frontend-178522450316"
-  prod = "recruiterreply-prod-frontend-178522450316"
+  prod = "recruiterreply-prod-frontend-4d2e1c61dac86c486324f7f490"
 }
