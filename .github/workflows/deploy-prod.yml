@@ -73,14 +73,14 @@ jobs:
 
       - name: Configure AWS credentials (OIDC role)
         if: steps.aws-auth.outputs.auth_mode == 'oidc'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (access keys)
         if: steps.aws-auth.outputs.auth_mode == 'keys'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
           aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
