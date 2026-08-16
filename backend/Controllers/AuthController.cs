@@ -18,19 +18,22 @@ public class AuthController : ControllerBase
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IGoogleAuthService _googleAuthService;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         RecruiterReplyDbContext db,
         IPasswordHashService passwordHashService,
         IJwtTokenService jwtTokenService,
         IGoogleAuthService googleAuthService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<AuthController> logger)
     {
         _db = db;
         _passwordHashService = passwordHashService;
         _jwtTokenService = jwtTokenService;
         _googleAuthService = googleAuthService;
         _configuration = configuration;
+        _logger = logger;
     }
 
     [HttpPost("register")]
@@ -105,6 +108,7 @@ public class AuthController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to build Google authorization URL");
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -125,8 +129,9 @@ public class AuthController : ControllerBase
             var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/auth/google/callback?token={Uri.EscapeDataString(result.Token)}");
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Google OAuth callback failed");
             var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/login?error=google_auth_failed");
         }
