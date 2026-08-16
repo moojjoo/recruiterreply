@@ -1,7 +1,8 @@
 import React, { useState } from "react";
+import { AnalyzeMessageResponse } from "../types/index";
 
 interface AnalysisResultProps {
-  result: any;
+  result: AnalyzeMessageResponse | null;
   loading: boolean;
   error: string | null;
 }
@@ -37,6 +38,10 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
         <span>{error}</span>
       </div>
     );
+  }
+
+  if (!result) {
+    return null;
   }
 
   const getScoreBadge = (score: number) => {

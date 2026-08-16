@@ -1,15 +1,5 @@
-import React, { createContext, useState, useCallback } from "react";
-
-export interface UIContextType {
-  isLoading: boolean;
-  setIsLoading: (loading: boolean) => void;
-  modalOpen: Record<string, boolean>;
-  openModal: (id: string) => void;
-  closeModal: (id: string) => void;
-  toggleModal: (id: string) => void;
-}
-
-export const UIContext = createContext<UIContextType | undefined>(undefined);
+import React, { useState, useCallback } from "react";
+import { UIContext } from "../hooks/useUI";
 
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

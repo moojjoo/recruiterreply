@@ -88,17 +88,20 @@ export const comparisonService = {
 };
 
 // Helper function to provide user-friendly error messages
-function handleApiError(error: any): Error {
-  if (error.response?.data?.error) {
-    return new Error(error.response.data.error);
+function handleApiError(error: unknown): Error {
+  if (error instanceof AxiosError) {
+    if (error.response?.data?.error) {
+      return new Error(error.response.data.error);
+    }
+    if (error.code === 'ECONNABORTED') {
+      return new Error('Request timeout. Is the backend running on port 5002?');
+    }
+    if (!error.response) {
+      return new Error('Cannot connect to backend. Make sure it\'s running on http://localhost:5002');
+    }
+    return error;
   }
-  if (error.code === 'ECONNABORTED') {
-    return new Error('Request timeout. Is the backend running on port 5002?');
-  }
-  if (!error.response) {
-    return new Error('Cannot connect to backend. Make sure it\'s running on http://localhost:5002');
-  }
-  return error;
+  return error instanceof Error ? error : new Error('Unknown error');
 }
 
 export default api;

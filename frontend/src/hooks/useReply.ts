@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { AxiosError } from "axios";
 import { messageService } from "../services/api/messageService";
 import { GenerateReplyResponse, GenerateReplyRequest } from "../types/index";
 import { useToast } from "./useToast";
@@ -18,9 +19,10 @@ export const useReply = () => {
         setResult(response.data);
         showToast("Reply generated!", "success");
         return response.data;
-      } catch (err: any) {
+      } catch (err) {
         const errorMsg =
-          err.response?.data?.message || "Failed to generate reply";
+          (err instanceof AxiosError ? err.response?.data?.message : undefined) ||
+          "Failed to generate reply";
         setError(errorMsg);
         showToast(errorMsg, "error");
         throw err;

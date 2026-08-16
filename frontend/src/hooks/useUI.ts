@@ -1,5 +1,15 @@
-import { useContext } from "react";
-import { UIContext, UIContextType } from "../contexts/UIContext";
+import { createContext, useContext } from "react";
+
+export interface UIContextType {
+  isLoading: boolean;
+  setIsLoading: (loading: boolean) => void;
+  modalOpen: Record<string, boolean>;
+  openModal: (id: string) => void;
+  closeModal: (id: string) => void;
+  toggleModal: (id: string) => void;
+}
+
+export const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const useUI = (): UIContextType => {
   const context = useContext(UIContext);

@@ -1,24 +1,15 @@
-import React, { createContext, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { Toast } from "../types/index";
-
-export interface ToastContextType {
-  toasts: Toast[];
-  showToast: (
-    message: string,
-    type: "success" | "error" | "info" | "warning",
-    duration?: number,
-  ) => void;
-  removeToast: (id: string) => void;
-}
-
-export const ToastContext = createContext<ToastContextType | undefined>(
-  undefined,
-);
+import { ToastContext } from "../hooks/useToast";
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const showToast = useCallback(
     (
@@ -37,12 +28,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
         }, duration);
       }
     },
-    [],
+    [removeToast],
   );
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
 
   return (
     <ToastContext.Provider value={{ toasts, showToast, removeToast }}>

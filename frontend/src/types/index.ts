@@ -13,7 +13,7 @@ export interface AnalyzeMessageRequest {
   jobTitle?: string;
 }
 
-export interface MessageAnalysisRequest extends AnalyzeMessageRequest {}
+export type MessageAnalysisRequest = AnalyzeMessageRequest;
 
 export interface AnalyzeMessageResponse {
   compensationMentioned: string;
@@ -108,5 +108,5 @@ export interface GmailStatus {
 export interface ApiError {
   message: string;
   status: number;
-  data?: any;
+  data?: unknown;
 }
