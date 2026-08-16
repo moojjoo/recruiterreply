@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { AxiosError } from "axios";
 import { replyService } from "../services/api";
 import { GenerateReplyResponse } from "../types/index";
 
@@ -62,11 +63,10 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
         notes: notes || undefined,
       });
       onResult(result);
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          "Failed to generate reply. Check your OpenAI API key.",
-      );
+    } catch (err) {
+      const message =
+        err instanceof AxiosError ? err.response?.data?.error : undefined;
+      setError(message || "Failed to generate reply. Check your OpenAI API key.");
     } finally {
       setLoading(false);
     }

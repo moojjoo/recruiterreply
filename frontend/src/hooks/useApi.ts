@@ -8,8 +8,8 @@ interface UseApiState<T> {
 }
 
 export const useApi = <T>(
-  fn: () => Promise<any>,
-  dependencies: any[] = [],
+  fn: () => Promise<{ data: T }>,
+  dependencies: unknown[] = [],
 ): UseApiState<T> => {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
@@ -39,6 +39,8 @@ export const useApi = <T>(
     return () => {
       isMounted = false;
     };
+    // dependencies is a caller-provided replacement for this effect's own deps (including fn), by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
 
   return state;

@@ -21,7 +21,7 @@ export const LoginForm: React.FC = () => {
       await login(email, password);
       showToast("Logged in successfully!", "success");
       window.location.href = "/dashboard";
-    } catch (error) {
+    } catch {
       showToast("Login failed. Please try again.", "error");
     } finally {
       setLoading(false);
@@ -33,7 +33,7 @@ export const LoginForm: React.FC = () => {
     try {
       const response = await authService.googleLoginStart();
       window.location.href = response.data.redirectUrl;
-    } catch (error) {
+    } catch {
       showToast("Google login is currently unavailable.", "error");
       setGoogleLoading(false);
     }

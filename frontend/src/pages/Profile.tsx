@@ -30,6 +30,10 @@ export const Profile: React.FC = () => {
   }, [showToast]);
 
   useEffect(() => {
+    // loadGmailStatus is shared with handleDisconnect's refresh call, so it can't be
+    // inlined here; its synchronous setIsLoadingStatus(true) is an intentional
+    // fetch-on-mount pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadGmailStatus();
   }, [loadGmailStatus]);
 

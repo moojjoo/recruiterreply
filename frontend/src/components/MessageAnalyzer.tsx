@@ -1,4 +1,5 @@
 import React, { useState, memo } from "react";
+import { AxiosError } from "axios";
 import { analysisService } from "../services/api";
 import { AnalyzeMessageResponse } from "../types/index";
 
@@ -30,9 +31,9 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
         jobTitle: jobTitle || undefined,
       });
       onResult(result);
-    } catch (err: any) {
+    } catch (err) {
       const errorMessage =
-        err?.response?.data?.error ||
+        (err instanceof AxiosError ? err.response?.data?.error : undefined) ||
         (err instanceof Error ? err.message : null) ||
         "Failed to analyze message. Please check backend configuration.";
       setError(errorMessage);

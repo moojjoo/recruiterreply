@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { AxiosError } from "axios";
 import { messageService } from "../services/api/messageService";
 import { CompareOffersResponse, CompareOffersRequest } from "../types/index";
 import { useToast } from "./useToast";
@@ -18,8 +19,10 @@ export const useComparison = () => {
         setResult(response.data);
         showToast("Comparison complete!", "success");
         return response.data;
-      } catch (err: any) {
-        const errorMsg = err.response?.data?.message || "Comparison failed";
+      } catch (err) {
+        const errorMsg =
+          (err instanceof AxiosError ? err.response?.data?.message : undefined) ||
+          "Comparison failed";
         setError(errorMsg);
         showToast(errorMsg, "error");
         throw err;
