@@ -14,7 +14,7 @@ env:
   BACKEND_SERVICE: backend-test
   BACKEND_IMAGE_VAR: BACKEND_IMAGE_TEST
   BACKEND_IMAGE_NAME: recruiterreply-backend
-  FRONTEND_API_BASE_URL: https://api-test.recruiterreply.com
+  FRONTEND_API_BASE_URL: https://api-test.recruiterreply.com/api
   EC2_DEPLOY_PATH: ${{ vars.EC2_DEPLOY_PATH || '/home/ubuntu/recruiterreply' }}
   AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}
 
