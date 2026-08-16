@@ -26,7 +26,7 @@ const Footer: React.FC = () => {
     <footer className="bg-gray-50 border-t border-gray-200 py-8 mt-12">
       <div className="container text-center text-sm text-gray-600">
         <p>&copy; 2026 RecruiterReply. All rights reserved.</p>
-        <a href="/privacy" className="inline-block mt-2 text-primary-600 hover:underline">
+        <a href="/policy" className="inline-block mt-2 text-primary-600 hover:underline">
           Privacy Policy
         </a>
         <span className="mx-2 text-gray-400">|</span>

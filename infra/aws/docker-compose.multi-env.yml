@@ -29,6 +29,11 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:5000
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_DEV}
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
+      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
+      Frontend__BaseUrl: https://dev.recruiterreply.com
+      Cors__AllowedOrigins__0: https://dev.recruiterreply.com
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5001:5000"
@@ -47,6 +52,11 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:5000
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_TEST}
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
+      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      Google__RedirectUri: https://api-test.recruiterreply.com/api/auth/google/callback
+      Frontend__BaseUrl: https://test.recruiterreply.com
+      Cors__AllowedOrigins__0: https://test.recruiterreply.com
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_test;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5002:5000"

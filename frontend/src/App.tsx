@@ -35,7 +35,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/policy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<Terms />} />
 
                 {/* Protected Routes */}
