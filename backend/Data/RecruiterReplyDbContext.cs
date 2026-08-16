@@ -30,7 +30,7 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsRequired();
             entity.Property(e => e.FirstName).HasColumnName("first_name").HasMaxLength(100);
             entity.Property(e => e.LastName).HasColumnName("last_name").HasMaxLength(100);
-            entity.Property(e => e.ProfilePictureUrl).HasColumnName("profile_picture_url").HasMaxLength(500);
+            entity.Property(e => e.ProfilePictureUrl).HasColumnName("profile_picture_url").HasMaxLength(2048);
             entity.Property(e => e.AuthProvider).HasColumnName("auth_provider").HasMaxLength(50).HasDefaultValue("email");
             entity.Property(e => e.ProviderUserId).HasColumnName("provider_user_id").HasMaxLength(255);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
