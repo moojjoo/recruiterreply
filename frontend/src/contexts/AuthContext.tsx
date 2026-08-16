@@ -1,19 +1,8 @@
-import React, { createContext, useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
+import { AxiosError } from "axios";
 import { User } from "../types/index";
 import { authService } from "../services/api/authService";
-
-export interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => void;
-}
-
-export const AuthContext = createContext<AuthContextType | undefined>(
-  undefined,
-);
+import { AuthContext } from "../hooks/useAuth";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -53,9 +42,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setUser(payload.user);
       localStorage.setItem("authToken", payload.token);
       localStorage.setItem("userData", JSON.stringify(payload.user));
-    } catch (error: any) {
-      const message = error?.response?.data?.error || "Login failed";
-      throw new Error(message);
+    } catch (error) {
+      const message =
+        error instanceof AxiosError ? error.response?.data?.error : undefined;
+      throw new Error(message || "Login failed", { cause: error });
     } finally {
       setIsLoading(false);
     }
@@ -70,9 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(payload.user);
         localStorage.setItem("authToken", payload.token);
         localStorage.setItem("userData", JSON.stringify(payload.user));
-      } catch (error: any) {
-        const message = error?.response?.data?.error || "Registration failed";
-        throw new Error(message);
+      } catch (error) {
+        const message =
+          error instanceof AxiosError
+            ? error.response?.data?.error
+            : undefined;
+        throw new Error(message || "Registration failed", { cause: error });
       } finally {
         setIsLoading(false);
       }

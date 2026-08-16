@@ -63,10 +63,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://0.0.0.0:5000
-      OpenAI__ApiKey: ${OPENAI_API_KEY}
-      Jwt__Key: ${JWT_KEY_PROD}
-      Google__ClientId: ${GOOGLE_CLIENT_ID}
-      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      AWS_REGION: us-east-1
+      AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/prod/backend-app-secrets
       Google__RedirectUri: https://api.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://recruiterreply.com
       Cors__AllowedOrigins__0: https://recruiterreply.com

@@ -1,10 +1,13 @@
 import React, { useState } from "react";
+import { AxiosError } from "axios";
 import { comparisonService } from "../services/api";
 import { CompareOffersResponse, JobOffer } from "../types/index";
 
 interface ComparisonToolProps {
   onResult: (result: CompareOffersResponse) => void;
 }
+
+type OfferFieldValue = string | number;
 
 const defaultOffer: JobOffer = {
   company: "",
@@ -23,11 +26,11 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleOfferOneChange = (field: keyof JobOffer, value: any) => {
+  const handleOfferOneChange = (field: keyof JobOffer, value: OfferFieldValue) => {
     setOfferOne({ ...offerOne, [field]: value });
   };
 
-  const handleOfferTwoChange = (field: keyof JobOffer, value: any) => {
+  const handleOfferTwoChange = (field: keyof JobOffer, value: OfferFieldValue) => {
     setOfferTwo({ ...offerTwo, [field]: value });
   };
 
@@ -57,17 +60,61 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
         offerTwo,
       });
       onResult(result);
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          "Failed to compare offers. Check your OpenAI API key.",
-      );
+    } catch (err) {
+      const message =
+        err instanceof AxiosError ? err.response?.data?.error : undefined;
+      setError(message || "Failed to compare offers. Check your OpenAI API key.");
     } finally {
       setLoading(false);
     }
   };
 
-  const OfferForm = ({ title, offer, onChange }: any) => (
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <OfferForm
+          title="Offer 1"
+          offer={offerOne}
+          onChange={handleOfferOneChange}
+          loading={loading}
+        />
+        <OfferForm
+          title="Offer 2"
+          offer={offerTwo}
+          onChange={handleOfferTwoChange}
+          loading={loading}
+        />
+      </div>
+
+      {error && <p className="error-text mb-4">{error}</p>}
+
+      <button type="submit" className="btn-primary w-full" disabled={loading}>
+        {loading ? (
+          <>
+            <span className="loading mr-2"></span>
+            Comparing...
+          </>
+        ) : (
+          "Compare Offers"
+        )}
+      </button>
+    </form>
+  );
+};
+
+interface OfferFormProps {
+  title: string;
+  offer: JobOffer;
+  onChange: (field: keyof JobOffer, value: OfferFieldValue) => void;
+  loading: boolean;
+}
+
+const OfferForm: React.FC<OfferFormProps> = ({
+  title,
+  offer,
+  onChange,
+  loading,
+}) => (
     <div className="card">
       <h3 className="text-xl font-bold mb-4">{title}</h3>
 
@@ -210,33 +257,3 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
     </div>
   );
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <OfferForm
-          title="Offer 1"
-          offer={offerOne}
-          onChange={handleOfferOneChange}
-        />
-        <OfferForm
-          title="Offer 2"
-          offer={offerTwo}
-          onChange={handleOfferTwoChange}
-        />
-      </div>
-
-      {error && <p className="error-text mb-4">{error}</p>}
-
-      <button type="submit" className="btn-primary w-full" disabled={loading}>
-        {loading ? (
-          <>
-            <span className="loading mr-2"></span>
-            Comparing...
-          </>
-        ) : (
-          "Compare Offers"
-        )}
-      </button>
-    </form>
-  );
-};
