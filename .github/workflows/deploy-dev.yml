@@ -266,7 +266,7 @@ jobs:
 
       - name: Deploy backend container on EC2
         env:
-          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           BACKEND_IMAGE: ${{ steps.push-backend.outputs.backend_image }}
         run: |
           set -euo pipefail
