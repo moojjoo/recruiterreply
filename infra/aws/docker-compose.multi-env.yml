@@ -27,6 +27,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://0.0.0.0:5000
+      AWS_REGION: us-east-1
+      AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/dev/backend-app-secrets
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_DEV}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
@@ -50,6 +52,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_URLS: http://0.0.0.0:5000
+      AWS_REGION: us-east-1
+      AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/test/backend-app-secrets
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_TEST}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
