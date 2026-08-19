@@ -9,6 +9,12 @@ export const Navbar: React.FC = () => {
     <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-200">
       <div className="container flex items-center justify-between py-4">
         <a href="/" className="flex items-center gap-2">
+          <img
+            src="/recruiterreply-mark.svg"
+            alt=""
+            aria-hidden="true"
+            className="h-9 w-9"
+          />
           <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
             RecruiterReply
           </span>
