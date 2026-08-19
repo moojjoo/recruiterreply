@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /analyze
+Disallow: /reply
+Disallow: /compare
+Disallow: /profile
+Disallow: /opportunities
+Disallow: /gmail/
+Disallow: /auth/
+
+Sitemap: https://recruiterreply.com/sitemap.xml
