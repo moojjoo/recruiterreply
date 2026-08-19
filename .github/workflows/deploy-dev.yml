@@ -266,7 +266,7 @@ jobs:
 
       - name: Deploy backend container on EC2
         env:
-          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           BACKEND_IMAGE: ${{ steps.push-backend.outputs.backend_image }}
         run: |
           set -euo pipefail
@@ -279,6 +279,24 @@ jobs:
             echo "BACKEND_IMAGE output is empty"
             exit 1
           fi
+
+          echo "Checking SSM agent connectivity for instance $EC2_INSTANCE_ID..."
+          for i in $(seq 1 20); do
+            PING_STATUS=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$EC2_INSTANCE_ID" \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null || echo "Unknown")
+            if [[ "$PING_STATUS" == "Online" ]]; then
+              echo "SSM agent is online"
+              break
+            fi
+            if [[ $i -eq 20 ]]; then
+              echo "::error::SSM agent is not online after 60s (status: $PING_STATUS)"
+              exit 1
+            fi
+            echo "SSM agent ping status: $PING_STATUS, retrying in 3s... ($i/20)"
+            sleep 3
+          done
 
           ECR_REGISTRY="${BACKEND_IMAGE%%/*}"
           ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
@@ -296,13 +314,16 @@ jobs:
                 "cd \($deploy_path)",
                 "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
+                "echo Validating required env vars in .env...",
+                "missing_vars=\"\"; for v in POSTGRES_SUPERUSER POSTGRES_SUPERPASS OPENAI_API_KEY JWT_KEY_DEV GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do if ! grep -q \"^${v}=\" .env; then echo \"Missing required .env variable: $v\"; missing_vars=\"$missing_vars $v\"; fi; done; if [ -n \"$missing_vars\" ]; then echo \"Aborting: required .env variables are missing:$missing_vars\"; exit 1; fi",
+                "echo All required env vars present.",
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
                 "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
                 "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env >/dev/null; fi",
                 "sudo grep \"^\($image_var)=\" .env",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service)",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service)",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml logs --no-color \($backend_service); exit 1; }",
                 "sudo docker image prune -f"
               ]
             }')

@@ -260,6 +260,24 @@ jobs:
             exit 1
           fi
 
+          echo "Checking SSM agent connectivity for instance $EC2_INSTANCE_ID..."
+          for i in $(seq 1 20); do
+            PING_STATUS=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$EC2_INSTANCE_ID" \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null || echo "Unknown")
+            if [[ "$PING_STATUS" == "Online" ]]; then
+              echo "SSM agent is online"
+              break
+            fi
+            if [[ $i -eq 20 ]]; then
+              echo "::error::SSM agent is not online after 60s (status: $PING_STATUS)"
+              exit 1
+            fi
+            echo "SSM agent ping status: $PING_STATUS, retrying in 3s... ($i/20)"
+            sleep 3
+          done
+
           ECR_REGISTRY="${BACKEND_IMAGE%%/*}"
           ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
 
