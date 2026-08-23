@@ -170,9 +170,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", status = "ok" }));
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
-app.MapGet("/health/db", async (RecruiterReplyDbContext db, CancellationToken ct) =>
+// nginx prepends /api to all requests, so these are also mapped under /api for external reachability.
+Func<IResult> healthHandler = () => Results.Ok(new { status = "healthy" });
+app.MapGet("/health", healthHandler);
+app.MapGet("/api/health", healthHandler);
+
+Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthDbHandler = async (db, ct) =>
 {
     var canConnect = await db.Database.CanConnectAsync(ct);
     if (!canConnect)
@@ -193,9 +197,11 @@ app.MapGet("/health/db", async (RecruiterReplyDbContext db, CancellationToken ct
             messagesCount
         }
     });
-});
+};
+app.MapGet("/health/db", healthDbHandler);
+app.MapGet("/api/health/db", healthDbHandler);
 
-app.MapGet("/health/apis", () =>
+Func<IResult> healthApisHandler = () =>
 {
     var configuredOpenAiKey = builder.Configuration["OpenAI:ApiKey"];
     if (string.IsNullOrWhiteSpace(configuredOpenAiKey) || configuredOpenAiKey == "sk-proj-YOUR_KEY_HERE")
@@ -218,9 +224,11 @@ app.MapGet("/health/apis", () =>
             comparisonApi = true
         }
     });
-});
+};
+app.MapGet("/health/apis", healthApisHandler);
+app.MapGet("/api/health/apis", healthApisHandler);
 
-app.MapGet("/health/gmail", async (RecruiterReplyDbContext db, CancellationToken ct) =>
+Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthGmailHandler = async (db, ct) =>
 {
     var gmailClientId = builder.Configuration["Gmail:ClientId"];
     var gmailClientSecret = builder.Configuration["Gmail:ClientSecret"];
@@ -239,9 +247,11 @@ app.MapGet("/health/gmail", async (RecruiterReplyDbContext db, CancellationToken
             errorConnections
         }
     });
-});
+};
+app.MapGet("/health/gmail", healthGmailHandler);
+app.MapGet("/api/health/gmail", healthGmailHandler);
 
-app.MapGet("/health/crud", async (RecruiterReplyDbContext db, IDefaultUserService defaultUserService, CancellationToken ct) =>
+Func<RecruiterReplyDbContext, IDefaultUserService, CancellationToken, Task<IResult>> healthCrudHandler = async (db, defaultUserService, ct) =>
 {
     var userId = await defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
     await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -272,7 +282,9 @@ app.MapGet("/health/crud", async (RecruiterReplyDbContext db, IDefaultUserServic
         status = "healthy",
         crud = new { create = true, read = true, update = true, delete = true }
     });
-});
+};
+app.MapGet("/health/crud", healthCrudHandler);
+app.MapGet("/api/health/crud", healthCrudHandler);
 
 app.MapControllers();
 
