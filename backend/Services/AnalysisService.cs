@@ -7,6 +7,8 @@ namespace RecruiterReply.Services;
 
 public class AnalysisService : IAnalysisService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<AnalysisService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
@@ -49,7 +51,8 @@ public class AnalysisService : IAnalysisService
                 request.JobTitle
             );
 
-            var response = JsonSerializer.Deserialize<AnalyzeMessageResponse>(result);
+            // OpenAI returns camelCase JSON; default JsonSerializerOptions is case-sensitive.
+            var response = JsonSerializer.Deserialize<AnalyzeMessageResponse>(result, JsonOptions);
             if (response == null)
             {
                 throw new InvalidOperationException("Failed to deserialize AI response");

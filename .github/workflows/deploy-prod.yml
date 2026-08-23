@@ -41,7 +41,7 @@ jobs:
         run: npm run lint
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -170,6 +170,11 @@ jobs:
             exit 1
           fi
 
+          if [[ ! -f frontend/dist/sitemap.xml ]]; then
+            echo "::error::Missing frontend/dist/sitemap.xml after build"
+            exit 1
+          fi
+
           if [[ ! -d frontend/dist/assets ]]; then
             echo "::error::Missing frontend/dist/assets after build"
             exit 1
@@ -203,6 +208,7 @@ jobs:
           fi
 
           aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key index.html >/dev/null
+          aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key sitemap.xml >/dev/null
           echo "S3 object verification passed: count=$OBJECT_COUNT"
 
       - name: Verify CloudFront origin matches S3 bucket

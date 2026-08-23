@@ -7,6 +7,8 @@ namespace RecruiterReply.Services;
 
 public class ComparisonService : IComparisonService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<ComparisonService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
@@ -52,7 +54,8 @@ public class ComparisonService : IComparisonService
 
             var result = await _openAIService.CompareOffersAsync(offerOneJson, offerTwoJson);
 
-            var response = JsonSerializer.Deserialize<CompareOffersResponse>(result);
+            // OpenAI returns camelCase JSON; default JsonSerializerOptions is case-sensitive.
+            var response = JsonSerializer.Deserialize<CompareOffersResponse>(result, JsonOptions);
             if (response == null)
             {
                 throw new InvalidOperationException("Failed to deserialize AI response");
