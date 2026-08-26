@@ -23,6 +23,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
@@ -122,21 +123,35 @@ jobs:
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME:$SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Verify and download frontend artifact
+      - name: Resolve successful build run
+        id: build-run
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           SHA: ${{ inputs.sha }}
         run: |
           set -euo pipefail
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ARTIFACT_BUCKET="recruiterreply-build-artifacts-$ACCOUNT_ID"
 
-          if ! aws s3 ls "s3://$ARTIFACT_BUCKET/frontend/$SHA/index.html" >/dev/null 2>&1; then
-            echo "::error::No frontend artifact found at s3://$ARTIFACT_BUCKET/frontend/$SHA/. Run the Build (Dev) workflow on that commit first."
+          RUN_ID=$(curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPOSITORY/actions/workflows/build.yml/runs?event=push&status=completed&head_sha=$SHA&per_page=10" \
+            | jq -r '.workflow_runs | map(select(.conclusion == "success")) | first | .id // empty')
+
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::No successful Build (Dev) workflow run found for SHA $SHA."
             exit 1
           fi
 
-          mkdir -p promoted-dist
-          aws s3 sync "s3://$ARTIFACT_BUCKET/frontend/$SHA/" ./promoted-dist --delete
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-${{ inputs.sha }}
+          path: promoted-dist
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
 
       - name: Apply environment configuration
         env:
