@@ -1,44 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const robotsByEnvironment = {
-  dev: `User-agent: *
-Disallow: /
-`,
-  test: `User-agent: *
-Disallow: /
-`,
-  prod: `User-agent: *
-Allow: /
-Disallow: /dashboard
-Disallow: /analyze
-Disallow: /reply
-Disallow: /compare
-Disallow: /profile
-Disallow: /opportunities
-Disallow: /gmail/
-Disallow: /auth/
-
-Sitemap: https://recruiterreply.com/sitemap.xml
-`,
-} as const
-
-const robotsPlugin = {
-  name: 'environment-robots',
-  generateBundle() {
-    const environment = process.env.DEPLOY_ENV === 'test' ? 'test' : process.env.DEPLOY_ENV === 'dev' ? 'dev' : 'prod'
-
-    this.emitFile({
-      type: 'asset',
-      fileName: 'robots.txt',
-      source: robotsByEnvironment[environment],
-    })
-  },
-}
+// robots.txt is written at promotion time (see .github/workflows/promote.yml)
+// since it now differs by deployed environment, not by build. public/robots.txt
+// ships a safe "disallow all" default for any build that skips promotion.
 
 export default defineConfig({
   envDir: '../docs',
-  plugins: [react(), robotsPlugin],
+  plugins: [react()],
   server: {
     port: 5173,
     proxy: {

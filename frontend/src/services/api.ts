@@ -8,9 +8,13 @@ import {
   CompareOffersResponse,
 } from '../types/index';
 
-// API configuration - configurable via environment or defaults to relative path
+// API configuration - runtime config.js (deploy-time) takes priority, then
+// build-time Vite env vars for local dev, then a relative-path default.
+const runtimeApiBaseUrl = window.__APP_CONFIG__?.API_BASE_URL;
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
+  runtimeApiBaseUrl && !runtimeApiBaseUrl.startsWith('__RUNTIME_')
+    ? runtimeApiBaseUrl
+    : import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
 
 // Create axios instance with base configuration
 const api = axios.create({
