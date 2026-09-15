@@ -14,4 +14,9 @@ public class UserEntity
     public DateTime UpdatedAt { get; set; }
     public DateTime? LastLogin { get; set; }
     public bool IsActive { get; set; }
+    public string SubscriptionTier { get; set; } = "free";
+    public string? SubscriptionStatus { get; set; }
+    public string? StripeCustomerId { get; set; }
+    public string? StripeSubscriptionId { get; set; }
+    public DateTime? SubscriptionCurrentPeriodEnd { get; set; }
 }

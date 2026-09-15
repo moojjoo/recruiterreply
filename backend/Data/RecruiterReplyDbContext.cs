@@ -18,6 +18,7 @@ public class RecruiterReplyDbContext : DbContext
     public DbSet<OfferComparisonEntity> OfferComparisons => Set<OfferComparisonEntity>();
     public DbSet<ComparisonItemEntity> ComparisonItems => Set<ComparisonItemEntity>();
     public DbSet<GmailConnectionEntity> GmailConnections => Set<GmailConnectionEntity>();
+    public DbSet<UsageRecordEntity> UsageRecords => Set<UsageRecordEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,8 +38,14 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.Property(e => e.LastLogin).HasColumnName("last_login");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.SubscriptionTier).HasColumnName("subscription_tier").HasMaxLength(50).HasDefaultValue("free").IsRequired();
+            entity.Property(e => e.SubscriptionStatus).HasColumnName("subscription_status").HasMaxLength(50);
+            entity.Property(e => e.StripeCustomerId).HasColumnName("stripe_customer_id").HasMaxLength(255);
+            entity.Property(e => e.StripeSubscriptionId).HasColumnName("stripe_subscription_id").HasMaxLength(255);
+            entity.Property(e => e.SubscriptionCurrentPeriodEnd).HasColumnName("subscription_current_period_end");
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => new { e.AuthProvider, e.ProviderUserId }).IsUnique();
+            entity.HasIndex(e => e.StripeCustomerId).IsUnique();
         });
 
         modelBuilder.Entity<MessageEntity>(entity =>
@@ -195,6 +202,19 @@ public class RecruiterReplyDbContext : DbContext
             entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(e => e.UserId).IsUnique();
             entity.HasIndex(e => e.Status);
+        });
+
+        modelBuilder.Entity<UsageRecordEntity>(entity =>
+        {
+            entity.ToTable("usage_records");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Feature).HasColumnName("feature").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.PeriodStart).HasColumnName("period_start");
+            entity.Property(e => e.Count).HasColumnName("count");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.Feature, e.PeriodStart }).IsUnique();
         });
     }
 }
