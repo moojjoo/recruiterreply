@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AxiosError } from "axios";
-import { replyService } from "../services/api";
+import { replyService, isQuotaExceededError } from "../services/api";
 import { GenerateReplyResponse } from "../types/index";
 
 interface ReplyGeneratorProps {
@@ -43,10 +43,12 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setQuotaExceeded(false);
 
     if (!message.trim()) {
       setError("Please paste the recruiter message");
@@ -64,9 +66,14 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
       });
       onResult(result);
     } catch (err) {
-      const message =
-        err instanceof AxiosError ? err.response?.data?.error : undefined;
-      setError(message || "Failed to generate reply. Check your OpenAI API key.");
+      if (isQuotaExceededError(err)) {
+        setQuotaExceeded(true);
+        setError("You've reached your plan's monthly limit for reply generation.");
+      } else {
+        const message =
+          err instanceof AxiosError ? err.response?.data?.error : undefined;
+        setError(message || "Failed to generate reply. Check your OpenAI API key.");
+      }
     } finally {
       setLoading(false);
     }
@@ -168,6 +175,11 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
         <div className="alert alert-error mb-6" role="alert">
           <span>⚠️</span>
           <span>{error}</span>
+          {quotaExceeded && (
+            <a href="/pricing" className="ml-2 font-semibold underline">
+              Upgrade →
+            </a>
+          )}
         </div>
       )}
 

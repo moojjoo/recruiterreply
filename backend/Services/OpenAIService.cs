@@ -13,15 +13,15 @@ public class OpenAIService : IOpenAIService
     private const string OpenAIBaseUrl = "https://api.openai.com/v1";
     private const string Model = "gpt-4-turbo";
 
-    public OpenAIService(string apiKey, ILogger<OpenAIService> logger)
+    public OpenAIService(string apiKey, ILogger<OpenAIService> logger, HttpMessageHandler? handler = null)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new ArgumentException("OpenAI API key cannot be empty", nameof(apiKey));
-        
+
         _apiKey = apiKey;
         _isConfigured = _apiKey != "sk-proj-NOT_CONFIGURED" && _apiKey != "sk-proj-YOUR_KEY_HERE";
         _logger = logger;
-        _httpClient = new HttpClient();
+        _httpClient = handler is null ? new HttpClient() : new HttpClient(handler);
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
     }
 

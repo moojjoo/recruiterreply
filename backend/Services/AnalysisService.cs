@@ -12,15 +12,18 @@ public class AnalysisService : IAnalysisService
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<AnalysisService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
+    private readonly IUsageService _usageService;
 
     public AnalysisService(
         IOpenAIService openAIService,
         ILogger<AnalysisService> logger,
-        RecruiterReplyDbContext dbContext)
+        RecruiterReplyDbContext dbContext,
+        IUsageService usageService)
     {
         _openAIService = openAIService;
         _logger = logger;
         _dbContext = dbContext;
+        _usageService = usageService;
     }
 
     public async Task<AnalyzeMessageResponse> AnalyzeRecruiterMessageAsync(AnalyzeMessageRequest request, Guid userId)
@@ -29,6 +32,8 @@ public class AnalysisService : IAnalysisService
         {
             throw new ArgumentException("Recruiter message cannot be empty");
         }
+
+        await _usageService.EnsureWithinQuotaAsync(userId, UsageFeatures.Analyze);
 
         try
         {
@@ -81,6 +86,8 @@ public class AnalysisService : IAnalysisService
 
             _dbContext.MessageAnalyses.Add(analysis);
             await _dbContext.SaveChangesAsync();
+
+            await _usageService.IncrementUsageAsync(userId, UsageFeatures.Analyze);
 
             return response;
         }

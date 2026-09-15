@@ -22,6 +22,7 @@ import { Opportunities } from "./pages/Opportunities";
 import { NotFound } from "./pages/NotFound";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { Terms } from "./pages/Terms";
+import { Pricing } from "./pages/Pricing";
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/policy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<Terms />} />
+                <Route path="/pricing" element={<Pricing />} />
 
                 {/* Protected Routes */}
                 <Route

@@ -21,6 +21,12 @@ export const Navbar: React.FC = () => {
         </a>
 
         <div className="flex items-center gap-4">
+          <a
+            href="/pricing"
+            className="text-sm font-medium text-gray-700 hover:text-primary-600"
+          >
+            Pricing
+          </a>
           {isAuthenticated && user && (
             <>
               <span className="text-sm text-gray-600">

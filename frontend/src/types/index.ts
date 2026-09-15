@@ -6,6 +6,22 @@ export interface User {
   createdAt: string;
 }
 
+// Billing Types
+export type SubscriptionTier = "free" | "professional" | "recruiter_pro";
+
+export interface FeatureUsageStatus {
+  feature: string;
+  used: number;
+  limit: number | null;
+}
+
+export interface UsageStatus {
+  subscriptionTier: SubscriptionTier;
+  subscriptionStatus?: string;
+  subscriptionCurrentPeriodEnd?: string;
+  usage: FeatureUsageStatus[];
+}
+
 // Message Analysis Types
 export interface AnalyzeMessageRequest {
   recruiterMessage: string;

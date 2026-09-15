@@ -63,6 +63,8 @@ backend/bin/
 backend/obj/
 backend/TestResults/
 backend/artifacts/
+backend/RecruiterReply.Tests/bin/
+backend/RecruiterReply.Tests/obj/
 
 # Local Data Protection key ring (encrypts stored Gmail OAuth tokens) — never commit
 backend/keys/

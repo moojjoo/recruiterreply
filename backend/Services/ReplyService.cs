@@ -9,15 +9,18 @@ public class ReplyService : IReplyService
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<ReplyService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
+    private readonly IUsageService _usageService;
 
     public ReplyService(
         IOpenAIService openAIService,
         ILogger<ReplyService> logger,
-        RecruiterReplyDbContext dbContext)
+        RecruiterReplyDbContext dbContext,
+        IUsageService usageService)
     {
         _openAIService = openAIService;
         _logger = logger;
         _dbContext = dbContext;
+        _usageService = usageService;
     }
 
     public async Task<GenerateReplyResponse> GenerateReplyAsync(GenerateReplyRequest request, Guid userId)
@@ -31,6 +34,8 @@ public class ReplyService : IReplyService
         {
             throw new ArgumentException("Reply type cannot be empty");
         }
+
+        await _usageService.EnsureWithinQuotaAsync(userId, UsageFeatures.Reply);
 
         try
         {
@@ -100,6 +105,8 @@ public class ReplyService : IReplyService
 
             _dbContext.GeneratedReplies.Add(generatedReply);
             await _dbContext.SaveChangesAsync();
+
+            await _usageService.IncrementUsageAsync(userId, UsageFeatures.Reply);
 
             return response;
         }
