@@ -1,0 +1,37 @@
+name: Promote to Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to promote (must already be verified on test)"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+
+jobs:
+  promote:
+    uses: ./.github/workflows/promote.yml
+    with:
+      environment: prod
+      sha: ${{ inputs.sha }}
+      api_base_url: https://api.recruiterreply.com/api
+      frontend_url: https://recruiterreply.com
+      api_url: https://api.recruiterreply.com
+      robots_txt: |
+        User-agent: *
+        Allow: /
+        Disallow: /dashboard
+        Disallow: /analyze
+        Disallow: /reply
+        Disallow: /compare
+        Disallow: /profile
+        Disallow: /opportunities
+        Disallow: /gmail/
+        Disallow: /auth/
+
+        Sitemap: https://recruiterreply.com/sitemap.xml

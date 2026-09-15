@@ -12,15 +12,18 @@ public class ComparisonService : IComparisonService
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<ComparisonService> _logger;
     private readonly RecruiterReplyDbContext _dbContext;
+    private readonly IUsageService _usageService;
 
     public ComparisonService(
         IOpenAIService openAIService,
         ILogger<ComparisonService> logger,
-        RecruiterReplyDbContext dbContext)
+        RecruiterReplyDbContext dbContext,
+        IUsageService usageService)
     {
         _openAIService = openAIService;
         _logger = logger;
         _dbContext = dbContext;
+        _usageService = usageService;
     }
 
     public async Task<CompareOffersResponse> CompareOffersAsync(CompareOffersRequest request, Guid userId)
@@ -29,6 +32,8 @@ public class ComparisonService : IComparisonService
         {
             throw new ArgumentException("Both offers are required");
         }
+
+        await _usageService.EnsureWithinQuotaAsync(userId, UsageFeatures.Compare);
 
         try
         {
@@ -60,6 +65,8 @@ public class ComparisonService : IComparisonService
             {
                 throw new InvalidOperationException("Failed to deserialize AI response");
             }
+
+            await _usageService.IncrementUsageAsync(userId, UsageFeatures.Compare);
 
             return response;
         }

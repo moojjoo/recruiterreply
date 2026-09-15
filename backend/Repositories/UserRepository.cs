@@ -14,4 +14,9 @@ public class UserRepository : EfRepository<UserEntity>, IUserRepository
     {
         return DbSet.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
     }
+
+    public Task<UserEntity?> GetByStripeCustomerIdAsync(string stripeCustomerId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.FirstOrDefaultAsync(u => u.StripeCustomerId == stripeCustomerId, cancellationToken);
+    }
 }

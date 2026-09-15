@@ -510,6 +510,39 @@ namespace RecruiterReply.Migrations
                     b.ToTable("opportunities", (string)null);
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.UsageRecordEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer")
+                        .HasColumnName("count");
+
+                    b.Property<string>("Feature")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("feature");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("period_start");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Feature", "PeriodStart")
+                        .IsUnique();
+
+                    b.ToTable("usage_records", (string)null);
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.UserEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -569,6 +602,33 @@ namespace RecruiterReply.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("provider_user_id");
 
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("stripe_customer_id");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("stripe_subscription_id");
+
+                    b.Property<DateTime?>("SubscriptionCurrentPeriodEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("subscription_current_period_end");
+
+                    b.Property<string>("SubscriptionStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("subscription_status");
+
+                    b.Property<string>("SubscriptionTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("free")
+                        .HasColumnName("subscription_tier");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -576,6 +636,9 @@ namespace RecruiterReply.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("StripeCustomerId")
                         .IsUnique();
 
                     b.HasIndex("AuthProvider", "ProviderUserId")
@@ -651,6 +714,15 @@ namespace RecruiterReply.Migrations
                 });
 
             modelBuilder.Entity("RecruiterReply.Entities.OpportunityEntity", b =>
+                {
+                    b.HasOne("RecruiterReply.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.UsageRecordEntity", b =>
                 {
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
                         .WithMany()

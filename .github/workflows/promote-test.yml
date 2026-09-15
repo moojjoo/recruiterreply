@@ -1,0 +1,27 @@
+name: Promote to Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to promote (must have a successful Build (Dev) run)"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+
+jobs:
+  promote:
+    uses: ./.github/workflows/promote.yml
+    with:
+      environment: test
+      sha: ${{ inputs.sha }}
+      api_base_url: https://api-test.recruiterreply.com/api
+      frontend_url: https://test.recruiterreply.com
+      api_url: https://api-test.recruiterreply.com
+      robots_txt: |
+        User-agent: *
+        Disallow: /

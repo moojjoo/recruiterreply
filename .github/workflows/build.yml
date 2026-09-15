@@ -1,0 +1,197 @@
+name: Build (Dev)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+
+env:
+  BACKEND_IMAGE_NAME: recruiterreply-backend
+  AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build backend
+        run: dotnet build backend/RecruiterReply.csproj --configuration Release
+
+      - name: Test backend
+        run: dotnet test backend/RecruiterReply.slnx --configuration Release
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve AWS auth inputs
+        id: aws-auth
+        env:
+          ROLE_FROM_VARS: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          ROLE_ARN_FROM_VARS: ${{ vars.AWS_ROLE_ARN }}
+          ROLE_ARN_FROM_SECRETS: ${{ secrets.AWS_ROLE_ARN }}
+          KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
+          KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          KEY_ALIAS_FROM_VARS: ${{ vars.AWS_ACCESS_KEY }}
+          KEY_ALIAS_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY }}
+          SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
+          SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SECRET_ALIAS_FROM_VARS: ${{ vars.AWS_SECRET_KEY }}
+          SECRET_ALIAS_FROM_SECRETS: ${{ secrets.AWS_SECRET_KEY }}
+          TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
+          TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-${ROLE_ARN_FROM_VARS:-${ROLE_ARN_FROM_SECRETS:-}}}}"
+          AWS_ACCESS_KEY_ID_VAL="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-${KEY_ALIAS_FROM_VARS:-${KEY_ALIAS_FROM_SECRETS:-}}}}"
+          AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-${SECRET_ALIAS_FROM_SECRETS:-${SECRET_ALIAS_FROM_VARS:-}}}}"
+          AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
+
+          if [[ -n "$ROLE_TO_ASSUME" ]]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "$AWS_ACCESS_KEY_ID_VAL" && -n "$AWS_SECRET_ACCESS_KEY_VAL" ]]; then
+            echo "auth_mode=keys" >> "$GITHUB_OUTPUT"
+            echo "aws_access_key_id=$AWS_ACCESS_KEY_ID_VAL" >> "$GITHUB_OUTPUT"
+            echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY_VAL" >> "$GITHUB_OUTPUT"
+            if [[ -n "$AWS_SESSION_TOKEN_VAL" ]]; then
+              echo "aws_session_token=$AWS_SESSION_TOKEN_VAL" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY."
+          exit 1
+
+      - name: Configure AWS credentials (OIDC role)
+        if: steps.aws-auth.outputs.auth_mode == 'oidc'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access keys)
+        if: steps.aws-auth.outputs.auth_mode == 'keys'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
+          aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and push backend image
+        run: |
+          set -euo pipefail
+          LOCAL_BACKEND_IMAGE="$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
+          docker build -t "$LOCAL_BACKEND_IMAGE" ./backend
+
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          ECR_IMAGE="$ECR_REGISTRY/$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
+
+          if ! aws ecr describe-repositories --repository-names "$BACKEND_IMAGE_NAME" >/dev/null 2>&1; then
+            aws ecr create-repository --repository-name "$BACKEND_IMAGE_NAME" >/dev/null
+          fi
+
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker tag "$LOCAL_BACKEND_IMAGE" "$ECR_IMAGE"
+          docker push "$ECR_IMAGE"
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          set -euo pipefail
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Verify frontend build artifacts
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f frontend/dist/index.html ]]; then
+            echo "::error::Missing frontend/dist/index.html after build"
+            exit 1
+          fi
+
+          if [[ ! -f frontend/dist/config.js ]]; then
+            echo "::error::Missing frontend/dist/config.js after build"
+            exit 1
+          fi
+
+          if [[ ! -d frontend/dist/assets ]]; then
+            echo "::error::Missing frontend/dist/assets after build"
+            exit 1
+          fi
+
+          ASSET_COUNT=$(find frontend/dist/assets -type f | wc -l | xargs)
+          if [[ "$ASSET_COUNT" -eq 0 ]]; then
+            echo "::error::No frontend assets were generated"
+            exit 1
+          fi
+
+          echo "Frontend artifact check passed: assets=$ASSET_COUNT"
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy-dev:
+    needs: build
+    uses: ./.github/workflows/promote.yml
+    with:
+      environment: dev
+      sha: ${{ github.sha }}
+      api_base_url: https://api-dev.recruiterreply.com/api
+      frontend_url: https://dev.recruiterreply.com
+      api_url: https://api-dev.recruiterreply.com
+      robots_txt: |
+        User-agent: *
+        Disallow: /

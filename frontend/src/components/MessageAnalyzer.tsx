@@ -1,6 +1,6 @@
 import React, { useState, memo } from "react";
 import { AxiosError } from "axios";
-import { analysisService } from "../services/api";
+import { analysisService, isQuotaExceededError } from "../services/api";
 import { AnalyzeMessageResponse } from "../types/index";
 
 interface AnalyzerProps {
@@ -13,10 +13,12 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
   const [jobTitle, setJobTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setQuotaExceeded(false);
 
     if (!message.trim()) {
       setError("Please paste a recruiter message");
@@ -32,11 +34,16 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
       });
       onResult(result);
     } catch (err) {
-      const errorMessage =
-        (err instanceof AxiosError ? err.response?.data?.error : undefined) ||
-        (err instanceof Error ? err.message : null) ||
-        "Failed to analyze message. Please check backend configuration.";
-      setError(errorMessage);
+      if (isQuotaExceededError(err)) {
+        setQuotaExceeded(true);
+        setError("You've reached your plan's monthly limit for message analyses.");
+      } else {
+        const errorMessage =
+          (err instanceof AxiosError ? err.response?.data?.error : undefined) ||
+          (err instanceof Error ? err.message : null) ||
+          "Failed to analyze message. Please check backend configuration.";
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -96,6 +103,11 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
         <div className="alert alert-error mb-6" role="alert">
           <span>⚠️</span>
           <span>{error}</span>
+          {quotaExceeded && (
+            <a href="/pricing" className="ml-2 font-semibold underline">
+              Upgrade →
+            </a>
+          )}
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AxiosError } from "axios";
-import { comparisonService } from "../services/api";
+import { comparisonService, isQuotaExceededError } from "../services/api";
 import { CompareOffersResponse, JobOffer } from "../types/index";
 
 interface ComparisonToolProps {
@@ -25,6 +25,7 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
   const [offerTwo, setOfferTwo] = useState<JobOffer>({ ...defaultOffer });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   const handleOfferOneChange = (field: keyof JobOffer, value: OfferFieldValue) => {
     setOfferOne({ ...offerOne, [field]: value });
@@ -37,6 +38,7 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setQuotaExceeded(false);
 
     if (!offerOne.company.trim() || !offerTwo.company.trim()) {
       setError("Please enter company names for both offers");
@@ -61,9 +63,14 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
       });
       onResult(result);
     } catch (err) {
-      const message =
-        err instanceof AxiosError ? err.response?.data?.error : undefined;
-      setError(message || "Failed to compare offers. Check your OpenAI API key.");
+      if (isQuotaExceededError(err)) {
+        setQuotaExceeded(true);
+        setError("You've reached your plan's monthly limit for offer comparisons.");
+      } else {
+        const message =
+          err instanceof AxiosError ? err.response?.data?.error : undefined;
+        setError(message || "Failed to compare offers. Check your OpenAI API key.");
+      }
     } finally {
       setLoading(false);
     }
@@ -86,7 +93,16 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
         />
       </div>
 
-      {error && <p className="error-text mb-4">{error}</p>}
+      {error && (
+        <p className="error-text mb-4">
+          {error}
+          {quotaExceeded && (
+            <a href="/pricing" className="ml-2 font-semibold underline">
+              Upgrade →
+            </a>
+          )}
+        </p>
+      )}
 
       <button type="submit" className="btn-primary w-full" disabled={loading}>
         {loading ? (
