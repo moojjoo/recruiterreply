@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RecruiterReply.csproj" />
+  <Project Path="RecruiterReply.Tests/RecruiterReply.Tests.csproj" />
+</Solution>

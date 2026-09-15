@@ -43,7 +43,7 @@ public class GmailPollingBackgroundService : BackgroundService
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task PollAllConnectionsAsync(CancellationToken stoppingToken)
+    internal async Task PollAllConnectionsAsync(CancellationToken stoppingToken)
     {
         List<Entities.GmailConnectionEntity> activeConnections;
         using (var scope = _scopeFactory.CreateScope())

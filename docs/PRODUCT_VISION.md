@@ -79,17 +79,25 @@ Track:
 
 ## Pricing
 
+**At launch:**
+
 Free Tier
 
-* Limited AI usage
+* Limited AI usage (5 analyses, 5 replies, 2 comparisons / month)
 
 Professional Tier
 
 * $19/month
 
+**Deferred until multi-seat/team CRM ships:**
+
 Recruiter Pro
 
-* $149/month
+* $149/month (or a lower founding-member rate at first release)
+* Held back at launch — a single-user tool at 8x the Professional price is a hard
+  sell with no team features or social proof yet. Billing/webhook support for this
+  tier is already built; enabling it is just adding the Stripe price ID and the
+  pricing page card back.
 
 Enterprise
 

@@ -86,7 +86,7 @@ public class GoogleAuthService : IGoogleAuthService
         }
 
         using var tokenJson = JsonDocument.Parse(payload);
-        var accessToken = tokenJson.RootElement.GetProperty("access_token").GetString();
+        var accessToken = tokenJson.RootElement.TryGetProperty("access_token", out var accessTokenProp) ? accessTokenProp.GetString() : null;
         if (string.IsNullOrWhiteSpace(accessToken))
         {
             throw new InvalidOperationException("Google token response did not include an access token.");

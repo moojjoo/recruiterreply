@@ -1,9 +1,20 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { useAuth } from "../hooks/useAuth";
+import { useToast } from "../hooks/useToast";
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("checkout") === "success") {
+      showToast("Subscription active! Welcome aboard.", "success");
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, showToast]);
 
   return (
     <MainLayout>

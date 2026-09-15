@@ -33,6 +33,10 @@ public class ComparisonController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (QuotaExceededException ex)
+        {
+            return StatusCode(402, new { error = ex.Message, upgradeRequired = true });
+        }
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex, "OpenAI operation failed in CompareOffers");

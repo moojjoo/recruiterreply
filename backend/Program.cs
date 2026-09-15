@@ -107,6 +107,10 @@ if (string.IsNullOrWhiteSpace(openAiKey))
 builder.Services.AddSingleton<IOpenAIService>(sp =>
     new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>()));
 
+// Configure Stripe billing (test-mode key until the account goes live). No-op if unset —
+// billing endpoints will fail at call time rather than at startup, same pattern as OpenAI above.
+Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
+
 // Add application services
 builder.Services.AddScoped<IAnalysisService, AnalysisService>();
 builder.Services.AddScoped<IReplyService, ReplyService>();
@@ -118,6 +122,9 @@ builder.Services.AddScoped<IDefaultUserService, DefaultUserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IOpportunityRepository, OpportunityRepository>();
+builder.Services.AddScoped<IUsageRepository, UsageRepository>();
+builder.Services.AddScoped<IUsageService, UsageService>();
+builder.Services.AddScoped<IBillingService, BillingService>();
 
 // Add Gmail recruiting agent services
 builder.Services.Configure<GmailOptions>(builder.Configuration.GetSection("Gmail"));
