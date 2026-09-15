@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
@@ -174,25 +175,13 @@ jobs:
 
           echo "Frontend artifact check passed: assets=$ASSET_COUNT"
 
-      - name: Publish frontend artifact
-        run: |
-          set -euo pipefail
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ARTIFACT_BUCKET="recruiterreply-build-artifacts-$ACCOUNT_ID"
-
-          if ! aws s3api head-bucket --bucket "$ARTIFACT_BUCKET" 2>/dev/null; then
-            if [[ "$AWS_REGION" == "us-east-1" ]]; then
-              aws s3api create-bucket --bucket "$ARTIFACT_BUCKET" --region "$AWS_REGION"
-            else
-              aws s3api create-bucket --bucket "$ARTIFACT_BUCKET" --region "$AWS_REGION" \
-                --create-bucket-configuration LocationConstraint="$AWS_REGION"
-            fi
-            aws s3api put-public-access-block --bucket "$ARTIFACT_BUCKET" --public-access-block-configuration \
-              BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-          fi
-
-          aws s3 sync frontend/dist/ "s3://$ARTIFACT_BUCKET/frontend/${GITHUB_SHA}/"
-          echo "Published frontend artifact: s3://$ARTIFACT_BUCKET/frontend/${GITHUB_SHA}/"
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 90
 
   deploy-dev:
     needs: build
