@@ -360,6 +360,7 @@ jobs:
 
       - name: Smoke test live frontend
         env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
           FRONTEND_URL: ${{ inputs.frontend_url }}
         run: |
@@ -388,8 +389,8 @@ jobs:
             exit 1
           fi
 
-          if curl -fsSL "$FRONTEND_URL/config.js" | grep -q '__RUNTIME_API_BASE_URL__'; then
-            echo "::error::Live config.js still contains placeholder runtime API URL"
+          if ! curl -fsSL "$FRONTEND_URL/config.js" | grep -Fq "$API_BASE_URL"; then
+            echo "::error::Live config.js does not contain the expected API base URL"
             exit 1
           fi
 
