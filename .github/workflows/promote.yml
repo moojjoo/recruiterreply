@@ -206,7 +206,7 @@ jobs:
             exit 1
           fi
 
-          mapfile -t ASSET_PATHS < <(grep -oE '/assets/[^"]+' promoted-dist/index.html | sort -u)
+          mapfile -t ASSET_PATHS < <(grep -oE "/assets/[^\"'[:space:]]+" promoted-dist/index.html | sort -u)
           if [[ "${#ASSET_PATHS[@]}" -eq 0 ]]; then
             echo "::error::No /assets references found in promoted-dist/index.html"
             exit 1
@@ -369,9 +369,9 @@ jobs:
           trap 'rm -rf "$TMP_DIR"' EXIT
 
           curl -fsSL "$FRONTEND_URL/" -o "$TMP_DIR/index.html"
-          grep -q '<div id="root"></div>' "$TMP_DIR/index.html"
+          grep -Eq "id=['\"]root['\"]" "$TMP_DIR/index.html"
 
-          mapfile -t LIVE_ASSET_PATHS < <(grep -oE '/assets/[^"]+' "$TMP_DIR/index.html" | sort -u)
+          mapfile -t LIVE_ASSET_PATHS < <(grep -oE "/assets/[^\"'[:space:]]+" "$TMP_DIR/index.html" | sort -u)
           if [[ "${#LIVE_ASSET_PATHS[@]}" -eq 0 ]]; then
             echo "::error::Live index.html does not reference any /assets files"
             exit 1
