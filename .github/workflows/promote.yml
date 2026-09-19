@@ -206,14 +206,31 @@ jobs:
             exit 1
           fi
 
-          mapfile -t ASSET_PATHS < <(grep -oE "/assets/[^\"'[:space:]]+" promoted-dist/index.html | sort -u)
+          mapfile -t ASSET_PATHS < <(python3 - "promoted-dist/index.html" <<'PY'
+          import re
+          import sys
+          from urllib.parse import urlparse
+
+          text = open(sys.argv[1], encoding="utf-8").read()
+          asset_paths = set()
+
+          for raw_url in re.findall(r"""(?:https?://[^"'\s>]+)?/assets/[^"'\s>]+""", text):
+              parsed = urlparse(raw_url)
+              path = parsed.path if parsed.scheme else raw_url
+              if path.startswith("/assets/"):
+                  asset_paths.add(path.lstrip("/"))
+
+          for asset_path in sorted(asset_paths):
+              print(asset_path)
+          PY
+          )
           if [[ "${#ASSET_PATHS[@]}" -eq 0 ]]; then
-            echo "::error::No /assets references found in promoted-dist/index.html"
+            echo "::error::No frontend asset references found in promoted-dist/index.html"
             exit 1
           fi
 
           for asset_path in "${ASSET_PATHS[@]}"; do
-            if [[ ! -f "promoted-dist${asset_path}" ]]; then
+            if [[ ! -f "promoted-dist/$asset_path" ]]; then
               echo "::error::Referenced asset missing from artifact: ${asset_path}"
               exit 1
             fi
@@ -246,7 +263,7 @@ jobs:
 
           while IFS= read -r asset_path; do
             [[ -n "$asset_path" ]] || continue
-            aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key "${asset_path#/}" >/dev/null
+            aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key "$asset_path" >/dev/null
           done <<< "$ASSET_PATHS"
 
           echo "S3 object verification passed: count=$OBJECT_COUNT assets=${{ steps.frontend-config.outputs.asset_count }}"
@@ -373,14 +390,38 @@ jobs:
           curl -fsSL "$FRONTEND_BASE_URL/" -o "$TMP_DIR/index.html"
           grep -Eq "id=['\"]root['\"]" "$TMP_DIR/index.html"
 
-          mapfile -t LIVE_ASSET_PATHS < <(grep -oE "/assets/[^\"'[:space:]]+" "$TMP_DIR/index.html" | sort -u)
-          if [[ "${#LIVE_ASSET_PATHS[@]}" -eq 0 ]]; then
-            echo "::error::Live index.html does not reference any /assets files"
+          mapfile -t LIVE_ASSET_ENTRIES < <(python3 - "$TMP_DIR/index.html" <<'PY'
+          import re
+          import sys
+          from urllib.parse import urlparse
+
+          text = open(sys.argv[1], encoding="utf-8").read()
+          asset_entries = {}
+
+          for raw_url in re.findall(r"""(?:https?://[^"'\s>]+)?/assets/[^"'\s>]+""", text):
+              parsed = urlparse(raw_url)
+              path = parsed.path if parsed.scheme else raw_url
+              if path.startswith("/assets/"):
+                  asset_entries[path.lstrip("/")] = raw_url
+
+          for asset_path in sorted(asset_entries):
+              print(f"{asset_path}\t{asset_entries[asset_path]}")
+          PY
+          )
+          if [[ "${#LIVE_ASSET_ENTRIES[@]}" -eq 0 ]]; then
+            echo "::error::Live index.html does not reference any frontend assets"
             exit 1
           fi
 
+          declare -A LIVE_ASSET_URLS=()
+          for asset_entry in "${LIVE_ASSET_ENTRIES[@]}"; do
+            asset_path=${asset_entry%%$'\t'*}
+            asset_url=${asset_entry#*$'\t'}
+            LIVE_ASSET_URLS["$asset_path"]="$asset_url"
+          done
+
           EXPECTED_ASSETS=$(printf '%s\n' "$ASSET_PATHS" | sed '/^$/d' | sort -u)
-          LIVE_ASSETS=$(printf '%s\n' "${LIVE_ASSET_PATHS[@]}" | sort -u)
+          LIVE_ASSETS=$(printf '%s\n' "${!LIVE_ASSET_URLS[@]}" | sort -u)
           if [[ "$LIVE_ASSETS" != "$EXPECTED_ASSETS" ]]; then
             echo "::error::Live index.html asset references do not match the promoted artifact"
             echo "Expected assets:"
@@ -403,12 +444,22 @@ jobs:
 
           while IFS= read -r asset_path; do
             [[ -n "$asset_path" ]] || continue
-            ASSET_HEADERS=$(curl -fsSI "${FRONTEND_BASE_URL}${asset_path}")
+            asset_url="${LIVE_ASSET_URLS[$asset_path]:-}"
+            if [[ -z "$asset_url" ]]; then
+              echo "::error::Live index.html did not expose a URL for promoted asset: ${asset_path}"
+              exit 1
+            fi
+            if [[ "$asset_url" == http://* || "$asset_url" == https://* ]]; then
+              request_url="$asset_url"
+            else
+              request_url="${FRONTEND_BASE_URL}${asset_url}"
+            fi
+            ASSET_HEADERS=$(curl -fsSI "$request_url")
             if printf '%s\n' "$ASSET_HEADERS" | grep -Eiq '^content-type:\s*text/html'; then
               echo "::error::Asset URL returned HTML instead of the expected static asset: ${asset_path}"
               exit 1
             fi
-            curl -fsSL "${FRONTEND_BASE_URL}${asset_path}" >/dev/null
+            curl -fsSL "$request_url" >/dev/null
           done <<< "$EXPECTED_ASSETS"
 
       - name: Deployment summary
