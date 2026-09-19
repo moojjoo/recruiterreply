@@ -390,8 +390,14 @@ jobs:
             exit 1
           fi
 
-          if ! curl -fsSL "$FRONTEND_BASE_URL/config.js" | grep -Fq "$API_BASE_URL"; then
-            echo "::error::Live config.js does not contain the expected API base URL"
+          CONFIG_JS=$(curl -fsSL "$FRONTEND_BASE_URL/config.js")
+          if [[ -n "$API_BASE_URL" ]]; then
+            if ! printf '%s' "$CONFIG_JS" | grep -Fq "$API_BASE_URL"; then
+              echo "::error::Live config.js does not contain the expected API base URL"
+              exit 1
+            fi
+          elif printf '%s' "$CONFIG_JS" | grep -Fq '__RUNTIME_API_BASE_URL__'; then
+            echo "::error::Live config.js still contains the runtime API placeholder"
             exit 1
           fi
 
