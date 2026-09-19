@@ -138,7 +138,7 @@ jobs:
             RUN_ID="$CURRENT_RUN_ID"
           else
             RUN_ID=$(curl -fsSL \
-              -H "Authorization: ******" \
+              -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPOSITORY/actions/workflows/build.yml/runs?status=completed&head_sha=$SHA&per_page=20" \
               | jq -r '.workflow_runs | map(select(.path == ".github/workflows/build.yml" and .conclusion == "success")) | first | .id // empty')
@@ -268,19 +268,49 @@ jobs:
 
           echo "S3 object verification passed: count=$OBJECT_COUNT assets=${{ steps.frontend-config.outputs.asset_count }}"
 
+      - name: Verify frontend deployment files
+        env:
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${S3_FRONTEND_BUCKET:-}" ]]; then
+            echo "::error::S3_FRONTEND_BUCKET variable is required"
+            exit 1
+          fi
+
+          for key in index.html config.js robots.txt; do
+            aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key "$key" >/dev/null
+          done
+
+          echo "Frontend deployment files verified in S3: index.html, config.js, robots.txt"
+
       - name: Invalidate CloudFront cache
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
           set -euo pipefail
-          INVALIDATION_ID=$(aws cloudfront create-invalidation \
-            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths '/*' \
-            --query 'Invalidation.Id' \
-            --output text)
-          aws cloudfront wait invalidation-completed \
+          if [[ -z "${CLOUDFRONT_DISTRIBUTION_ID:-}" ]]; then
+            echo "::error::CLOUDFRONT_DISTRIBUTION_ID variable is required for frontend deployments"
+            exit 1
+          fi
+
+          aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --id "$INVALIDATION_ID"
+
+      - name: Smoke test deployed frontend
+        env:
+          FRONTEND_URL: ${{ inputs.frontend_url }}
+        run: |
+          set -euo pipefail
+
+          curl -fsSL "$FRONTEND_URL/" -o /tmp/index.html
+          grep -Eq '<div id="root">' /tmp/index.html
+
+          curl -fsSL "$FRONTEND_URL/config.js" -o /tmp/config.js
+          grep -Eq 'API_BASE_URL|https://api|http://.*api' /tmp/config.js
+
+          echo "Frontend smoke test passed: $FRONTEND_URL"
 
       - name: Deploy backend container on EC2
         env:
@@ -334,10 +364,10 @@ jobs:
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
                 "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
-                "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env >/dev/null; fi",
+                "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env; fi",
                 "sudo grep \"^\($image_var)=\" .env",
                 "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml logs --no-color \($backend_service); exit 1; }",
+                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml ps; exit 1; }",
                 "sudo docker image prune -f"
               ]
             }')
