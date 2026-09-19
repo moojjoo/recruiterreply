@@ -80,7 +80,8 @@ cat > "$PERMISSION_POLICY_FILE" <<EOF
         "s3:PutObject",
         "s3:DeleteObject",
         "cloudfront:GetDistribution",
-        "cloudfront:CreateInvalidation"
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation"
       ],
       "Resource": "*"
     },

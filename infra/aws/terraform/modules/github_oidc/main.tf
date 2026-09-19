@@ -122,6 +122,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "s3:DeleteObject",
           "cloudfront:GetDistribution",
           "cloudfront:CreateInvalidation",
+          "cloudfront:GetInvalidation",
         ]
         Resource = "*"
       },
