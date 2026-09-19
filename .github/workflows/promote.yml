@@ -409,7 +409,7 @@ jobs:
               exit 1
             fi
             curl -fsSL "${FRONTEND_BASE_URL}${asset_path}" >/dev/null
-          done <<< "$LIVE_ASSETS"
+          done <<< "$EXPECTED_ASSETS"
 
       - name: Deployment summary
         env:
