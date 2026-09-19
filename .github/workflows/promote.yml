@@ -137,7 +137,7 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$REPOSITORY/actions/workflows/build.yml/runs?head_sha=$SHA&per_page=20" \
-            | jq -r --arg current_run_id "$CURRENT_RUN_ID" '.workflow_runs | map(select(.conclusion == "success" or .id == ($current_run_id | tonumber))) | first | .id // empty')
+            | jq -r --arg current_run_id "$CURRENT_RUN_ID" '.workflow_runs | map(select(.path == ".github/workflows/build.yml" and (.conclusion == "success" or .id == ($current_run_id | tonumber)))) | first | .id // empty')
 
           if [[ -z "$RUN_ID" ]]; then
             echo "::error::No Build (Dev) workflow run with artifacts found for SHA $SHA."
