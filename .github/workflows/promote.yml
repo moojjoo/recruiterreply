@@ -454,12 +454,11 @@ jobs:
             else
               request_url="${FRONTEND_BASE_URL}${asset_url}"
             fi
-            ASSET_HEADERS=$(curl -fsSI "$request_url")
+            ASSET_HEADERS=$(curl -fsSL -D - -o /dev/null "$request_url")
             if printf '%s\n' "$ASSET_HEADERS" | grep -Eiq '^content-type:\s*text/html'; then
               echo "::error::Asset URL returned HTML instead of the expected static asset: ${asset_path}"
               exit 1
             fi
-            curl -fsSL "$request_url" >/dev/null
           done <<< "$EXPECTED_ASSETS"
 
       - name: Deployment summary
