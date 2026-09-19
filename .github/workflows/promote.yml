@@ -172,15 +172,81 @@ jobs:
           sed -i "s|__RUNTIME_API_BASE_URL__|${API_BASE_URL}|" promoted-dist/config.js
           printf '%s\n' "$ROBOTS_TXT" > promoted-dist/robots.txt
 
-      - name: Upload frontend to S3
+      - name: Validate frontend deployment configuration
+        id: frontend-config
         env:
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+          FRONTEND_URL: ${{ inputs.frontend_url }}
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
         run: |
           set -euo pipefail
+
           if [[ -z "${S3_FRONTEND_BUCKET:-}" ]]; then
-            echo "S3_FRONTEND_BUCKET variable is required"
+            echo "::error::S3_FRONTEND_BUCKET variable is required"
             exit 1
           fi
+
+          if [[ -z "${CLOUDFRONT_DISTRIBUTION_ID:-}" ]]; then
+            echo "::error::CLOUDFRONT_DISTRIBUTION_ID variable is required"
+            exit 1
+          fi
+
+          if [[ -z "${FRONTEND_URL:-}" ]]; then
+            echo "::error::frontend_url input is required"
+            exit 1
+          fi
+
+          if [[ ! -f promoted-dist/index.html ]]; then
+            echo "::error::promoted-dist/index.html missing from artifact"
+            exit 1
+          fi
+
+          if [[ ! -d promoted-dist/assets ]]; then
+            echo "::error::promoted-dist/assets missing from artifact"
+            exit 1
+          fi
+
+          mapfile -t ASSET_PATHS < <(python3 - "promoted-dist/index.html" <<'PY'
+          import re
+          import sys
+          from urllib.parse import urlparse
+
+          text = open(sys.argv[1], encoding="utf-8").read()
+          asset_paths = set()
+
+          for raw_url in re.findall(r"""(?:https?://[^"'\s>]+)?/assets/[^"'\s>]+""", text):
+              parsed = urlparse(raw_url)
+              path = parsed.path if parsed.scheme else raw_url
+              if path.startswith("/assets/"):
+                  asset_paths.add(path.lstrip("/"))
+
+          for asset_path in sorted(asset_paths):
+              print(asset_path)
+          PY
+          )
+          if [[ "${#ASSET_PATHS[@]}" -eq 0 ]]; then
+            echo "::error::No frontend asset references found in promoted-dist/index.html"
+            exit 1
+          fi
+
+          for asset_path in "${ASSET_PATHS[@]}"; do
+            if [[ ! -f "promoted-dist/$asset_path" ]]; then
+              echo "::error::Referenced asset missing from artifact: ${asset_path}"
+              exit 1
+            fi
+          done
+
+          echo "asset_count=${#ASSET_PATHS[@]}" >> "$GITHUB_OUTPUT"
+          echo "asset_paths<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${ASSET_PATHS[@]}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Upload frontend to S3
+        env:
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+          ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
+        run: |
+          set -euo pipefail
 
           echo "Syncing frontend artifacts to s3://$S3_FRONTEND_BUCKET"
           aws s3 sync ./promoted-dist "s3://$S3_FRONTEND_BUCKET" --delete
@@ -191,18 +257,30 @@ jobs:
             exit 1
           fi
 
-          aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key index.html >/dev/null
-          echo "S3 object verification passed: count=$OBJECT_COUNT"
+          for object_key in index.html config.js; do
+            aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key "$object_key" >/dev/null
+          done
+
+          while IFS= read -r asset_path; do
+            [[ -n "$asset_path" ]] || continue
+            aws s3api head-object --bucket "$S3_FRONTEND_BUCKET" --key "$asset_path" >/dev/null
+          done <<< "$ASSET_PATHS"
+
+          echo "S3 object verification passed: count=$OBJECT_COUNT assets=${{ steps.frontend-config.outputs.asset_count }}"
 
       - name: Invalidate CloudFront cache
-        if: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID != '' }}
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
           set -euo pipefail
-          aws cloudfront create-invalidation \
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths '/*'
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --id "$INVALIDATION_ID"
 
       - name: Deploy backend container on EC2
         env:
@@ -296,6 +374,92 @@ jobs:
             echo "SSM waiter returned non-zero status: $WAIT_STATUS"
             exit 1
           fi
+
+      - name: Smoke test live frontend
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
+          FRONTEND_URL: ${{ inputs.frontend_url }}
+        run: |
+          set -euo pipefail
+
+          TMP_DIR=$(mktemp -d)
+          trap 'rm -rf "$TMP_DIR"' EXIT
+          FRONTEND_BASE_URL="${FRONTEND_URL%/}"
+
+          curl -fsSL "$FRONTEND_BASE_URL/" -o "$TMP_DIR/index.html"
+          grep -Eq "id=['\"]root['\"]" "$TMP_DIR/index.html"
+
+          mapfile -t LIVE_ASSET_ENTRIES < <(python3 - "$TMP_DIR/index.html" <<'PY'
+          import re
+          import sys
+          from urllib.parse import urlparse
+
+          text = open(sys.argv[1], encoding="utf-8").read()
+          asset_entries = {}
+
+          for raw_url in re.findall(r"""(?:https?://[^"'\s>]+)?/assets/[^"'\s>]+""", text):
+              parsed = urlparse(raw_url)
+              path = parsed.path if parsed.scheme else raw_url
+              if path.startswith("/assets/"):
+                  asset_entries[path.lstrip("/")] = raw_url
+
+          for asset_path in sorted(asset_entries):
+              print(f"{asset_path}\t{asset_entries[asset_path]}")
+          PY
+          )
+          if [[ "${#LIVE_ASSET_ENTRIES[@]}" -eq 0 ]]; then
+            echo "::error::Live index.html does not reference any frontend assets"
+            exit 1
+          fi
+
+          declare -A LIVE_ASSET_URLS=()
+          for asset_entry in "${LIVE_ASSET_ENTRIES[@]}"; do
+            asset_path=${asset_entry%%$'\t'*}
+            asset_url=${asset_entry#*$'\t'}
+            LIVE_ASSET_URLS["$asset_path"]="$asset_url"
+          done
+
+          EXPECTED_ASSETS=$(printf '%s\n' "$ASSET_PATHS" | sed '/^$/d' | sort -u)
+          LIVE_ASSETS=$(printf '%s\n' "${!LIVE_ASSET_URLS[@]}" | sort -u)
+          if [[ "$LIVE_ASSETS" != "$EXPECTED_ASSETS" ]]; then
+            echo "::error::Live index.html asset references do not match the promoted artifact"
+            echo "Expected assets:"
+            echo "$EXPECTED_ASSETS"
+            echo "Live assets:"
+            echo "$LIVE_ASSETS"
+            exit 1
+          fi
+
+          CONFIG_JS=$(curl -fsSL "$FRONTEND_BASE_URL/config.js")
+          if [[ -n "$API_BASE_URL" ]]; then
+            if ! printf '%s' "$CONFIG_JS" | grep -Fq "$API_BASE_URL"; then
+              echo "::error::Live config.js does not contain the expected API base URL"
+              exit 1
+            fi
+          elif printf '%s' "$CONFIG_JS" | grep -Fq '__RUNTIME_API_BASE_URL__'; then
+            echo "::error::Live config.js still contains the runtime API placeholder"
+            exit 1
+          fi
+
+          while IFS= read -r asset_path; do
+            [[ -n "$asset_path" ]] || continue
+            asset_url="${LIVE_ASSET_URLS[$asset_path]:-}"
+            if [[ -z "$asset_url" ]]; then
+              echo "::error::Live index.html did not expose a URL for promoted asset: ${asset_path}"
+              exit 1
+            fi
+            if [[ "$asset_url" == http://* || "$asset_url" == https://* ]]; then
+              request_url="$asset_url"
+            else
+              request_url="${FRONTEND_BASE_URL}${asset_url}"
+            fi
+            ASSET_HEADERS=$(curl -fsSL -D - -o /dev/null "$request_url")
+            if printf '%s\n' "$ASSET_HEADERS" | grep -Eiq '^content-type:\s*text/html'; then
+              echo "::error::Asset URL returned HTML instead of the expected static asset: ${asset_path}"
+              exit 1
+            fi
+          done <<< "$EXPECTED_ASSETS"
 
       - name: Deployment summary
         env:
