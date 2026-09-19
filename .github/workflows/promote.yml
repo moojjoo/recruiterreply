@@ -368,8 +368,9 @@ jobs:
 
           TMP_DIR=$(mktemp -d)
           trap 'rm -rf "$TMP_DIR"' EXIT
+          FRONTEND_BASE_URL="${FRONTEND_URL%/}"
 
-          curl -fsSL "$FRONTEND_URL/" -o "$TMP_DIR/index.html"
+          curl -fsSL "$FRONTEND_BASE_URL/" -o "$TMP_DIR/index.html"
           grep -Eq "id=['\"]root['\"]" "$TMP_DIR/index.html"
 
           mapfile -t LIVE_ASSET_PATHS < <(grep -oE "/assets/[^\"'[:space:]]+" "$TMP_DIR/index.html" | sort -u)
@@ -389,14 +390,14 @@ jobs:
             exit 1
           fi
 
-          if ! curl -fsSL "$FRONTEND_URL/config.js" | grep -Fq "$API_BASE_URL"; then
+          if ! curl -fsSL "$FRONTEND_BASE_URL/config.js" | grep -Fq "$API_BASE_URL"; then
             echo "::error::Live config.js does not contain the expected API base URL"
             exit 1
           fi
 
           while IFS= read -r asset_path; do
             [[ -n "$asset_path" ]] || continue
-            curl -fsSL "${FRONTEND_URL}${asset_path}" >/dev/null
+            curl -fsSL "${FRONTEND_BASE_URL}${asset_path}" >/dev/null
           done <<< "$LIVE_ASSETS"
 
       - name: Deployment summary
