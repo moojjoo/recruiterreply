@@ -403,6 +403,11 @@ jobs:
 
           while IFS= read -r asset_path; do
             [[ -n "$asset_path" ]] || continue
+            ASSET_HEADERS=$(curl -fsSI "${FRONTEND_BASE_URL}${asset_path}")
+            if printf '%s\n' "$ASSET_HEADERS" | grep -Eiq '^content-type:\s*text/html'; then
+              echo "::error::Asset URL returned HTML instead of the expected static asset: ${asset_path}"
+              exit 1
+            fi
             curl -fsSL "${FRONTEND_BASE_URL}${asset_path}" >/dev/null
           done <<< "$LIVE_ASSETS"
 
