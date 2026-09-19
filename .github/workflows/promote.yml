@@ -379,7 +379,7 @@ jobs:
           fi
 
           EXPECTED_ASSETS=$(printf '%s\n' "$ASSET_PATHS" | sed '/^$/d' | sort -u)
-          LIVE_ASSETS=$(printf '%s\n' "${LIVE_ASSET_PATHS[@]}")
+          LIVE_ASSETS=$(printf '%s\n' "${LIVE_ASSET_PATHS[@]}" | sort -u)
           if [[ "$LIVE_ASSETS" != "$EXPECTED_ASSETS" ]]; then
             echo "::error::Live index.html asset references do not match the promoted artifact"
             echo "Expected assets:"
