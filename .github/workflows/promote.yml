@@ -296,7 +296,7 @@ jobs:
 
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --id "$INVALIDATION_ID"
+            --paths "/*"
 
       - name: Smoke test deployed frontend
         env:
