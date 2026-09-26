@@ -36,6 +36,7 @@ services:
       Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://dev.recruiterreply.com
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
+      Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5001:5000"
@@ -61,6 +62,7 @@ services:
       Google__RedirectUri: https://api-test.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://test.recruiterreply.com
       Cors__AllowedOrigins__0: https://test.recruiterreply.com
+      Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_test;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5002:5000"
