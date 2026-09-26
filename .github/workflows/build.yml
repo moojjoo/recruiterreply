@@ -176,7 +176,7 @@ jobs:
           echo "Frontend artifact check passed: assets=$ASSET_COUNT"
 
       - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist-${{ github.sha }}
           path: frontend/dist

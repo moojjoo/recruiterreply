@@ -58,6 +58,30 @@ Infrastructure (VPC, EC2, S3, IAM/SSM role) is already provisioned via Terraform
 
 GitHub `dev`/`prod` environments already have the required secrets/variables configured (`AWS_ROLE_TO_ASSUME`, `EC2_HOST`, `EC2_DEPLOY_PATH`, `S3_FRONTEND_BUCKET`, `EC2_SSH_PRIVATE_KEY`, etc.) — just push to `dev` or `main`/`prod` to deploy, or trigger a workflow manually via `workflow_dispatch`.
 
+Your release steps each time:
+
+Merge/push your release commit to main.
+Wait for Build (Dev) workflow to finish successfully.
+Verify dev:
+Frontend: https://dev.recruiterreply.com
+API: https://api-dev.recruiterreply.com
+Copy the commit SHA from that successful run.
+In GitHub Actions, run Promote to Test and paste that SHA.
+Validate test:
+Frontend: https://test.recruiterreply.com
+API: https://api-test.recruiterreply.com
+Run Promote to Prod with the exact same SHA.
+Validate prod:
+Frontend: https://recruiterreply.com
+API: https://api.recruiterreply.com
+Why this is build once:
+
+Promote workflow checks backend image exists for that SHA in ECR, then reuses frontend artifact from the successful Build (Dev) run for the same SHA, so no rebuild per environment (see promote.yml:109 and promote.yml:125).
+Also relevant:
+
+Your active Playwright workflow (playwright.yml:1) is test automation only, not deployment.
+If you want, I can give you a quick pre-release checklist you can run in 2 minutes before pushing to main.
+
 ---
 
 ## 📋 Local Development Prerequisites
