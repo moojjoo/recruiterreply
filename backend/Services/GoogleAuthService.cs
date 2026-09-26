@@ -117,7 +117,7 @@ public class GoogleAuthService : IGoogleAuthService
             throw new InvalidOperationException("Google account is missing email or user identifier.");
         }
 
-        var normalizedEmail = email.Trim();
+        var normalizedEmail = email.Trim().ToLowerInvariant();
         var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.IsActive);
         if (existingUser is null)
         {

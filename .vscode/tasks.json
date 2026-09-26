@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-backend",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/backend/RecruiterReply.csproj"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "frontend-dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "beginsPattern": "VITE",
+          "endsPattern": "Local:.*5173"
+        }
+      }
+    }
+  ]
+}

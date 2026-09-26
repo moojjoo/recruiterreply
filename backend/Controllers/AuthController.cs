@@ -115,10 +115,11 @@ public class AuthController : ControllerBase
 
     [HttpGet("google/callback")]
     [AllowAnonymous]
-    public async Task<IActionResult> GoogleCallback([FromQuery] string code, CancellationToken ct)
+    public async Task<IActionResult> GoogleCallback([FromQuery] string code, CancellationToken ct, [FromQuery] string? error = null)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
+            _logger.LogWarning("Google OAuth callback missing code. Google error: {GoogleError}", error ?? "(none)");
             var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/login?error=google_auth_failed");
         }
