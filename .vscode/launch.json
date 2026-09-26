@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (.NET)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-backend",
+      "program": "${workspaceFolder}/backend/bin/Debug/net10.0/RecruiterReply.dll",
+      "cwd": "${workspaceFolder}/backend",
+      "launchSettingsProfile": "https",
+      "launchSettingsFilePath": "${workspaceFolder}/backend/Properties/launchSettings.json",
+      "env": {
+        "ASPNETCORE_URLS": "http://localhost:5002",
+        "Frontend__BaseUrl": "http://localhost:5173",
+        "Google__RedirectUri": "http://localhost:5002/api/auth/google/callback",
+        "Cors__AllowedOrigins__0": "http://localhost:5173"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Frontend (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "preLaunchTask": "frontend-dev"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": ["Backend (.NET)", "Frontend (Chrome)"],
+      "stopAll": true
+    }
+  ]
+}
