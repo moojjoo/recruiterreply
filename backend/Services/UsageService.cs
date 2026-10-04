@@ -35,7 +35,7 @@ public class UsageService : IUsageService
 
         var periodStart = CurrentPeriodStart();
         var record = await _usageRepository.GetForPeriodAsync(userId, feature, periodStart, cancellationToken);
-        if (record is not null && record.Count >= limit)
+        if ((record?.Count ?? 0) >= limit)
         {
             throw new QuotaExceededException(
                 $"You've reached your plan's monthly limit for this feature. Upgrade to keep going.");

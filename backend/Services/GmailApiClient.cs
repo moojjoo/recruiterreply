@@ -1,8 +1,12 @@
 using Google;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Gmail.v1;
+using Google.Apis.Gmail.v1.Data;
 using Google.Apis.Services;
 using Google.Apis.Util;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace RecruiterReply.Services;
 
@@ -87,6 +91,72 @@ public class GmailApiClient : IGmailApiClient
         var from = headers?.FirstOrDefault(h => h.Name == "From")?.Value;
 
         return new GmailMessageSummary(message.Id, message.ThreadId, subject, from);
+    }
+
+    public async Task<GmailMessageDetail> GetMessageFullAsync(string accessToken, string messageId, CancellationToken cancellationToken = default)
+    {
+        using var service = CreateService(accessToken);
+        var request = service.Users.Messages.Get("me", messageId);
+        request.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
+
+        var message = await request.ExecuteAsync(cancellationToken);
+        var headers = message.Payload?.Headers;
+        string? Header(string name) => headers?.FirstOrDefault(h => string.Equals(h.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
+        var body = FindPartBody(message.Payload, "text/plain")
+            ?? StripHtml(FindPartBody(message.Payload, "text/html"))
+            ?? message.Snippet
+            ?? string.Empty;
+
+        var receivedAt = message.InternalDate is { } ms
+            ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime
+            : DateTime.UtcNow;
+
+        return new GmailMessageDetail(
+            message.Id,
+            message.ThreadId,
+            Header("Subject"),
+            Header("From"),
+            Header("Message-ID"),
+            receivedAt,
+            message.LabelIds?.Contains("SENT") == true,
+            body);
+    }
+
+    private static string? FindPartBody(MessagePart? part, string mimeType)
+    {
+        if (part is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(part.MimeType, mimeType, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(part.Body?.Data))
+        {
+            return DecodeBase64Url(part.Body.Data);
+        }
+
+        return part.Parts?.Select(p => FindPartBody(p, mimeType)).FirstOrDefault(b => b is not null);
+    }
+
+    private static string DecodeBase64Url(string data)
+    {
+        var base64 = data.Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight(base64.Length + (4 - base64.Length % 4) % 4, '=');
+        return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+    }
+
+    private static string? StripHtml(string? html)
+    {
+        if (html is null)
+        {
+            return null;
+        }
+
+        var text = Regex.Replace(html, "<(script|style)[^>]*>.*?</\\1>", " ", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<br\\s*/?>|</p>|</div>", "\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<[^>]+>", " ");
+        text = WebUtility.HtmlDecode(text);
+        return Regex.Replace(text, "[ \t]+", " ").Trim();
     }
 
     private static GmailService CreateService(string accessToken)

@@ -19,6 +19,9 @@ public class RecruiterReplyDbContext : DbContext
     public DbSet<ComparisonItemEntity> ComparisonItems => Set<ComparisonItemEntity>();
     public DbSet<GmailConnectionEntity> GmailConnections => Set<GmailConnectionEntity>();
     public DbSet<UsageRecordEntity> UsageRecords => Set<UsageRecordEntity>();
+    public DbSet<CareerProfileEntity> CareerProfiles => Set<CareerProfileEntity>();
+    public DbSet<RecruiterThreadEntity> RecruiterThreads => Set<RecruiterThreadEntity>();
+    public DbSet<RecruiterEmailEntity> RecruiterEmails => Set<RecruiterEmailEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -215,6 +218,78 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.Count).HasColumnName("count");
             entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(e => new { e.UserId, e.Feature, e.PeriodStart }).IsUnique();
+        });
+        modelBuilder.Entity<CareerProfileEntity>(entity =>
+        {
+            entity.ToTable("career_profiles");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TargetTitles).HasColumnName("target_titles");
+            entity.Property(e => e.Skills).HasColumnName("skills");
+            entity.Property(e => e.MinW2HourlyRate).HasColumnName("min_w2_hourly_rate").HasPrecision(10, 2);
+            entity.Property(e => e.MinC2CHourlyRate).HasColumnName("min_c2c_hourly_rate").HasPrecision(10, 2);
+            entity.Property(e => e.MinSalary).HasColumnName("min_salary").HasPrecision(12, 2);
+            entity.Property(e => e.EmploymentTypes).HasColumnName("employment_types");
+            entity.Property(e => e.WorkModes).HasColumnName("work_modes");
+            entity.Property(e => e.AllowedLocations).HasColumnName("allowed_locations");
+            entity.Property(e => e.MinContractMonths).HasColumnName("min_contract_months");
+            entity.Property(e => e.DealBreakerKeywords).HasColumnName("deal_breaker_keywords");
+            entity.Property(e => e.BlockedCompanies).HasColumnName("blocked_companies");
+            entity.Property(e => e.MustKnowFields).HasColumnName("must_know_fields");
+            entity.Property(e => e.Tone).HasColumnName("tone").HasMaxLength(50);
+            entity.Property(e => e.Signature).HasColumnName("signature").HasMaxLength(1000);
+            entity.Property(e => e.DiscloseMinRate).HasColumnName("disclose_min_rate");
+            entity.Property(e => e.AutoSendRequestInfo).HasColumnName("auto_send_request_info");
+            entity.Property(e => e.AutoSendDecline).HasColumnName("auto_send_decline");
+            entity.Property(e => e.DailySendCap).HasColumnName("daily_send_cap");
+            entity.Property(e => e.Paused).HasColumnName("paused");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.UserId).IsUnique();
+        });
+
+        modelBuilder.Entity<RecruiterThreadEntity>(entity =>
+        {
+            entity.ToTable("recruiter_threads");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.GmailThreadId).HasColumnName("gmail_thread_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Subject).HasColumnName("subject").HasMaxLength(500);
+            entity.Property(e => e.RecruiterEmail).HasColumnName("recruiter_email").HasMaxLength(320);
+            entity.Property(e => e.State).HasColumnName("state").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Facts).HasColumnName("facts").HasColumnType("jsonb");
+            entity.Property(e => e.MissingFields).HasColumnName("missing_fields").HasColumnType("jsonb");
+            entity.Property(e => e.Reasons).HasColumnName("reasons").HasColumnType("jsonb");
+            entity.Property(e => e.LastMessageAt).HasColumnName("last_message_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.GmailThreadId }).IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.State });
+        });
+
+        modelBuilder.Entity<RecruiterEmailEntity>(entity =>
+        {
+            entity.ToTable("recruiter_emails");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ThreadId).HasColumnName("thread_id");
+            entity.Property(e => e.GmailMessageId).HasColumnName("gmail_message_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.GmailThreadId).HasColumnName("gmail_thread_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Direction).HasColumnName("direction").HasMaxLength(10).IsRequired();
+            entity.Property(e => e.From).HasColumnName("from_address").HasMaxLength(500);
+            entity.Property(e => e.Subject).HasColumnName("subject").HasMaxLength(500);
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Error).HasColumnName("error");
+            entity.Property(e => e.ReceivedAt).HasColumnName("received_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<RecruiterThreadEntity>().WithMany().HasForeignKey(e => e.ThreadId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.GmailMessageId }).IsUnique();
         });
     }
 }

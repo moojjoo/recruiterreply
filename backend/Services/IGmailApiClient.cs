@@ -2,6 +2,16 @@ namespace RecruiterReply.Services;
 
 public record GmailMessageSummary(string MessageId, string ThreadId, string? Subject, string? From);
 
+public record GmailMessageDetail(
+    string MessageId,
+    string ThreadId,
+    string? Subject,
+    string? From,
+    string? RfcMessageId,
+    DateTime ReceivedAt,
+    bool IsSentByUser,
+    string Body);
+
 public class GmailHistoryResult
 {
     /// <summary>True when Gmail no longer has history for the requested startHistoryId (its retention window
@@ -24,4 +34,7 @@ public interface IGmailApiClient
     Task<GmailHistoryResult> ListMessageIdsSinceHistoryAsync(string accessToken, string startHistoryId, CancellationToken cancellationToken = default);
 
     Task<GmailMessageSummary> GetMessageSummaryAsync(string accessToken, string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>Full message with decoded body (text/plain preferred, tag-stripped text/html fallback).</summary>
+    Task<GmailMessageDetail> GetMessageFullAsync(string accessToken, string messageId, CancellationToken cancellationToken = default);
 }
