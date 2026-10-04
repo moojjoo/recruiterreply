@@ -81,8 +81,10 @@ builder.Services.AddCors(options =>
         if (builder.Environment.IsDevelopment())
         {
             // Vite may bind a different port or be opened via 127.0.0.1.
+            // Configured origins still apply: the hosted dev env runs as Development.
             policy.SetIsOriginAllowed(origin =>
-                Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback);
+                allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase)
+                || (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback));
         }
         else
         {
