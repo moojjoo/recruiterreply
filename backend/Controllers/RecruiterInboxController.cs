@@ -45,6 +45,8 @@ public class RecruiterInboxController : ControllerBase
         Facts = Deserialize<RecruiterFacts>(t.Facts),
         MissingFields = Deserialize<List<string>>(t.MissingFields) ?? [],
         Reasons = Deserialize<List<string>>(t.Reasons) ?? [],
+        HasDraft = !string.IsNullOrEmpty(t.DraftId),
+        DraftCreatedAt = t.DraftCreatedAt,
         LastMessageAt = t.LastMessageAt,
     };
 

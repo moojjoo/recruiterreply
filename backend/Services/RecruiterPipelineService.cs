@@ -6,8 +6,8 @@ using RecruiterReply.Repositories;
 namespace RecruiterReply.Services;
 
 /// <summary>
-/// Phase 1 of the recruiter autopilot: claim → pre-filter → extract (LLM) → evaluate (rules engine)
-/// → persist the thread's triage state. Read-only with respect to Gmail; drafts and labels come later.
+/// Recruiter autopilot pipeline: claim → pre-filter → extract (LLM) → evaluate (rules engine)
+/// → persist the thread's triage state → label the thread and draft a reply in Gmail.
 /// </summary>
 public class RecruiterPipelineService : IRecruiterPipelineService
 {
@@ -15,6 +15,7 @@ public class RecruiterPipelineService : IRecruiterPipelineService
     private readonly IGmailApiClient _apiClient;
     private readonly IOpenAIService _openAIService;
     private readonly IUsageService _usageService;
+    private readonly IRecruiterActionService _actionService;
     private readonly ILogger<RecruiterPipelineService> _logger;
 
     public RecruiterPipelineService(
@@ -22,8 +23,10 @@ public class RecruiterPipelineService : IRecruiterPipelineService
         IGmailApiClient apiClient,
         IOpenAIService openAIService,
         IUsageService usageService,
+        IRecruiterActionService actionService,
         ILogger<RecruiterPipelineService> logger)
     {
+        _actionService = actionService;
         _repository = repository;
         _apiClient = apiClient;
         _openAIService = openAIService;
@@ -123,6 +126,7 @@ public class RecruiterPipelineService : IRecruiterPipelineService
         thread.Reasons = JsonSerializer.Serialize(decision.Reasons);
         thread.LastMessageAt = message.ReceivedAt;
         thread.UpdatedAt = now;
+        await _actionService.ApplyAsync(connection, accessToken, thread, message, decision, merged, profile, cancellationToken);
         await _repository.SaveThreadAsync(thread, cancellationToken);
 
         email.ThreadId = thread.Id;

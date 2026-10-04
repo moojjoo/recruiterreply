@@ -263,6 +263,8 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.Facts).HasColumnName("facts").HasColumnType("jsonb");
             entity.Property(e => e.MissingFields).HasColumnName("missing_fields").HasColumnType("jsonb");
             entity.Property(e => e.Reasons).HasColumnName("reasons").HasColumnType("jsonb");
+            entity.Property(e => e.DraftId).HasColumnName("draft_id").HasMaxLength(100);
+            entity.Property(e => e.DraftCreatedAt).HasColumnName("draft_created_at");
             entity.Property(e => e.LastMessageAt).HasColumnName("last_message_at");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");

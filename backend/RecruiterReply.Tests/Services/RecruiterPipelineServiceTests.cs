@@ -14,20 +14,21 @@ public class RecruiterPipelineServiceTests
     private readonly Mock<IGmailApiClient> _apiClient = new();
     private readonly Mock<IOpenAIService> _openAI = new();
     private readonly Mock<IUsageService> _usage = new();
+    private readonly Mock<IRecruiterActionService> _actions = new();
     private readonly RecruiterPipelineService _sut;
     private readonly GmailConnectionEntity _connection = new() { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), GoogleAccountEmail = "me@gmail.com" };
     private readonly List<RecruiterEmailEntity> _savedEmails = [];
 
     public RecruiterPipelineServiceTests()
     {
-        _sut = new RecruiterPipelineService(_repository.Object, _apiClient.Object, _openAI.Object, _usage.Object, NullLogger<RecruiterPipelineService>.Instance);
+        _sut = new RecruiterPipelineService(_repository.Object, _apiClient.Object, _openAI.Object, _usage.Object, _actions.Object, NullLogger<RecruiterPipelineService>.Instance);
         _repository.Setup(r => r.AddEmailAsync(It.IsAny<RecruiterEmailEntity>(), It.IsAny<CancellationToken>()))
             .Callback<RecruiterEmailEntity, CancellationToken>((e, _) => _savedEmails.Add(e));
     }
 
     private void GivenMessage(string subject, string body, string threadId = "t1") =>
         _apiClient.Setup(a => a.GetMessageFullAsync("token", "m1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GmailMessageDetail("m1", threadId, subject, "Jane <jane@staffing.com>", null, DateTime.UtcNow, false, body));
+            .ReturnsAsync(new GmailMessageDetail("m1", threadId, subject, "Jane <jane@staffing.com>", null, null, null, DateTime.UtcNow, false, body));
 
     private void GivenExtracted(RecruiterFacts facts) =>
         _openAI.Setup(o => o.ExtractRecruiterFactsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -86,6 +87,8 @@ public class RecruiterPipelineServiceTests
         Assert.Equal("processed", email.Status);
         Assert.Equal(saved.Id, email.ThreadId);
         _usage.Verify(u => u.IncrementUsageAsync(_connection.UserId, UsageFeatures.AutoTriage, It.IsAny<CancellationToken>()), Times.Once);
+        _actions.Verify(a => a.ApplyAsync(_connection, "token", saved, It.IsAny<GmailMessageDetail>(),
+            It.Is<TriageDecision>(d => d.State == TriageStates.NeedsInfo), It.IsAny<RecruiterFacts>(), null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

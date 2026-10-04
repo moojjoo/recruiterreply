@@ -114,6 +114,7 @@ export interface ApiResponse<T> {
 // Gmail Recruiting Agent Types
 export interface GmailStatus {
   isConnected: boolean;
+  canWriteDrafts?: boolean;
   googleAccountEmail?: string;
   status?: string;
   lastSyncedAt?: string;
@@ -187,5 +188,7 @@ export interface RecruiterThread {
   facts?: RecruiterFacts | null;
   missingFields: FactField[];
   reasons: string[];
+  hasDraft: boolean;
+  draftCreatedAt?: string | null;
   lastMessageAt: string;
 }

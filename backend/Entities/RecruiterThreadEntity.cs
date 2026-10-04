@@ -16,6 +16,9 @@ public class RecruiterThreadEntity
     public string? MissingFields { get; set; }
     /// <summary>jsonb string array of reasons the opportunity is below the user's bar.</summary>
     public string? Reasons { get; set; }
+    /// <summary>Gmail draft id of the latest suggested reply, if one was created.</summary>
+    public string? DraftId { get; set; }
+    public DateTime? DraftCreatedAt { get; set; }
     public DateTime LastMessageAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

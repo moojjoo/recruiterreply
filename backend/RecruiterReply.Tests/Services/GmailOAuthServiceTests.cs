@@ -39,6 +39,8 @@ public class GmailOAuthServiceTests
         Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth?", url);
         Assert.Contains("client_id=test-client-id", url);
         Assert.Contains("prompt=consent", url);
+        Assert.Contains(Uri.EscapeDataString(GmailScopes.Modify), url);
+        Assert.Contains(Uri.EscapeDataString(GmailScopes.Compose), url);
     }
 
     [Fact]

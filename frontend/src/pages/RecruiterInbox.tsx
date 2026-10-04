@@ -109,7 +109,8 @@ export const RecruiterInbox: React.FC = () => {
         </div>
         <p className="text-gray-600 mb-6">
           Recruiter emails from your connected Gmail, sorted against your
-          career profile. New mail is checked every few minutes.
+          career profile. New mail is checked every few minutes, and a
+          suggested reply is saved as a Gmail draft for you to review and send.
         </p>
 
         <div role="tablist" aria-label="Triage state" className="flex flex-wrap gap-2">
@@ -176,7 +177,7 @@ const ThreadItem: React.FC<{ thread: RecruiterThread }> = ({ thread }) => {
             rel="noopener noreferrer"
             className="font-semibold text-primary-700 hover:underline"
           >
-            Open in Gmail
+            {thread.hasDraft ? "Review draft reply in Gmail" : "Open in Gmail"}
           </a>
         </div>
       </div>

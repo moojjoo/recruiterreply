@@ -33,5 +33,7 @@ public class RecruiterThreadDto
     public Services.RecruiterFacts? Facts { get; set; }
     public List<string> MissingFields { get; set; } = [];
     public List<string> Reasons { get; set; } = [];
+    public bool HasDraft { get; set; }
+    public DateTime? DraftCreatedAt { get; set; }
     public DateTime LastMessageAt { get; set; }
 }

@@ -5,7 +5,7 @@ namespace RecruiterReply.Tests.Services;
 public class RecruiterPrefilterTests
 {
     private static GmailMessageDetail Message(string subject, string body, string from = "jane@staffing.com", bool sent = false) =>
-        new("m1", "t1", subject, from, null, DateTime.UtcNow, sent, body);
+        new("m1", "t1", subject, from, null, null, null, DateTime.UtcNow, sent, body);
 
     [Fact]
     public void RecruiterOutreach_Passes()

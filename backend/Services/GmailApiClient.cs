@@ -117,11 +117,96 @@ public class GmailApiClient : IGmailApiClient
             message.ThreadId,
             Header("Subject"),
             Header("From"),
+            Header("Reply-To"),
             Header("Message-ID"),
+            Header("References"),
             receivedAt,
             message.LabelIds?.Contains("SENT") == true,
             body);
     }
+
+    public async Task<string> EnsureLabelAsync(string accessToken, string name, CancellationToken cancellationToken = default)
+    {
+        using var service = CreateService(accessToken);
+        var existing = await service.Users.Labels.List("me").ExecuteAsync(cancellationToken);
+        var match = existing.Labels?.FirstOrDefault(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+        {
+            return match.Id;
+        }
+
+        var created = await service.Users.Labels.Create(new Label
+        {
+            Name = name,
+            LabelListVisibility = "labelShow",
+            MessageListVisibility = "show",
+        }, "me").ExecuteAsync(cancellationToken);
+        return created.Id;
+    }
+
+    public async Task ModifyThreadLabelsAsync(string accessToken, string threadId, IReadOnlyList<string> addLabelIds, IReadOnlyList<string> removeLabelIds, CancellationToken cancellationToken = default)
+    {
+        using var service = CreateService(accessToken);
+        await service.Users.Threads.Modify(new ModifyThreadRequest
+        {
+            AddLabelIds = addLabelIds.ToList(),
+            RemoveLabelIds = removeLabelIds.ToList(),
+        }, "me", threadId).ExecuteAsync(cancellationToken);
+    }
+
+    public async Task<string> CreateDraftReplyAsync(string accessToken, GmailDraftReply reply, CancellationToken cancellationToken = default)
+    {
+        using var service = CreateService(accessToken);
+        var draft = await service.Users.Drafts.Create(new Draft
+        {
+            Message = new Message
+            {
+                ThreadId = reply.ThreadId,
+                Raw = EncodeBase64Url(BuildMimeReply(reply)),
+            },
+        }, "me").ExecuteAsync(cancellationToken);
+        return draft.Id;
+    }
+
+    public async Task DeleteDraftAsync(string accessToken, string draftId, CancellationToken cancellationToken = default)
+    {
+        using var service = CreateService(accessToken);
+        try
+        {
+            await service.Users.Drafts.Delete("me", draftId).ExecuteAsync(cancellationToken);
+        }
+        catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+        }
+    }
+
+    internal static string BuildMimeReply(GmailDraftReply reply)
+    {
+        var subject = reply.Subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase) ? reply.Subject : $"Re: {reply.Subject}";
+        var references = string.Join(' ', new[] { reply.References, reply.InReplyTo }.Where(r => !string.IsNullOrWhiteSpace(r)));
+        var mime = new StringBuilder();
+        mime.Append($"To: {StripLineBreaks(reply.To)}\r\n");
+        mime.Append($"Subject: =?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(StripLineBreaks(subject)))}?=\r\n");
+        if (!string.IsNullOrWhiteSpace(reply.InReplyTo))
+        {
+            mime.Append($"In-Reply-To: {StripLineBreaks(reply.InReplyTo)}\r\n");
+        }
+        if (references.Length > 0)
+        {
+            mime.Append($"References: {StripLineBreaks(references)}\r\n");
+        }
+        mime.Append("MIME-Version: 1.0\r\n");
+        mime.Append("Content-Type: text/plain; charset=UTF-8\r\n");
+        mime.Append("Content-Transfer-Encoding: base64\r\n\r\n");
+        mime.Append(Convert.ToBase64String(Encoding.UTF8.GetBytes(reply.Body), Base64FormattingOptions.InsertLineBreaks));
+        return mime.ToString();
+    }
+
+    // Header values come from untrusted email; a CR/LF would let a sender inject extra headers.
+    private static string StripLineBreaks(string value) => value.Replace("\r", " ").Replace("\n", " ");
+
+    private static string EncodeBase64Url(string value) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private static string? FindPartBody(MessagePart? part, string mimeType)
     {

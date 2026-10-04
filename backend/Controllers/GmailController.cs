@@ -88,6 +88,7 @@ public class GmailController : ControllerBase
         return Ok(new GmailStatusResponse
         {
             IsConnected = true,
+            CanWriteDrafts = GmailScopes.CanWrite(connection.GrantedScopes),
             GoogleAccountEmail = connection.GoogleAccountEmail,
             Status = connection.Status,
             LastSyncedAt = connection.LastSyncedAt,

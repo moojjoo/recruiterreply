@@ -45,7 +45,7 @@ public class GmailOAuthService : IGmailOAuthService
         {
             ClientId = _options.ClientId,
             RedirectUri = _options.RedirectUri,
-            Scope = string.Join(' ', _options.Scopes),
+            Scope = string.Join(' ', _options.EffectiveScopes),
             State = state,
             AccessType = "offline"
         };
@@ -122,7 +122,7 @@ public class GmailOAuthService : IGmailOAuthService
         connection.AccessTokenEncrypted = _tokenProtector.Protect(tokenResponse.AccessToken);
         connection.RefreshTokenEncrypted = _tokenProtector.Protect(tokenResponse.RefreshToken);
         connection.TokenExpiresAt = now.AddSeconds(tokenResponse.ExpiresInSeconds ?? 3600);
-        connection.GrantedScopes = tokenResponse.Scope ?? string.Join(' ', _options.Scopes);
+        connection.GrantedScopes = tokenResponse.Scope ?? string.Join(' ', _options.EffectiveScopes);
         connection.Status = "active";
         connection.LastSyncStatus = null;
         connection.LastSyncError = null;
@@ -197,7 +197,7 @@ public class GmailOAuthService : IGmailOAuthService
                 ClientId = _options.ClientId,
                 ClientSecret = _options.ClientSecret
             },
-            Scopes = _options.Scopes,
+            Scopes = _options.EffectiveScopes,
             DataStore = new GmailNullDataStore()
         });
     }

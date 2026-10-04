@@ -158,6 +158,7 @@ builder.Services.AddScoped<IGmailConnectionRepository, GmailConnectionRepository
 builder.Services.AddScoped<IGmailOAuthService, GmailOAuthService>();
 builder.Services.AddScoped<IGmailApiClient, GmailApiClient>();
 builder.Services.AddScoped<IRecruiterInboxRepository, RecruiterInboxRepository>();
+builder.Services.AddScoped<IRecruiterActionService, RecruiterActionService>();
 builder.Services.AddScoped<IRecruiterPipelineService, RecruiterPipelineService>();
 builder.Services.AddScoped<IGmailSyncService, GmailSyncService>();
 builder.Services.AddHostedService<GmailPollingBackgroundService>();
