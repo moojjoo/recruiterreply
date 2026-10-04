@@ -264,6 +264,8 @@ jobs:
       - name: Generate idempotent migration script
         if: inputs.environment == 'prod'
         working-directory: src/backend
+        env:
+          ConnectionStrings__DefaultConnection: Host=localhost;Database=recruiterreply
         run: |
           set -euo pipefail
           dotnet tool restore
