@@ -267,6 +267,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet tool restore
+          dotnet restore
           dotnet ef migrations script --idempotent -o "$RUNNER_TEMP/migrate.sql"
           # EF writes a UTF-8 BOM that psql rejects on the first statement.
           sed -i '1s/^\xEF\xBB\xBF//' "$RUNNER_TEMP/migrate.sql"
