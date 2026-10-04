@@ -1,14 +1,16 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../common/Button";
 
 export const Navbar: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
+  const brandDestination = isAuthenticated ? "/dashboard" : "/";
 
   return (
     <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-200">
       <div className="container flex items-center justify-between py-4">
-        <a href="/" className="flex items-center gap-2">
+        <Link to={brandDestination} className="flex items-center gap-2">
           <img
             src="/recruiterreply-mark.svg"
             alt=""
@@ -18,7 +20,7 @@ export const Navbar: React.FC = () => {
           <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
             RecruiterReply
           </span>
-        </a>
+        </Link>
 
         <div className="flex items-center gap-4">
           <a
