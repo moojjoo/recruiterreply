@@ -9,6 +9,9 @@ on:
       sha:
         required: true
         type: string
+      build_run_id:
+        required: false
+        type: string
       api_base_url:
         required: true
         type: string
@@ -129,12 +132,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           SHA: ${{ inputs.sha }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
           CURRENT_RUN_ID: ${{ github.run_id }}
           CURRENT_WORKFLOW: ${{ github.workflow }}
         run: |
           set -euo pipefail
 
-          if [[ "$CURRENT_WORKFLOW" == "Build (Dev)" ]]; then
+          if [[ -n "$BUILD_RUN_ID" ]]; then
+            RUN_ID="$BUILD_RUN_ID"
+          elif [[ "$CURRENT_WORKFLOW" == "Build (Dev)" ]]; then
             RUN_ID="$CURRENT_RUN_ID"
           else
             RUN_ID=$(curl -fsSL \
