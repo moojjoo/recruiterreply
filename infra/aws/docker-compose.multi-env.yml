@@ -16,6 +16,8 @@ services:
       retries: 8
     networks:
       - recruiterreply
+    ports:
+      - "127.0.0.1:5433:5432"
 
   backend-dev:
     image: ${BACKEND_IMAGE_DEV:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:dev-latest}
@@ -27,8 +29,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://0.0.0.0:5000
-      AWS_REGION: us-east-1
-      AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/dev/backend-app-secrets
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_DEV}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
@@ -36,9 +36,11 @@ services:
       Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://dev.recruiterreply.com
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
+      Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5001:5000"
+      - "127.0.0.1:5432"
     networks:
       - recruiterreply
 
@@ -52,8 +54,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_URLS: http://0.0.0.0:5000
-      AWS_REGION: us-east-1
-      AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/test/backend-app-secrets
       OpenAI__ApiKey: ${OPENAI_API_KEY}
       Jwt__Key: ${JWT_KEY_TEST}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
@@ -61,6 +61,7 @@ services:
       Google__RedirectUri: https://api-test.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://test.recruiterreply.com
       Cors__AllowedOrigins__0: https://test.recruiterreply.com
+      Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_test;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5002:5000"

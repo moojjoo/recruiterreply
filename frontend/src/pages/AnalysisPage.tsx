@@ -3,6 +3,7 @@ import { MessageAnalyzer } from "../components/MessageAnalyzer";
 import { AnalysisResult } from "../components/AnalysisResult";
 import { AnalyzeMessageResponse } from "../types/index";
 import { MainLayout } from "../components/layout/MainLayout";
+import { ToolNavigation } from "../components/ToolNavigation";
 
 export const AnalysisPage: React.FC = () => {
   const [result, setResult] = useState<AnalyzeMessageResponse | null>(null);
@@ -21,6 +22,7 @@ export const AnalysisPage: React.FC = () => {
             <p className="section-subtitle text-lg">
               Decode recruiter messages with AI-powered intelligence
             </p>
+            <ToolNavigation currentTool="/analyze" />
           </div>
         </section>
 

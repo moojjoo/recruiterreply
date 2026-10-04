@@ -3,6 +3,7 @@ import { ReplyGenerator } from "../components/ReplyGenerator";
 import { ReplyResult } from "../components/ReplyResult";
 import { GenerateReplyResponse } from "../types/index";
 import { MainLayout } from "../components/layout/MainLayout";
+import { ToolNavigation } from "../components/ToolNavigation";
 
 export const ReplyPage: React.FC = () => {
   const [result, setResult] = useState<GenerateReplyResponse | null>(null);
@@ -17,6 +18,7 @@ export const ReplyPage: React.FC = () => {
             <p className="section-subtitle text-lg">
               Craft compelling responses that showcase your professionalism
             </p>
+            <ToolNavigation currentTool="/reply" />
           </div>
         </section>
 
