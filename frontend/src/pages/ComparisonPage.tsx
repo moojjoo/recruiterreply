@@ -3,6 +3,7 @@ import { ComparisonTool } from "../components/ComparisonTool";
 import { ComparisonResult } from "../components/ComparisonResult";
 import { CompareOffersResponse } from "../types/index";
 import { MainLayout } from "../components/layout/MainLayout";
+import { ToolNavigation } from "../components/ToolNavigation";
 
 export const ComparisonPage: React.FC = () => {
   const [result, setResult] = useState<CompareOffersResponse | null>(null);
@@ -17,6 +18,7 @@ export const ComparisonPage: React.FC = () => {
             <p className="section-subtitle text-lg">
               Make data-driven decisions with AI-powered offer analysis
             </p>
+            <ToolNavigation currentTool="/compare" />
           </div>
         </section>
 

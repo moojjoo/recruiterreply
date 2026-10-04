@@ -16,6 +16,8 @@ services:
       retries: 8
     networks:
       - recruiterreply
+    ports:
+      - "127.0.0.1:5433:5432"
 
   backend-dev:
     image: ${BACKEND_IMAGE_DEV:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:dev-latest}
@@ -38,6 +40,7 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5001:5000"
+      - "127.0.0.1:5432"
     networks:
       - recruiterreply
 
