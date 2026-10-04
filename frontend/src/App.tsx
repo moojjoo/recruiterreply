@@ -19,6 +19,8 @@ import { Profile } from "./pages/Profile";
 import { GmailCallback } from "./pages/GmailCallback";
 import { GoogleCallback } from "./pages/GoogleCallback";
 import { Opportunities } from "./pages/Opportunities";
+import { CareerProfile } from "./pages/CareerProfile";
+import { RecruiterInbox } from "./pages/RecruiterInbox";
 import { NotFound } from "./pages/NotFound";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { Terms } from "./pages/Terms";
@@ -86,6 +88,22 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Opportunities />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/career-profile"
+                  element={
+                    <ProtectedRoute>
+                      <CareerProfile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/recruiter-inbox"
+                  element={
+                    <ProtectedRoute>
+                      <RecruiterInbox />
                     </ProtectedRoute>
                   }
                 />

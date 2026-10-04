@@ -11,6 +11,7 @@ public class UsageService : IUsageService
         UsageFeatures.Analyze,
         UsageFeatures.Reply,
         UsageFeatures.Compare,
+        UsageFeatures.AutoTriage,
     ];
 
     private readonly IUsageRepository _usageRepository;

@@ -126,3 +126,66 @@ export interface ApiError {
   status: number;
   data?: unknown;
 }
+
+export type EmploymentType = "w2" | "c2c" | "1099" | "fte";
+export type WorkMode = "remote" | "hybrid" | "onsite";
+export type FactField =
+  | "rate"
+  | "employment_type"
+  | "work_mode"
+  | "location"
+  | "end_client"
+  | "duration";
+
+export interface CareerProfile {
+  targetTitles: string[];
+  skills: string[];
+  minW2HourlyRate: number | null;
+  minC2CHourlyRate: number | null;
+  minSalary: number | null;
+  employmentTypes: EmploymentType[];
+  workModes: WorkMode[];
+  allowedLocations: string[];
+  minContractMonths: number | null;
+  dealBreakerKeywords: string[];
+  blockedCompanies: string[];
+  mustKnowFields: FactField[];
+  tone: string | null;
+  signature: string | null;
+  discloseMinRate: boolean;
+  autoSendRequestInfo: boolean;
+  autoSendDecline: boolean;
+  dailySendCap: number;
+  paused: boolean;
+}
+
+export type TriageState = "qualified" | "needs_info" | "below_bar" | "ignored";
+
+export interface RecruiterFacts {
+  isRecruiter: boolean;
+  title?: string | null;
+  company?: string | null;
+  endClient?: string | null;
+  employmentType?: string | null;
+  rateMin?: number | null;
+  rateMax?: number | null;
+  rateUnit?: string | null;
+  location?: string | null;
+  workMode?: string | null;
+  durationMonths?: number | null;
+  recruiterName?: string | null;
+  agency?: string | null;
+  skills: string[];
+}
+
+export interface RecruiterThread {
+  id: string;
+  gmailThreadId: string;
+  subject?: string | null;
+  recruiterEmail?: string | null;
+  state: TriageState;
+  facts?: RecruiterFacts | null;
+  missingFields: FactField[];
+  reasons: string[];
+  lastMessageAt: string;
+}
