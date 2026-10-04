@@ -247,7 +247,7 @@ dotnet run
 
 ### Release Build
 
-```bash rocks
+```bash rocks the house
 dotnet publish -c Release
 ```
 
