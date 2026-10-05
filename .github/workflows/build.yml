@@ -1,8 +1,8 @@
-name: Build (Main) all branches pull to main
+name: Build and Deploy to Dev
 
 on:
   push:
-    branches: ["main"]
+    branches: ["**"]
   workflow_dispatch:
 
 permissions:
