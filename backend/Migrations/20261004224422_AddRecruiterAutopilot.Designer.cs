@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RecruiterReply.Data;
@@ -12,9 +13,11 @@ using RecruiterReply.Data;
 namespace RecruiterReply.Migrations
 {
     [DbContext(typeof(RecruiterReplyDbContext))]
-    partial class RecruiterReplyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261004224422_AddRecruiterAutopilot")]
+    partial class AddRecruiterAutopilot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -708,15 +711,6 @@ namespace RecruiterReply.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("DraftCreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("draft_created_at");
-
-                    b.Property<string>("DraftId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("draft_id");
 
                     b.Property<string>("Facts")
                         .HasColumnType("jsonb")

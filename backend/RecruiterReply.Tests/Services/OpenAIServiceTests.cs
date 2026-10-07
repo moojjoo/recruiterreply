@@ -122,3 +122,32 @@ public class OpenAIServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => sut.CompareOffersAsync("", "{}"));
     }
 }
+
+public class OpenAIServiceParseRecruiterFactsTests
+{
+    [Fact]
+    public void ParseRecruiterFacts_HandlesMarkdownFencesAndNulls()
+    {
+        const string response = """
+            ```json
+            {"isRecruiter": true, "title": "Data Engineer", "employmentType": "w2", "rateMin": "80", "rateMax": 90,
+             "rateUnit": "hour", "workMode": null, "durationMonths": 12, "skills": ["Spark"]}
+            ```
+            """;
+
+        var facts = OpenAIService.ParseRecruiterFacts(response);
+
+        Assert.True(facts.IsRecruiter);
+        Assert.Equal("Data Engineer", facts.Title);
+        Assert.Equal(80, facts.RateMin);
+        Assert.Equal(90, facts.RateMax);
+        Assert.Null(facts.WorkMode);
+        Assert.Equal(["Spark"], facts.Skills);
+    }
+
+    [Fact]
+    public void ParseRecruiterFacts_WithoutJson_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => OpenAIService.ParseRecruiterFacts("I can't help with that."));
+    }
+}

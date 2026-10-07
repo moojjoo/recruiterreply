@@ -4,23 +4,25 @@ using RecruiterReply.Repositories;
 namespace RecruiterReply.Services;
 
 /// <summary>
-/// Phase 1: read-only detection only. Logs what it would process for each connection but does
-/// not create MessageEntity rows, call the LLM, or write anything to Gmail. Phase 2 adds the
-/// claim/extract/evaluate pipeline; Phase 3 adds draft creation + labeling.
+/// Pulls new inbox messages for a connection and hands each one to the recruiter pipeline
+/// (claim/extract/evaluate). Still read-only with respect to Gmail; drafts + labeling come later.
 /// </summary>
 public class GmailSyncService : IGmailSyncService
 {
     private readonly IGmailConnectionRepository _connectionRepository;
     private readonly IGmailOAuthService _oAuthService;
     private readonly IGmailApiClient _apiClient;
+    private readonly IRecruiterPipelineService _pipeline;
     private readonly ILogger<GmailSyncService> _logger;
 
     public GmailSyncService(
         IGmailConnectionRepository connectionRepository,
         IGmailOAuthService oAuthService,
         IGmailApiClient apiClient,
+        IRecruiterPipelineService pipeline,
         ILogger<GmailSyncService> logger)
     {
+        _pipeline = pipeline;
         _connectionRepository = connectionRepository;
         _oAuthService = oAuthService;
         _apiClient = apiClient;
@@ -62,10 +64,15 @@ public class GmailSyncService : IGmailSyncService
 
             foreach (var messageId in messageIds)
             {
-                var summary = await _apiClient.GetMessageSummaryAsync(accessToken, messageId, cancellationToken);
-                _logger.LogInformation(
-                    "Gmail poll detected message {MessageId} (thread {ThreadId}) from {From}: {Subject}",
-                    summary.MessageId, summary.ThreadId, summary.From, summary.Subject);
+                try
+                {
+                    await _pipeline.ProcessMessageAsync(connection, accessToken, messageId, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not TokenResponseException and not OperationCanceledException)
+                {
+                    // One bad message must not block the rest of the batch or stall the history cursor.
+                    _logger.LogError(ex, "Recruiter pipeline failed for message {MessageId} on connection {ConnectionId}", messageId, connectionId);
+                }
             }
 
             var newHistoryId = await _apiClient.GetProfileHistoryIdAsync(accessToken, cancellationToken);

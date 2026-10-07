@@ -12,11 +12,12 @@ public class GmailSyncServiceTests
     private readonly Mock<IGmailConnectionRepository> _connectionRepository = new();
     private readonly Mock<IGmailOAuthService> _oAuthService = new();
     private readonly Mock<IGmailApiClient> _apiClient = new();
+    private readonly Mock<IRecruiterPipelineService> _pipeline = new();
     private readonly GmailSyncService _sut;
 
     public GmailSyncServiceTests()
     {
-        _sut = new GmailSyncService(_connectionRepository.Object, _oAuthService.Object, _apiClient.Object, NullLogger<GmailSyncService>.Instance);
+        _sut = new GmailSyncService(_connectionRepository.Object, _oAuthService.Object, _apiClient.Object, _pipeline.Object, NullLogger<GmailSyncService>.Instance);
     }
 
     private static GmailConnectionEntity BuildConnection(string status = "active", string? historyId = null) => new()
@@ -60,13 +61,12 @@ public class GmailSyncServiceTests
         _connectionRepository.Setup(r => r.GetByIdAsync(connection.Id, It.IsAny<CancellationToken>())).ReturnsAsync(connection);
         _oAuthService.Setup(o => o.GetValidAccessTokenAsync(connection, It.IsAny<CancellationToken>())).ReturnsAsync("access-token");
         _apiClient.Setup(a => a.ListRecentInboxMessageIdsAsync("access-token", It.IsAny<CancellationToken>())).ReturnsAsync(["msg1"]);
-        _apiClient.Setup(a => a.GetMessageSummaryAsync("access-token", "msg1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GmailMessageSummary("msg1", "thread1", "Subject", "from@example.com"));
         _apiClient.Setup(a => a.GetProfileHistoryIdAsync("access-token", It.IsAny<CancellationToken>())).ReturnsAsync("history-100");
 
         await _sut.SyncConnectionAsync(connection.Id);
 
         _apiClient.Verify(a => a.ListMessageIdsSinceHistoryAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _pipeline.Verify(p => p.ProcessMessageAsync(connection, "access-token", "msg1", It.IsAny<CancellationToken>()), Times.Once);
         Assert.Equal("history-100", connection.HistoryId);
         Assert.Equal("ok", connection.LastSyncStatus);
         Assert.NotNull(connection.LastSyncedAt);
@@ -81,14 +81,31 @@ public class GmailSyncServiceTests
         _oAuthService.Setup(o => o.GetValidAccessTokenAsync(connection, It.IsAny<CancellationToken>())).ReturnsAsync("access-token");
         _apiClient.Setup(a => a.ListMessageIdsSinceHistoryAsync("access-token", "history-50", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GmailHistoryResult { HistoryExpired = false, MessageIds = ["msg2"] });
-        _apiClient.Setup(a => a.GetMessageSummaryAsync("access-token", "msg2", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GmailMessageSummary("msg2", "thread2", "Subject2", "from2@example.com"));
         _apiClient.Setup(a => a.GetProfileHistoryIdAsync("access-token", It.IsAny<CancellationToken>())).ReturnsAsync("history-200");
 
         await _sut.SyncConnectionAsync(connection.Id);
 
         _apiClient.Verify(a => a.ListRecentInboxMessageIdsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.Equal("history-200", connection.HistoryId);
+    }
+
+    [Fact]
+    public async Task SyncConnectionAsync_WhenPipelineFailsForOneMessage_ContinuesAndAdvancesHistory()
+    {
+        var connection = BuildConnection(historyId: "history-50");
+        _connectionRepository.Setup(r => r.GetByIdAsync(connection.Id, It.IsAny<CancellationToken>())).ReturnsAsync(connection);
+        _oAuthService.Setup(o => o.GetValidAccessTokenAsync(connection, It.IsAny<CancellationToken>())).ReturnsAsync("access-token");
+        _apiClient.Setup(a => a.ListMessageIdsSinceHistoryAsync("access-token", "history-50", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GmailHistoryResult { HistoryExpired = false, MessageIds = ["bad", "good"] });
+        _pipeline.Setup(p => p.ProcessMessageAsync(connection, "access-token", "bad", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+        _apiClient.Setup(a => a.GetProfileHistoryIdAsync("access-token", It.IsAny<CancellationToken>())).ReturnsAsync("history-200");
+
+        await _sut.SyncConnectionAsync(connection.Id);
+
+        _pipeline.Verify(p => p.ProcessMessageAsync(connection, "access-token", "good", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal("history-200", connection.HistoryId);
+        Assert.Equal("ok", connection.LastSyncStatus);
     }
 
     [Fact]

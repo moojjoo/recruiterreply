@@ -12,6 +12,7 @@ public static class UsageFeatures
     public const string Analyze = "analyze";
     public const string Reply = "reply";
     public const string Compare = "compare";
+    public const string AutoTriage = "auto_triage";
 }
 
 public static class PlanLimits
@@ -24,18 +25,21 @@ public static class PlanLimits
             [UsageFeatures.Analyze] = 5,
             [UsageFeatures.Reply] = 5,
             [UsageFeatures.Compare] = 2,
+            [UsageFeatures.AutoTriage] = 0,
         },
         [PlanTiers.Professional] = new()
         {
             [UsageFeatures.Analyze] = 200,
             [UsageFeatures.Reply] = 200,
             [UsageFeatures.Compare] = 50,
+            [UsageFeatures.AutoTriage] = 500,
         },
         [PlanTiers.RecruiterPro] = new()
         {
             [UsageFeatures.Analyze] = null,
             [UsageFeatures.Reply] = null,
             [UsageFeatures.Compare] = null,
+            [UsageFeatures.AutoTriage] = null,
         },
     };
 

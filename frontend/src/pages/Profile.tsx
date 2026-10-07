@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
@@ -19,6 +20,7 @@ const FEATURE_LABELS: Record<string, string> = {
   analyze: "Message analyses",
   reply: "Replies generated",
   compare: "Offer comparisons",
+  auto_triage: "Recruiter emails triaged",
 };
 
 export const Profile: React.FC = () => {
@@ -229,6 +231,31 @@ export const Profile: React.FC = () => {
                 Connection needs to be re-authorized — disconnect and reconnect Gmail.
               </p>
             )}
+            {gmailStatus.status !== "error" && !gmailStatus.canWriteDrafts && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                <p>
+                  Reconnect Gmail to let RecruiterReply label recruiter threads
+                  and save suggested replies as drafts. Nothing is ever sent
+                  without you.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleConnect}
+                  isLoading={isConnecting}
+                >
+                  Reconnect Gmail
+                </Button>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-4 text-sm font-semibold">
+              <Link to="/recruiter-inbox" className="text-primary-700 hover:underline">
+                Recruiter inbox →
+              </Link>
+              <Link to="/career-profile" className="text-primary-700 hover:underline">
+                What I'm looking for →
+              </Link>
+            </div>
             <Button
               variant="danger"
               onClick={handleDisconnect}
