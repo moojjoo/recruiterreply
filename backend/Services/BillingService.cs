@@ -147,7 +147,7 @@ public class BillingService : IBillingService
             var subscriptionService = _stripeClient is null ? new SubscriptionService() : new SubscriptionService(_stripeClient);
             var subscription = await subscriptionService.GetAsync(session.SubscriptionId, cancellationToken: cancellationToken);
             user.SubscriptionStatus = subscription.Status;
-            user.SubscriptionCurrentPeriodEnd = subscription.CurrentPeriodEnd;
+            user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
         }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
@@ -168,7 +168,7 @@ public class BillingService : IBillingService
 
         user.StripeSubscriptionId = subscription.Id;
         user.SubscriptionStatus = subscription.Status;
-        user.SubscriptionCurrentPeriodEnd = subscription.CurrentPeriodEnd;
+        user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
 
         var priceId = subscription.Items?.Data?.FirstOrDefault()?.Price?.Id;
         var tier = ResolveTierFromPriceId(priceId);
@@ -179,6 +179,10 @@ public class BillingService : IBillingService
 
         await _userRepository.UpdateAsync(user, cancellationToken);
     }
+
+    // Since API version 2025-03-31.basil, billing periods live on subscription items.
+    private static DateTime? GetCurrentPeriodEnd(Subscription subscription) =>
+        subscription.Items?.Data?.FirstOrDefault()?.CurrentPeriodEnd;
 
     private async Task HandleSubscriptionDeletedAsync(Event stripeEvent, CancellationToken cancellationToken)
     {
