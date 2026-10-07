@@ -6,7 +6,10 @@
   "directories": {
     "doc": "docs"
   },
-  "scripts": {},
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moojjoo/recruiterreply.git"
