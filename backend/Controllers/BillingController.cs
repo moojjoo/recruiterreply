@@ -84,8 +84,9 @@ public class BillingController : ControllerBase
         }
         catch (Stripe.StripeException ex)
         {
-            _logger.LogWarning(ex, "Stripe webhook signature verification failed");
-            return BadRequest(new { error = "Invalid webhook signature" });
+            // Covers both signature failures and event API version mismatches.
+            _logger.LogWarning(ex, "Stripe webhook rejected: {Message}", ex.Message);
+            return BadRequest(new { error = "Invalid webhook event" });
         }
         catch (Exception ex)
         {

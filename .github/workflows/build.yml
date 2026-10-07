@@ -10,6 +10,11 @@ permissions:
   id-token: write
   contents: read
 
+# Serialize main builds so overlapping dev deploys don't race on the shared EC2 host.
+concurrency:
+  group: build-main-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   BACKEND_IMAGE_NAME: recruiterreply-backend
   AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}

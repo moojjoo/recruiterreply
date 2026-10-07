@@ -107,9 +107,20 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task HandleWebhookAsync_WithMismatchedApiVersion_ThrowsStripeException()
+    {
+        // The live webhook endpoint is pinned to 2025-04-30.basil; Stripe.net must match it.
+        var payload = """{"id":"evt_1","object":"event","type":"some.unhandled.event","request":null,"api_version":"2025-02-24.acacia","data":{"object":{"object":"customer"}}}""";
+        var signature = StripeSignatureHelper.BuildSignatureHeader(payload, WebhookSecret);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<StripeException>(() => sut.HandleWebhookAsync(payload, signature));
+    }
+
+    [Fact]
     public async Task HandleWebhookAsync_WithUnhandledEventType_IsNoOp()
     {
-        var payload = """{"id":"evt_1","object":"event","type":"some.unhandled.event","request":null,"api_version":"2025-02-24.acacia","data":{"object":{"object":"customer"}}}""";
+        var payload = """{"id":"evt_1","object":"event","type":"some.unhandled.event","request":null,"api_version":"2025-04-30.basil","data":{"object":{"object":"customer"}}}""";
         var signature = StripeSignatureHelper.BuildSignatureHeader(payload, WebhookSecret);
         var sut = CreateSut();
 
@@ -131,7 +142,7 @@ public class BillingServiceTests
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "customer.subscription.updated",
               "data": {
                 "object": {
@@ -139,13 +150,13 @@ public class BillingServiceTests
                   "object": "subscription",
                   "customer": "cus_123",
                   "status": "active",
-                  "current_period_end": 1893456000,
                   "items": {
                     "object": "list",
                     "data": [
                       {
                         "id": "si_1",
                         "object": "subscription_item",
+                        "current_period_end": 1893456000,
                         "price": { "id": "price_professional_test", "object": "price" }
                       }
                     ]
@@ -162,7 +173,7 @@ public class BillingServiceTests
         Assert.Equal("sub_123", user.StripeSubscriptionId);
         Assert.Equal("active", user.SubscriptionStatus);
         Assert.Equal(PlanTiers.Professional, user.SubscriptionTier);
-        Assert.NotNull(user.SubscriptionCurrentPeriodEnd);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1893456000).UtcDateTime, user.SubscriptionCurrentPeriodEnd);
         _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -178,7 +189,7 @@ public class BillingServiceTests
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "customer.subscription.updated",
               "data": {
                 "object": {
@@ -215,7 +226,7 @@ public class BillingServiceTests
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "customer.subscription.deleted",
               "data": {
                 "object": {
@@ -248,7 +259,7 @@ public class BillingServiceTests
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "checkout.session.completed",
               "data": {
                 "object": {
@@ -278,7 +289,7 @@ public class BillingServiceTests
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "checkout.session.completed",
               "data": {
                 "object": {
@@ -309,7 +320,7 @@ public class BillingServiceTests
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "checkout.session.completed",
               "data": {
                 "object": {
@@ -343,14 +354,22 @@ public class BillingServiceTests
         stripeClient
             .Setup(c => c.RequestAsync<Subscription>(
                 It.IsAny<HttpMethod>(), It.Is<string>(p => p.Contains("sub_123")), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Subscription { Id = "sub_123", Status = "trialing", CurrentPeriodEnd = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
+            .ReturnsAsync(new Subscription
+            {
+                Id = "sub_123",
+                Status = "trialing",
+                Items = new StripeList<SubscriptionItem>
+                {
+                    Data = [new SubscriptionItem { CurrentPeriodEnd = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc) }],
+                },
+            });
 
         var payload = $$"""
             {
               "id": "evt_1",
               "object": "event",
               "request": null,
-              "api_version": "2025-02-24.acacia",
+              "api_version": "2025-04-30.basil",
               "type": "checkout.session.completed",
               "data": {
                 "object": {
