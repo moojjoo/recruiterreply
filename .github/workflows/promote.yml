@@ -446,6 +446,8 @@ jobs:
             '{
               commands: [
                 "set -eu",
+                "exec 9>/tmp/recruiterreply-deploy.lock",
+                "flock -w 600 9 || { echo Timed out waiting for deploy lock; exit 1; }",
                 "cd \($deploy_path)",
                 "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
