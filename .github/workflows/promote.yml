@@ -449,6 +449,7 @@ jobs:
             --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
+            --arg sha "$SHA" \
             --arg backup_scripts_archive "$BACKUP_SCRIPTS_ARCHIVE" \
             '{
               commands: [
