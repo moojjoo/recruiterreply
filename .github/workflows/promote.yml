@@ -441,6 +441,8 @@ jobs:
             --arg image_var "$BACKEND_IMAGE_VAR" \
             --arg backend_image "$BACKEND_IMAGE" \
             --arg backend_service "$BACKEND_SERVICE" \
+            --arg environment "$ENVIRONMENT" \
+            --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
             '{
@@ -458,6 +460,7 @@ jobs:
                 "sudo grep \"^\($image_var)=\" .env",
                 "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
                 "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml ps; exit 1; }",
+                "sudo bash scripts/aws/install_postgres_backup_schedule.sh \($environment) \($region)",
                 "sudo docker image prune -f"
               ]
             }')

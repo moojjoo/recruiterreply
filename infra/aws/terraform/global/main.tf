@@ -22,3 +22,107 @@ module "frontend" {
   frontend_bucket_names = var.frontend_bucket_names
   aws_account_id        = data.aws_caller_identity.current.account_id
 }
+
+resource "aws_s3_bucket" "postgres_backups" {
+  bucket        = "${var.app_name}-postgres-backups-${data.aws_caller_identity.current.account_id}"
+  force_destroy = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name        = "${var.app_name}-postgres-backups"
+    Application = var.app_name
+    Purpose     = "PostgreSQL backups"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "postgres_backups" {
+  bucket = aws_s3_bucket.postgres_backups.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "postgres_backups" {
+  bucket                  = aws_s3_bucket.postgres_backups.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "postgres_backups" {
+  bucket = aws_s3_bucket.postgres_backups.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "postgres_backups" {
+  bucket = aws_s3_bucket.postgres_backups.id
+
+  rule {
+    id     = "expire-postgres-backups-after-30-days"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 30
+    }
+  }
+}
+
+data "aws_iam_policy_document" "postgres_backups" {
+  statement {
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.postgres_backups.arn,
+      "${aws_s3_bucket.postgres_backups.arn}/*",
+    ]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid     = "RequireServerSideEncryption"
+    effect  = "Deny"
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.postgres_backups.arn}/*",
+    ]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["AES256"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "postgres_backups" {
+  bucket = aws_s3_bucket.postgres_backups.id
+  policy = data.aws_iam_policy_document.postgres_backups.json
+}
