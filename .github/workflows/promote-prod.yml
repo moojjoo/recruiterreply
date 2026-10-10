@@ -2,23 +2,52 @@ name: Promote to Prod
 
 on:
   workflow_dispatch:
-    inputs:
-      sha:
-        description: "Commit SHA to promote (must already be verified on test)"
-        required: true
-        type: string
 
 permissions:
   actions: read
   id-token: write
   contents: read
+  deployments: read
 
 jobs:
+  resolve-source:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Select latest successful test deployment
+        id: release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const environment = 'test';
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              owner, repo, environment, per_page: 100
+            });
+            for (const deployment of deployments) {
+              if (!/^[a-f0-9]{40}$/.test(deployment.sha)) continue;
+              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
+                owner, repo, deployment_id: deployment.id, per_page: 100
+              });
+              // Only the latest status is authoritative; never select an older success
+              // if the same deployment was subsequently marked failed/inactive.
+              if (statuses[0]?.state !== 'success') continue;
+              core.info(`Selected ${environment} deployment ${deployment.id} SHA ${deployment.sha}`);
+              core.setOutput('sha', deployment.sha);
+              return;
+            }
+            core.setFailed(`No successful ${environment} deployment with a full SHA was found. Refusing promotion.`);
+
   promote:
+    needs: resolve-source
+    concurrency:
+      group: promote-prod
+      cancel-in-progress: false
     uses: ./.github/workflows/promote.yml
     with:
       environment: prod
-      sha: ${{ inputs.sha }}
+      sha: ${{ needs.resolve-source.outputs.sha }}
       api_base_url: https://api.recruiterreply.com/api
       frontend_url: https://recruiterreply.com
       api_url: https://api.recruiterreply.com
