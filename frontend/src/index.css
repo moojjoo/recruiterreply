@@ -190,3 +190,61 @@
 .loading {
   @apply inline-block animate-spin h-4 w-4 border-2 border-blue-600 border-r-transparent rounded-full;
 }
+
+/* Issue #226: theme switch. Existing light styles remain untouched. */
+@layer components {
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    color: #0f172a;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+  .theme-toggle:hover { background: #cbd5e1; }
+  .theme-toggle svg { width: 22px; height: 22px; }
+  [data-theme="dark"] .theme-toggle { background: #334155; color: #f8fafc; }
+  [data-theme="dark"] .theme-toggle:hover { background: #475569; }
+}
+
+/* Target existing Tailwind utility surfaces used across public and protected routes. */
+@layer utilities {
+  [data-theme="dark"] body { background: #0b1220; color: #e2e8f0; }
+  [data-theme="dark"] .bg-white,
+  [data-theme="dark"] .bg-white\/80 { background-color: #172235; }
+  [data-theme="dark"] .bg-gray-50,
+  [data-theme="dark"] .bg-gray-100 { background-color: #202e42; }
+  [data-theme="dark"] .bg-gray-200 { background-color: #334155; }
+  [data-theme="dark"] .text-gray-900,
+  [data-theme="dark"] .text-gray-800,
+  [data-theme="dark"] .text-gray-700 { color: #f1f5f9; }
+  [data-theme="dark"] .text-gray-600,
+  [data-theme="dark"] .text-gray-500 { color: #cbd5e1; }
+  [data-theme="dark"] .border-gray-200,
+  [data-theme="dark"] .border-gray-300 { border-color: #475569; }
+  [data-theme="dark"] input,
+  [data-theme="dark"] textarea,
+  [data-theme="dark"] select { background-color: #1e293b; color: #f8fafc; border-color: #64748b; }
+  [data-theme="dark"] input::placeholder,
+  [data-theme="dark"] textarea::placeholder { color: #cbd5e1; }
+  [data-theme="dark"] .card,
+  [data-theme="dark"] .card-elevated { background-color: #172235; }
+  [data-theme="dark"] .btn-secondary { background: #334155; color: #f8fafc; }
+  [data-theme="dark"] .btn-secondary:hover { background: #475569; }
+  [data-theme="dark"] .bg-gradient-subtle { background: #0b1220; }
+  [data-theme="dark"] .bg-primary-50,
+  [data-theme="dark"] .bg-success-50,
+  [data-theme="dark"] .bg-amber-50,
+  [data-theme="dark"] .bg-red-50 { background-color: #26364d; }
+  [data-theme="dark"] .text-primary-900,
+  [data-theme="dark"] .text-success-900,
+  [data-theme="dark"] .text-amber-900,
+  [data-theme="dark"] .text-red-900 { color: #f1f5f9; }
+  [data-theme="dark"] .text-primary-600 { color: #93c5fd; }
+  [data-theme="dark"] .bg-clip-text { color: transparent; }
+}
