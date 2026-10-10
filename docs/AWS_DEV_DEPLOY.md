@@ -68,7 +68,14 @@ Recommended start:
    3. 443 from 0.0.0.0/0
    4. No public 5432
 
-Install packages:
+   The currently deployed shared API host uses the Elastic IP managed by
+   `infra/aws/terraform/envs/dev`. Use that stack's `ec2_elastic_ip` output as
+   `api_target_ipv4` in `infra/aws/rout53`; the three API DNS records share this
+   address. Review Terraform and DNS plans and obtain owner approval before
+   applying either. AWS charges for public IPv4 addresses; check current EC2
+   pricing for applicable rates.
+
+   Install packages:
 
 ```bash
 sudo apt update && sudo apt -y upgrade

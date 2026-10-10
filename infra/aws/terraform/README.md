@@ -52,6 +52,14 @@ GitHub Actions variable on the corresponding GitHub Environment (`dev`, `test`,
 `prod`) so `deploy-<env>.yml` targets the right instance — see
 [`MIGRATION.md`](./MIGRATION.md) for why this matters today.
 
+The currently deployed shared API host is managed by `envs/dev`. Its stable
+public address is available with `terraform output -raw ec2_elastic_ip`. The
+separate `infra/aws/rout53` configuration uses this value for
+`api_target_ipv4`; all three API records point to this shared host. Review and
+approve the Terraform and Route 53 plans separately before applying either.
+AWS charges for public IPv4 addresses; check current EC2 pricing for applicable
+rates.
+
 ## PostgreSQL backups
 
 The `global` root creates a dedicated private S3 bucket named
