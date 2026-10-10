@@ -16,6 +16,13 @@
 6. **Release:** follow the repository's **existing** GitHub Actions build and promotion process; do not alter workflows or promote to production without explicit authorization.
 7. **Close:** merge approved PR, link it to the issue, and close the issue when acceptance criteria are met.
 
+## Build and DEV deployment workflow
+
+- Feature-branch pushes run `verify` only.
+- Pull requests targeting `main` run `verify` only.
+- Pushes to `main` run `verify`, then `build`, then `deploy-dev`.
+- Manual dispatch runs `verify` on any branch, but runs `build` and `deploy-dev` only when dispatched on `main`.
+
 ## Issue template (copy into GitHub)
 
 **Problem / outcome:** What user problem are we solving?
