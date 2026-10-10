@@ -226,6 +226,7 @@ jobs:
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
         with:
+          github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
           script: |
             const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
             await reconcile({github, context, core});
