@@ -11,6 +11,17 @@
       gtag('config', 'G-LRR12SSGH7');
     </script>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        var theme;
+        try { theme = localStorage.getItem("recruiterreply-theme"); } catch (e) {}
+        if (theme !== "dark" && theme !== "light") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <script src="/config.js"></script>
     <link rel="icon" type="image/x-icon" href="/recruiterreply.ico" />
     <link rel="icon" type="image/svg+xml" href="/recruiterreply-mark.svg" />
