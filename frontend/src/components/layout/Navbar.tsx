@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../common/Button";
+import { ThemeToggle } from "../common/ThemeToggle";
 
 export const Navbar: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -23,6 +24,7 @@ export const Navbar: React.FC = () => {
         </Link>
 
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           <a
             href="/pricing"
             className="text-sm font-medium text-gray-700 hover:text-primary-600"
