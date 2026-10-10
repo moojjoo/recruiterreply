@@ -359,3 +359,14 @@
   [data-theme="dark"] textarea:disabled,
   [data-theme="dark"] select:disabled { background-color: #334155; color: #cbd5e1; border-color: #475569; opacity: 0.7; cursor: not-allowed; }
 }
+
+/* #233: Headings on dark theme surfaces must not inherit light-theme dark text. */
+@layer utilities {
+  [data-theme="dark"] :is(h1, h2, h3, h4, h5, h6) {
+    color: #f8fafc;
+  }
+  /* Explicit light surfaces keep dark heading text. */
+  [data-theme="dark"] :is(.bg-yellow-100, .bg-amber-100) :is(h1, h2, h3, h4, h5, h6) {
+    color: #0f172a;
+  }
+}
