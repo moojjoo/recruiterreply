@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Test issue reconciliation logic
+        run: node --test .github/scripts/tests/reconcile-dev-issues.test.cjs
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
@@ -226,6 +229,7 @@ jobs:
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
         with:
+          github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
           script: |
             const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
             await reconcile({github, context, core});
