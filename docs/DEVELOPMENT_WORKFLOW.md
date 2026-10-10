@@ -12,9 +12,9 @@
 2. **Discuss:** define user value, scope, non-goals, acceptance criteria, affected frontend/backend/database components, security, cost and tests.
 3. **Approve:** review the proposed Issue body before ChatGPT creates the issue.
 4. **Implement:** after explicit approval, create a feature branch from `main` (or assign an authorized coding agent). Reference the issue number in the branch and PR.
-5. **Review:** coding agent proposes changes in a PR. Use Windows + VS Code for final inspection, tests and approval.
+5. **Review:** coding agent opens a PR, automatically requests GitHub Copilot review, addresses findings and passes required checks. For `/execute`, the owner's instruction authorizes merge and deployment to **dev** so the owner can inspect the running feature there; Windows + VS Code review is optional for dev.
 6. **Release:** follow the repository's **existing** GitHub Actions build and promotion process; do not alter workflows or promote to production without explicit authorization.
-7. **Close:** merge approved PR, link it to the issue, and close the issue when acceptance criteria are met.
+7. **Close:** merge the validated PR under the authorized `/execute` dev workflow, link it to the issue, and close the issue when acceptance criteria are met. Test and production require separate explicit owner approval.
 
 ## Build and DEV deployment workflow
 
@@ -52,4 +52,4 @@
 - Dev/test/prod secrets remain in AWS; local secrets remain local.
 - Local HTTPS-only is a **desired future change**, not yet established by the repository.
 - No destructive EF migrations without explicit review and approval.
-- No coding-agent source modifications, GitHub Actions edits, or deployments without the owner's approval.
+- Owner invocation of `/execute <issue>` expressly authorizes coding-agent source modifications, validated PR merge and deployment **to dev only** via existing GitHub Actions. Never bypass required checks or protection rules. Changes to GitHub Actions workflows, manual AWS deployments, and promotions to test/prod require separate explicit owner approval.
