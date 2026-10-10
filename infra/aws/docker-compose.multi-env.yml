@@ -41,7 +41,6 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5001:5000"
-      - "127.0.0.1:5432"
     networks:
       - recruiterreply
 
