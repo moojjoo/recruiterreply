@@ -206,3 +206,26 @@ jobs:
       robots_txt: |
         User-agent: *
         Disallow: /
+
+  reconcile-dev-issues:
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Reconcile completed issues
+        uses: actions/github-script@v7
+        env:
+          PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
+        with:
+          script: |
+            const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
+            await reconcile({github, context, core});
