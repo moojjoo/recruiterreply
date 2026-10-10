@@ -1,0 +1,65 @@
+name: Execute PR Automation
+
+# Runs from the trusted default branch. Never checks out or executes PR code.
+on:
+  pull_request_target:
+    types: [opened, ready_for_review, synchronize, reopened, labeled]
+  workflow_run:
+    workflows: ["Build and Deploy to Dev"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request Copilot review and enable protected auto-merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prs = context.payload.pull_request
+              ? [context.payload.pull_request]
+              : (await github.paginate(github.rest.pulls.list, {owner, repo, state: 'open', per_page: 100}));
+            for (const pr of prs) {
+              if (pr.base.ref !== 'main' || pr.draft || !pr.labels.some(l => l.name === 'execute-dev')) continue;
+              const {data: full} = await github.rest.pulls.get({owner, repo, pull_number: pr.number});
+              if (full.head.repo.full_name !== context.repo.owner + '/' + context.repo.repo) continue;
+              const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
+              const copilotReviews = reviews.filter(r => r.user?.login === 'copilot-pull-request-reviewer');
+              if (!copilotReviews.some(r => r.commit_id === full.head.sha)) {
+                try {
+                  await github.rest.pulls.requestReviewers({owner, repo, pull_number: pr.number, reviewers: ['copilot-pull-request-reviewer']});
+                  core.notice('Requested Copilot review for PR #' + pr.number);
+                } catch (e) {
+                  core.warning('Could not request Copilot review for PR #' + pr.number + ': ' + e.message);
+                }
+                continue;
+              }
+              const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
+              const required = checks.check_runs.filter(c => ['verify','test','analyze (javascript-typescript)','analyze (csharp)'].includes(c.name));
+              if (!required.some(c => c.name === 'verify') || required.some(c => c.status !== 'completed' || !['success','neutral'].includes(c.conclusion))) continue;
+              if (reviews.some(r => r.state === 'CHANGES_REQUESTED')) continue;
+              const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
+                repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
+                  id reviewThreads(first:100) { nodes { isResolved isOutdated } }
+                } } }`, {owner, repo, number:pr.number});
+              const item = q.repository.pullRequest;
+              if (item.reviewThreads.nodes.some(t => !t.isResolved && !t.isOutdated)) {
+                core.notice('Unresolved review findings on PR #' + pr.number);
+                continue;
+              }
+              // GitHub branch protection and required checks still govern the merge.
+              try {
+                await github.graphql(`mutation($id:ID!) {
+                  enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:SQUASH}) { clientMutationId }
+                }`, {id:item.id});
+                core.notice('Enabled GitHub protected auto-merge for PR #' + pr.number);
+              } catch (e) {
+                core.warning('Auto-merge unavailable for PR #' + pr.number + ': ' + e.message);
+              }
+            }
