@@ -87,6 +87,9 @@ backend/keys/
 # Keep project docs and lock files tracked
 # -----------------------------
 !docs/**
+docs/.env
+docs/.env.*
+!docs/.env.example
 !frontend/package-lock.json
 !backend/RecruiterReply.csproj
 
