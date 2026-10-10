@@ -445,12 +445,17 @@ jobs:
             --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
+            --arg sha "$SHA" \
             '{
               commands: [
                 "set -eu",
                 "exec 9>/tmp/recruiterreply-deploy.lock",
                 "flock -w 600 9 || { echo Timed out waiting for deploy lock; exit 1; }",
                 "cd \($deploy_path)",
+                "git -C \($deploy_path) rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo Missing git checkout: \($deploy_path); exit 1; }",
+                "git -C \($deploy_path) fetch --all --tags --prune",
+                "git -C \($deploy_path) checkout -f \($sha)",
+                "git -C \($deploy_path) reset --hard \($sha)",
                 "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
