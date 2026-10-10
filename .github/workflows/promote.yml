@@ -414,10 +414,10 @@ jobs:
             exit 1
           fi
 
-          BACKUP_SCRIPTS_ARCHIVE=$(tar -czf - -C src \
-            scripts/aws/install_postgres_backup_schedule.sh \
-            scripts/aws/backup_postgres.sh \
-            scripts/aws/test_postgres_backup_restore.sh | base64 -w0)
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SHA must be a 40-character commit SHA"
+            exit 1
+          fi
 
           echo "Checking SSM agent connectivity for instance $EC2_INSTANCE_ID..."
           for i in $(seq 1 20); do
@@ -450,29 +450,29 @@ jobs:
             --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
-            --arg backup_scripts_archive "$BACKUP_SCRIPTS_ARCHIVE" \
             '{
               commands: [
                 "set -eu",
                 "exec 9>/tmp/recruiterreply-deploy.lock",
                 "flock -w 600 9 || { echo Timed out waiting for deploy lock; exit 1; }",
                 "cd \($deploy_path)",
-                "git -C \($deploy_path) rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo Missing git checkout: \($deploy_path); exit 1; }",
-                "git -C \($deploy_path) fetch --all --tags --prune",
-                "git -C \($deploy_path) checkout -f \($sha)",
-                "git -C \($deploy_path) reset --hard \($sha)",
-                "CHECKED_OUT_SHA=$(git -C \($deploy_path) rev-parse HEAD); if [ \"$CHECKED_OUT_SHA\" != \($sha) ]; then echo Promoted checkout SHA mismatch: expected \($sha), got $CHECKED_OUT_SHA; exit 1; fi",
-                "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
-                "if [ ! -f scripts/aws/install_postgres_backup_schedule.sh ]; then echo Missing backup schedule installer: \($deploy_path)/scripts/aws/install_postgres_backup_schedule.sh; exit 1; fi",
+                "if ! command -v git >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y git; fi",
+                "DEPLOY_SOURCE_PATH=$(mktemp -d /tmp/recruiterreply-deploy.XXXXXX); trap 'rm -rf -- \"$DEPLOY_SOURCE_PATH\"' EXIT",
+                "git clone --quiet --no-checkout https://github.com/moojjoo/recruiterreply.git \"$DEPLOY_SOURCE_PATH\" || { echo Failed to clone the public repository; exit 1; }",
+                "git -C \"$DEPLOY_SOURCE_PATH\" fetch --all --tags --prune || { echo Failed to fetch repository refs; exit 1; }",
+                "git -C \"$DEPLOY_SOURCE_PATH\" checkout --detach \($sha) || { echo Failed to check out promoted SHA \($sha); exit 1; }",
+                "CHECKED_OUT_SHA=$(git -C \"$DEPLOY_SOURCE_PATH\" rev-parse HEAD); if [ \"$CHECKED_OUT_SHA\" != \($sha) ]; then echo Promoted checkout SHA mismatch: expected \($sha), got $CHECKED_OUT_SHA; exit 1; fi",
+                "if [ ! -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ]; then echo Missing compose file for promoted SHA \($sha); exit 1; fi",
+                "if [ ! -f \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" ]; then echo Missing backup schedule installer for promoted SHA \($sha); exit 1; fi",
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
                 "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
                 "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env; fi",
                 "sudo grep \"^\($image_var)=\" .env",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml ps; exit 1; }",
-                "sudo bash scripts/aws/install_postgres_backup_schedule.sh \($environment) \($region)",
+                "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
+                "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ps; exit 1; }",
+                "sudo bash \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" \($environment) \($region)",
                 "sudo docker image prune -f"
               ]
             }')
