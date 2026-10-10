@@ -370,3 +370,34 @@
     color: #0f172a;
   }
 }
+
+/* #235: User-selected pure white typography across dark-theme UI.
+   Apply after utility overrides so muted and semantic text do not become gray.
+   Preserve focus outlines, SVG fills, and background-driven status affordances. */
+@layer utilities {
+  [data-theme="dark"] body,
+  [data-theme="dark"] body :is(
+    h1, h2, h3, h4, h5, h6, p, span, small, strong, em, label,
+    a, button, li, dt, dd, th, td, legend, summary, blockquote,
+    input, textarea, select, option, [role="status"], [role="alert"]
+  ) {
+    color: #ffffff;
+  }
+  [data-theme="dark"] body :is(input, textarea)::placeholder {
+    color: #ffffff;
+    opacity: 1;
+  }
+  /* Avoid making intentionally light surfaces unreadable. */
+  [data-theme="dark"] body :is(.bg-yellow-100, .bg-amber-100):not(.badge):not(.badge-warning) {
+    background-color: #26364d;
+  }
+  [data-theme="dark"] body :is(input, textarea, select):disabled {
+    color: #ffffff;
+    opacity: 1;
+    border-style: dashed;
+  }
+  /* Semantic states remain recognizable without tinted text. */
+  [data-theme="dark"] :is(.error-text, .badge-danger) { border-left: 3px solid #fca5a5; padding-left: 0.4rem; }
+  [data-theme="dark"] :is(.success-text, .badge-success) { border-left: 3px solid #86efac; padding-left: 0.4rem; }
+  [data-theme="dark"] :is(.warning-text, .badge-warning) { border-left: 3px solid #fde68a; padding-left: 0.4rem; }
+}
