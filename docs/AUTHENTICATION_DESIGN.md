@@ -25,16 +25,24 @@ Add login with Google, GitHub, LinkedIn, and Facebook to the existing authentica
 ## Google OAuth configuration by environment
 
 The backend requires `Google:ClientId`, `Google:ClientSecret`, and
-`Google:RedirectUri`; the callback also requires `Frontend:BaseUrl`. The Google start
-endpoint rejects a missing client ID, client secret, or redirect URI before redirecting
-the user, without returning any secret values. Redirect and frontend URLs must be
-absolute HTTP(S) URLs. Missing or invalid URLs are rejected rather than silently
+`Google:RedirectUri`; the callback also requires `Frontend:BaseUrl`. In deployed
+environments, `Google:ClientId` and `Google:ClientSecret` are supplied by the
+environment's AWS Secrets Manager secret:
+`recruiterreply/{dev,test,prod}/backend-app-secrets`. `AwsSecretsLoader` adds those
+secret values after environment variables, so they take precedence over same-named
+Compose or `.env` settings. Do not put Google credentials in frontend configuration or
+commit them to the repository.
+
+`Google:RedirectUri` and `Frontend:BaseUrl` are configured per environment in
+`infra/aws/docker-compose.multi-env.yml`; if either key is also present in the AWS
+secret, its secret value takes precedence and must match the values below. The Google
+start endpoint rejects a missing client ID, client secret, or redirect URI before
+redirecting the user, without returning any secret values. Redirect and frontend URLs
+must be absolute HTTP(S) URLs. Missing or invalid URLs are rejected rather than silently
 falling back to localhost.
 
-Deployed backends load AWS Secrets Manager after environment variables, so keys present
-in a secret override the corresponding values in `infra/aws/docker-compose.multi-env.yml`.
-Set the following values in each environment's `backend-app-secrets` secret and keep
-them aligned with the Compose values:
+Keep each environment's effective OAuth callback and frontend return URL aligned with
+these values:
 
 | Environment | `Google:RedirectUri` | `Frontend:BaseUrl` |
 | --- | --- | --- |
@@ -50,10 +58,11 @@ JavaScript origins. The frontend build selects its environment's API base URL
 separately; using the same frontend build does not set the backend OAuth callback or
 frontend return URL.
 
-Before enabling sign-in, verify the secret values without printing or sharing the client
-secret, and request `GET /api/auth/google/start` on each API host. Its `redirect_uri`
-must exactly match that environment's callback above. Complete a browser sign-in on each
-environment to verify the callback and return URL end to end.
+Before enabling sign-in, verify that the environment's AWS secret contains the required
+Google client ID and client secret without printing or sharing either value. Request
+`GET /api/auth/google/start` on each API host; its `redirect_uri` must exactly match
+that environment's callback above. Complete a browser sign-in on each environment to
+verify the callback and return URL end to end.
 
 ## Files likely to change
 - [backend/Controllers/AuthController.cs](backend/Controllers/AuthController.cs)
