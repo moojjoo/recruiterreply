@@ -309,12 +309,6 @@
   [data-theme="dark"] .text-gray-400 { color: #cbd5e1; }
   [data-theme="dark"] .text-primary-700,
   [data-theme="dark"] .text-primary-800,
-  [data-theme="dark"] .text-success-700,
-  [data-theme="dark"] .text-success-800,
-  [data-theme="dark"] .text-amber-700,
-  [data-theme="dark"] .text-amber-800,
-  [data-theme="dark"] .text-red-700,
-  [data-theme="dark"] .text-red-800,
   [data-theme="dark"] .text-blue-600,
   [data-theme="dark"] .text-blue-700 { color: #bfdbfe; }
   [data-theme="dark"] .error-text,
@@ -341,4 +335,27 @@
     outline: 3px solid #fbbf24;
     outline-offset: 3px;
   }
+}
+
+/* #231 Copilot review: retain semantic contrast and disabled-state affordance. */
+@layer utilities {
+  [data-theme="dark"] .text-accent-800,
+  [data-theme="dark"] .text-accent-900 { color: #c4b5fd; }
+  [data-theme="dark"] .text-success-600,
+  [data-theme="dark"] .text-success-700,
+  [data-theme="dark"] .text-success-800,
+  [data-theme="dark"] .text-green-600,
+  [data-theme="dark"] .text-green-700 { color: #86efac; }
+  [data-theme="dark"] .text-amber-600,
+  [data-theme="dark"] .text-amber-700,
+  [data-theme="dark"] .text-amber-800,
+  [data-theme="dark"] .text-yellow-600 { color: #fde68a; }
+  [data-theme="dark"] .text-red-600,
+  [data-theme="dark"] .text-red-700,
+  [data-theme="dark"] .text-red-800 { color: #fca5a5; }
+  [data-theme="dark"] .input-field:disabled,
+  [data-theme="dark"] .textarea-field:disabled,
+  [data-theme="dark"] input:disabled,
+  [data-theme="dark"] textarea:disabled,
+  [data-theme="dark"] select:disabled { background-color: #334155; color: #cbd5e1; border-color: #475569; opacity: 0.7; cursor: not-allowed; }
 }
