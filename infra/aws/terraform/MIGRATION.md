@@ -1,130 +1,114 @@
-# Migrating to per-environment state
+# Migrating legacy Terraform state
 
-Today all infrastructure lives in one S3 state file
-(`recruiterreply/terraform.tfstate`), and what's actually deployed there is the
-**dev** environment (`recruiterreply-development-*`, EC2 instance
-`i-0dbe396e361ea6d56`) plus the account-wide frontend buckets/CloudFront and
-the GitHub OIDC role. `envs/test` and `envs/prod` have never been applied —
-`test`/`prod` deploys currently land on the dev box by accident, because all
-three GitHub Actions workflows fall back to the same hardcoded
-`EC2_INSTANCE_ID` when the per-environment variable isn't set.
+The legacy root stored dev and account-wide resources in
+`recruiterreply/terraform.tfstate`. The current roots use
+`recruiterreply/global/terraform.tfstate` and
+`recruiterreply/dev/terraform.tfstate`. The current `main` tree no longer
+contains the legacy root; it is available at commit
+`223b86d7334ae8c0107e1daafd3096a9c8ec0d55`.
 
-This runbook splits that one state file into `recruiterreply/global/...` and
-`recruiterreply/dev/...`, verifies nothing changed, and only then applies
-`envs/test` and `envs/prod` to create their own dedicated VPC + EC2 (+ RDS).
-Run this **before** merging the branch that removes the old root
-`main.tf`/`versions.tf` — you need the old config in place to read the
-existing state. Requires AWS credentials with access to the
-`recruiterreply-terraform-state-178522450316` bucket.
+This procedure only migrates Terraform state. It must not apply AWS resource
+changes, provision test/prod, or update DNS. State files can contain secrets:
+keep them out of chat and version control.
 
-## 1. Pull the current state and inspect it
+## 1. Prepare a secure workspace and read the legacy state
 
-From the **old** `infra/aws/terraform/` root (pre-restructure):
+Use a detached worktree so the current checkout stays on the new layout:
 
 ```bash
-cd infra/aws/terraform
-terraform init -reconfigure
+git worktree add --detach /tmp/recruiterreply-terraform-legacy \
+  223b86d7334ae8c0107e1daafd3096a9c8ec0d55
+```
+
+Create a private temporary directory before writing state files:
+
+```bash
+umask 077
+STATE_DIR="$(mktemp -d)"
+chmod 700 "$STATE_DIR"
+```
+
+From the legacy worktree, initialize the legacy S3 backend and inspect the
+resource addresses:
+
+```bash
+cd /tmp/recruiterreply-terraform-legacy/infra/aws/terraform
+terraform init -reconfigure -input=false
 terraform state list
+terraform state pull > "$STATE_DIR/old.tfstate"
+cp "$STATE_DIR/old.tfstate" "$STATE_DIR/dev.tfstate"
+chmod 600 "$STATE_DIR/old.tfstate" "$STATE_DIR/dev.tfstate"
 ```
 
-Confirm the list splits cleanly into two groups:
-- global: `module.github_oidc.*`, `module.frontend.*`
-- dev: everything else (`module.network.*`, `module.security.*`,
-  `module.compute.*`, `module.secrets.*`, and `module.database.*` if RDS is
-  enabled)
+Confirm the legacy state contains both expected groups:
+
+- Global: `module.github_oidc.*` and `module.frontend.*`
+- Dev: `module.network.*`, `module.security.*`, `module.compute.*`,
+  `module.secrets.*`, and `module.database.*` if RDS is enabled
+
+## 2. Split and verify locally
+
+Move only the global modules out of the dev copy. Do not pre-create
+`global.tfstate`; the first `state mv` creates it with only the moved module.
 
 ```bash
-terraform state pull > /tmp/old.tfstate
-chmod 600 /tmp/old.tfstate
-```
-
-## 2. Split into two local state files
-
-Move the global-scoped modules out of the dev copy. Do not pre-create
-`/tmp/global.tfstate` from the full state: the first `state mv` creates it with
-only the moved module. Pre-seeding it with the full state causes duplicate
-destination addresses and aborts the move.
-
-```bash
-cp /tmp/old.tfstate /tmp/dev.tfstate
-chmod 600 /tmp/dev.tfstate
-
-terraform state mv -state=/tmp/dev.tfstate -state-out=/tmp/global.tfstate \
+terraform state mv -state="$STATE_DIR/dev.tfstate" \
+  -state-out="$STATE_DIR/global.tfstate" \
   'module.github_oidc' 'module.github_oidc'
-terraform state mv -state=/tmp/dev.tfstate -state-out=/tmp/global.tfstate \
+terraform state mv -state="$STATE_DIR/dev.tfstate" \
+  -state-out="$STATE_DIR/global.tfstate" \
   'module.frontend' 'module.frontend'
 ```
 
-After this, `/tmp/global.tfstate` should contain only `module.github_oidc.*`
-and `module.frontend.*`; `/tmp/dev.tfstate` should contain the environment
-resources. The original `/tmp/old.tfstate` and its S3 object remain unchanged.
-Verify the two splits are disjoint and complete:
+Verify the global and dev address lists are disjoint and their union matches
+the original address list. Confirm the dev state still contains the deployed
+EC2 instance and other expected environment resources. Stop if any resource is
+missing, duplicated, or assigned to the wrong state.
+
+## 3. Check destinations before any remote write
+
+The target keys must be absent or empty before pushing split state. Inspect the
+S3 objects and versions for both exact keys:
+
+- `recruiterreply/global/terraform.tfstate`
+- `recruiterreply/dev/terraform.tfstate`
+
+If either key already contains state, **stop**. Do not overwrite or delete it,
+and do not use `terraform state push -force`. Read-only `terraform state list`
+checks may be used to establish what each existing state tracks; obtain explicit
+recovery approval before changing populated state objects.
+
+Before any push, verify the AWS account, bucket, and that the checked-out
+backend configuration maps `global/` to the global key and `envs/dev/` to the
+dev key. Run `terraform init -reconfigure -input=false` in both roots so stale
+local backend metadata cannot direct a command to the wrong key.
+
+Only when both destination keys are confirmed empty and the split has been
+reviewed, push without `-force`:
 
 ```bash
-terraform state list -state=/tmp/global.tfstate
-terraform state list -state=/tmp/dev.tfstate
+cd /path/to/recruiterreply/infra/aws/terraform/global
+terraform init -reconfigure -input=false
+terraform state push "$STATE_DIR/global.tfstate"
+
+cd /path/to/recruiterreply/infra/aws/terraform/envs/dev
+terraform init -reconfigure -input=false
+terraform state push "$STATE_DIR/dev.tfstate"
 ```
 
-## 3. Switch to the new layout and push each state
+Verify each remote state list matches its local split. If a push is rejected,
+stop and investigate; do not force it.
 
-Now check out the branch with this restructure (`global/`, `envs/dev`,
-`envs/test`, `envs/prod`, old root files removed).
+## 4. Review plans without applying
 
-```bash
-cd infra/aws/terraform/global
-terraform init
-terraform state push /tmp/global.tfstate
-terraform plan   # expect no changes
-```
+Run `terraform plan -input=false` in `global/` and `envs/dev/`. Review every
+proposed action. Stop if there are unexpected creates, replacements, or
+deletions, especially for the existing EC2 instance, its root volume, or any
+database. No `terraform apply` is part of this migration.
 
-```bash
-cd ../envs/dev
-terraform init
-terraform state push /tmp/dev.tfstate
-terraform plan   # expect no changes
-```
+Do not initialize or apply `envs/test` or `envs/prod`, and do not change GitHub
+environment variables, DNS, or EIP resources as part of this issue.
 
-If `terraform plan` shows anything other than no-op / cosmetic diffs, stop and
-investigate before proceeding — do not `apply` a plan you don't understand
-against live resources.
-
-## 4. Create test and prod
-
-Only after step 3 is clean:
-
-```bash
-cd ../envs/test
-terraform init
-terraform apply     # creates a new VPC + EC2 (+ RDS) for test
-
-cd ../prod
-terraform init
-terraform apply     # creates a new VPC + EC2 (+ RDS) for prod
-```
-
-These are new, billable resources — review the plan output before confirming.
-
-## 5. Point deploys at the right instance
-
-For each environment, grab its instance ID and set it as the `EC2_INSTANCE_ID`
-GitHub Actions variable on the matching GitHub Environment (`dev`, `test`,
-`prod`) so `deploy-<env>.yml` stops falling back to the shared hardcoded ID:
-
-```bash
-terraform output ec2_instance_id   # run in envs/dev, envs/test, envs/prod
-```
-
-Set it in GitHub: Settings → Environments → `<env>` → Environment variables →
-`EC2_INSTANCE_ID`.
-
-Once each environment has its own instance, `docker-compose.multi-env.yml`
-running three backend containers on one box is no longer necessary — each
-box only needs its own service. That change is out of scope for this
-restructure and is a good follow-up once test/prod are confirmed healthy on
-their own instances.
-
-## 6. Clean up
-
-Delete `/tmp/old.tfstate`, `/tmp/global.tfstate`, `/tmp/dev.tfstate` once
-you've confirmed `terraform plan` is clean in `global/` and `envs/dev` and the
-new `test`/`prod` instances are healthy.
+Keep the original legacy S3 object untouched. Retain the local backup securely
+until both remote state lists and plans have been reviewed; then remove only
+the temporary state files and detached worktree created for this procedure.
