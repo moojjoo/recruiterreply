@@ -450,7 +450,8 @@ jobs:
             --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
-            '{
+            "$(cat <<'JQ'
+          {
               commands: [
                 "set -eu",
                 "exec 9>/tmp/recruiterreply-deploy.lock",
@@ -475,7 +476,9 @@ jobs:
                 "sudo bash \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" \($environment) \($region)",
                 "sudo docker image prune -f"
               ]
-            }')
+            }
+          JQ
+            )")
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
