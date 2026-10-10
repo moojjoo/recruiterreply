@@ -35,16 +35,19 @@ Confirm the list splits cleanly into two groups:
 
 ```bash
 terraform state pull > /tmp/old.tfstate
-cp /tmp/old.tfstate /tmp/global.tfstate
+chmod 600 /tmp/old.tfstate
 ```
 
 ## 2. Split into two local state files
 
-Move the global-scoped modules out of the copy, leaving the original
-untouched copy to become the dev state:
+Move the global-scoped modules out of the dev copy. Do not pre-create
+`/tmp/global.tfstate` from the full state: the first `state mv` creates it with
+only the moved module. Pre-seeding it with the full state causes duplicate
+destination addresses and aborts the move.
 
 ```bash
 cp /tmp/old.tfstate /tmp/dev.tfstate
+chmod 600 /tmp/dev.tfstate
 
 terraform state mv -state=/tmp/dev.tfstate -state-out=/tmp/global.tfstate \
   'module.github_oidc' 'module.github_oidc'
@@ -53,8 +56,9 @@ terraform state mv -state=/tmp/dev.tfstate -state-out=/tmp/global.tfstate \
 ```
 
 After this, `/tmp/global.tfstate` should contain only `module.github_oidc.*`
-and `module.frontend.*`; `/tmp/dev.tfstate` should contain everything else.
-Verify:
+and `module.frontend.*`; `/tmp/dev.tfstate` should contain the environment
+resources. The original `/tmp/old.tfstate` and its S3 object remain unchanged.
+Verify the two splits are disjoint and complete:
 
 ```bash
 terraform state list -state=/tmp/global.tfstate
