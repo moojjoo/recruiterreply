@@ -8,15 +8,15 @@ This guide helps AI coding agents quickly understand and contribute to the Recru
 ```bash
 cd backend
 dotnet restore        # Install dependencies
-dotnet run           # Start API on http://localhost:5000
+dotnet run           # Start API on https://localhost:5002
 dotnet build         # Compile the project
 ```
 
-### Frontend (React 18 + TypeScript)
+### Frontend (React 19 + TypeScript)
 ```bash
 cd frontend
 npm install          # Install dependencies
-npm run dev          # Start dev server on http://localhost:5173
+npm run dev          # Start dev server on https://localhost:5173
 npm run build        # Build for production
 ```
 
@@ -44,7 +44,7 @@ npm run build        # Build for production
 
 ### Frontend Architecture  
 - **Pattern**: React component hierarchy with hooks
-- **Routing**: React Router v6
+- **Routing**: React Router v7
 - **State**: React Context + Custom Hooks (no Redux/Zustand)
 - **Key Directories**:
   - `components/` - Reusable React components organized by feature
@@ -165,13 +165,23 @@ cd frontend && npm run build
 ## 🚦 Branch & Commit Strategy
 
 - **Current Branch**: Feature branches named `feature_XX_description`
-- **Default Branch**: `dev` (see attachment for current branch context)
+- **Default Branch**: `main` (verified GitHub repository default)
 - **Commits**: Use conventional commits (see `/commit-msg` skill for generating messages)
 - **Before Push**: Run `/code-review` to check for console.log, hardcoded values, etc.
 - **Secret Scan**: Always check for API keys before pushing (see user memory: git.md)
 
 ---
 
-**Last Updated**: 2026-08-14  
+**Last Updated**: 2026-10-09  
 **Version**: MVP Phase  
-**Tech Stack**: ASP.NET CORE 10 + React 18 + TypeScript + Tailwind CSS
+**Tech Stack**: ASP.NET CORE 10 + React 19 + TypeScript + Tailwind CSS
+
+
+## Current source-of-truth and approval policies
+
+- Read [current architecture](docs/CURRENT_ARCHITECTURE.md), [development workflow](docs/DEVELOPMENT_WORKFLOW.md), and [database migration policy](docs/DATABASE_MIGRATION_POLICY.md) before proposing changes.
+- The local HTTPS URLs above are **targets**, not verified running endpoints; current Vite config proxies to HTTP and requires a separate approved code change.
+- AWS Secrets Manager is the intended source for deployed dev/test/prod secrets; never commit .env files. Local .env and .NET user-secrets are local-only.
+- Never change working GitHub Actions workflows without an explicitly approved issue.
+- Never generate or execute destructive EF migrations without separate explicit approval, verified backup, and data-preservation review.
+- Plan first in a GitHub Issue, implement on an issue-linked feature branch, review by PR, and deploy only after owner approval.
