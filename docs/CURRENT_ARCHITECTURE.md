@@ -21,7 +21,7 @@ This is a source-code inventory based on the `main` branch reviewed on 2026-10-0
 
 ## Runtime and security
 
-- Deployed dev/test/prod secrets are managed in AWS, according to the project owner. The backend can load AWS Secrets Manager values through `AwsSecretsLoader` when `AWS_SECRETS_MANAGER_SECRET_NAME` or `Aws:SecretsManager:SecretName` is set. Verify the deployed secret names and IAM policies in AWS; repository inspection alone does not verify live configuration.
+- Deployed dev/test/prod secrets are managed in AWS, according to the project owner. The backend can load AWS Secrets Manager values through `AwsSecretsLoader` when `AWS_SECRETS_MANAGER_SECRET_NAME` or `Aws:SecretsManager:SecretName` is set. For Google authentication, each environment's `backend-app-secrets` secret supplies `Google:ClientId` and `Google:ClientSecret`; these secret values override environment variables. Verify the deployed secret names and IAM policies in AWS; repository inspection alone does not verify live configuration.
 - Never commit credentials, tokens, connection strings or private keys. Browser `VITE_*` settings are public at runtime and must not contain secrets.
 - Local development should use ignored local environment files or .NET user-secrets; local-only `.env` files must not be committed.
 - Current local configuration is **not yet HTTPS-only**: `frontend/vite.config.ts` uses port 5173 and proxies to `http://localhost:5002`; `backend/Program.cs` skips HTTPS redirection in Development. Implementing HTTPS-only localhost requires a separately approved source-code change, certificates, proxy/CORS changes and tests.

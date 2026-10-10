@@ -235,7 +235,12 @@ For each environment, set variables:
 6. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
 7. ECR_BACKEND_REPOSITORY (optional, default: recruiterreply-backend)
 
-Note: API/OpenAI/JWT/DB runtime secrets are read on EC2 from /home/ubuntu/recruiterreply/.env.
+Google OAuth credentials (`Google:ClientId` and `Google:ClientSecret`) are loaded by
+the backend from the environment-specific AWS Secrets Manager secret
+`recruiterreply/{dev,test,prod}/backend-app-secrets`. The backend adds that secret after
+environment variables, so AWS values take precedence over same-named `.env` or Compose
+settings. See [AUTHENTICATION_DESIGN.md](./AUTHENTICATION_DESIGN.md) for the per-environment
+callback and frontend return URLs.
 Note: Deploy now uses AWS SSM Run Command and does not require inbound SSH from GitHub runners.
 
 ## 8) Branch to Environment Mapping
