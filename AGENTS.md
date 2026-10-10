@@ -8,7 +8,7 @@ This guide helps AI coding agents quickly understand and contribute to the Recru
 ```bash
 cd backend
 dotnet restore        # Install dependencies
-dotnet run           # Start API on https://localhost:5002
+dotnet run           # Start API on https://localhost:5003 and http://localhost:5002
 dotnet build         # Compile the project
 ```
 
