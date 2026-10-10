@@ -366,7 +366,7 @@
     color: #f8fafc;
   }
   /* Explicit light surfaces keep dark heading text. */
-  [data-theme="dark"] :is(.bg-white:not(.card):not(.card-elevated), .bg-yellow-100, .bg-amber-100) :is(h1, h2, h3, h4, h5, h6) {
+  [data-theme="dark"] :is(.bg-yellow-100, .bg-amber-100) :is(h1, h2, h3, h4, h5, h6) {
     color: #0f172a;
   }
 }
