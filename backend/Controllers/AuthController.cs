@@ -117,25 +117,28 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GoogleCallback([FromQuery] string code, CancellationToken ct, [FromQuery] string? error = null)
     {
+        var frontendBase = GetFrontendBaseUrl();
+        if (frontendBase is null)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Google login callback is not configured." });
+        }
+
         if (string.IsNullOrWhiteSpace(code))
         {
             _logger.LogWarning(
                 "Google OAuth callback missing code. Google error: {GoogleError}",
                 error?.Replace("\r", "").Replace("\n", "") ?? "(none)");
-            var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/login?error=google_auth_failed");
         }
 
         try
         {
             var result = await _googleAuthService.ExchangeCodeForTokenAsync(code, ct);
-            var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/auth/google/callback?token={Uri.EscapeDataString(result.Token)}");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Google OAuth callback failed");
-            var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/login?error=google_auth_failed");
         }
     }
@@ -185,5 +188,19 @@ public class AuthController : ControllerBase
         return parts.Length == 1
             ? (parts[0], null)
             : (parts[0], parts[1]);
+    }
+
+    private string? GetFrontendBaseUrl()
+    {
+        var frontendBase = _configuration["Frontend:BaseUrl"];
+        if (string.IsNullOrWhiteSpace(frontendBase)
+            || !Uri.TryCreate(frontendBase, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            _logger.LogError("Frontend:BaseUrl must be configured as an absolute HTTP or HTTPS URL for Google login.");
+            return null;
+        }
+
+        return frontendBase.TrimEnd('/');
     }
 }

@@ -164,6 +164,26 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public async Task GoogleCallback_WithoutValidFrontendBase_Returns500()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Frontend:BaseUrl"] = "not-a-url",
+        }).Build();
+        var controller = new AuthController(
+            _db,
+            _passwordHashService,
+            _jwtTokenService,
+            _googleAuthService.Object,
+            config,
+            NullLogger<AuthController>.Instance);
+
+        var result = await controller.GoogleCallback(null!, CancellationToken.None);
+
+        Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
     public async Task GoogleCallback_OnSuccess_RedirectsWithToken()
     {
         _googleAuthService.Setup(s => s.ExchangeCodeForTokenAsync("good-code", It.IsAny<CancellationToken>()))
