@@ -55,6 +55,16 @@ public class GoogleAuthServiceTests
         Assert.Throws<InvalidOperationException>(() => sut.BuildAuthorizationUrl());
     }
 
+    [Fact]
+    public void BuildAuthorizationUrl_WithoutClientSecret_Throws()
+    {
+        var (sut, _) = CreateSut(BuildConfig(new Dictionary<string, string?> { ["Google:ClientSecret"] = null }), _ => new HttpResponseMessage());
+
+        var exception = Assert.Throws<InvalidOperationException>(() => sut.BuildAuthorizationUrl());
+
+        Assert.Contains("Google:ClientSecret", exception.Message);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("not-a-url")]
@@ -82,6 +92,21 @@ public class GoogleAuthServiceTests
         Assert.Contains($"redirect_uri={Uri.EscapeDataString("http://localhost:5002/api/auth/google/callback")}", url);
         Assert.Contains("response_type=code", url);
         Assert.Contains("scope=openid%20email%20profile", url);
+    }
+
+    [Theory]
+    [InlineData("https://api-dev.recruiterreply.com/api/auth/google/callback")]
+    [InlineData("https://api-test.recruiterreply.com/api/auth/google/callback")]
+    [InlineData("https://api.recruiterreply.com/api/auth/google/callback")]
+    public void BuildAuthorizationUrl_UsesEnvironmentSpecificRedirectUri(string redirectUri)
+    {
+        var (sut, _) = CreateSut(
+            BuildConfig(new Dictionary<string, string?> { ["Google:RedirectUri"] = redirectUri }),
+            _ => new HttpResponseMessage());
+
+        var url = sut.BuildAuthorizationUrl();
+
+        Assert.Contains($"redirect_uri={Uri.EscapeDataString(redirectUri)}", url);
     }
 
     // ----- ExchangeCodeForTokenAsync -----

@@ -29,11 +29,17 @@ public class GoogleAuthService : IGoogleAuthService
     public string BuildAuthorizationUrl()
     {
         var clientId = _configuration["Google:ClientId"] ?? string.Empty;
+        var clientSecret = _configuration["Google:ClientSecret"] ?? string.Empty;
         var redirectUri = GetRequiredRedirectUri();
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
             throw new InvalidOperationException("Google:ClientId is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(clientSecret))
+        {
+            throw new InvalidOperationException("Google:ClientSecret is not configured.");
         }
 
         var query = new Dictionary<string, string>

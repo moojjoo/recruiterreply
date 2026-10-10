@@ -25,9 +25,11 @@ Add login with Google, GitHub, LinkedIn, and Facebook to the existing authentica
 ## Google OAuth configuration by environment
 
 The backend requires `Google:ClientId`, `Google:ClientSecret`, and
-`Google:RedirectUri`; the callback also requires `Frontend:BaseUrl`. Redirect and
-frontend URLs must be absolute HTTP(S) URLs. Missing or invalid URLs are rejected rather
-than silently falling back to localhost.
+`Google:RedirectUri`; the callback also requires `Frontend:BaseUrl`. The Google start
+endpoint rejects a missing client ID, client secret, or redirect URI before redirecting
+the user, without returning any secret values. Redirect and frontend URLs must be
+absolute HTTP(S) URLs. Missing or invalid URLs are rejected rather than silently
+falling back to localhost.
 
 Deployed backends load AWS Secrets Manager after environment variables, so keys present
 in a secret override the corresponding values in `infra/aws/docker-compose.multi-env.yml`.
