@@ -3,7 +3,7 @@
 ## What is an Issue versus a branch?
 
 - **GitHub Issue:** describes a feature, bug or documentation task. It is the planning and discussion record; creating one does **not** change code.
-- **Feature branch:** an isolated line of development created from `main` for the approved issue. Example: `feature/42-gmail-filtering`.
+- **Feature branch:** an isolated line of development created from `main` for the approved issue. Example: `feature_42_gmail_filtering`.
 - **Pull request (PR):** proposes merging branch changes into `main`; provides a reviewable diff and CI results.
 
 ## Recommended solo-developer workflow
