@@ -37,7 +37,7 @@ variable "domain_name" {
 }
 
 variable "api_target_ipv4" {
-  description = "Public IPv4 (or EIP) for EC2 API hostnames."
+  description = "Shared API host Elastic IP from envs/dev output ec2_elastic_ip."
   type        = string
 }
 

@@ -36,6 +36,11 @@ variable "enable_public_ip" {
   default = true
 }
 
+variable "enable_elastic_ip" {
+  type    = bool
+  default = false
+}
+
 variable "backup_bucket_arn" {
   type = string
 }

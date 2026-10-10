@@ -60,7 +60,7 @@ variable "ami_id" {
 variable "instance_type" {
   description = "EC2 instance type for app host."
   type        = string
-  default     = "t3.small"
+  default     = "t3.medium"
 }
 
 variable "key_name" {
