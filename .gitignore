@@ -36,6 +36,15 @@ pnpm-debug.log*
 !frontend/.env.example
 !backend/.env.example
 
+# Local-only app settings and runtime config should never be tracked.
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.local
+frontend/.env.*
+docs/.env
+docs/.env.*
+
 # Local appsettings overrides / secrets
 backend/appsettings.json
 backend/appsettings.Development.json
@@ -86,7 +95,10 @@ backend/keys/
 # -----------------------------
 # Keep project docs and lock files tracked
 # -----------------------------
-!docs/**
+!docs/*.md
+!docs/*.txt
+!docs/**/*.md
+!docs/**/*.txt
 !frontend/package-lock.json
 !backend/RecruiterReply.csproj
 

@@ -13,9 +13,11 @@ using System.Text;
 var envCandidates = new[]
 {
     Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), ".env.local"),
     Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", ".env.local"),
     Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
-    Path.Combine(Directory.GetCurrentDirectory(), "..", "docs", ".env")
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env.local")
 };
 
 foreach (var envPath in envCandidates.Distinct())
