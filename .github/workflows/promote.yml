@@ -126,6 +126,16 @@ jobs:
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME:$SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve immutable backend image digest
+        id: image-digest
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          DIGEST=$(aws ecr describe-images --repository-name "$BACKEND_IMAGE_NAME" --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Invalid ECR image digest"; exit 1; }
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Resolve successful build run
         id: build-run
         env:
@@ -164,6 +174,15 @@ jobs:
           path: promoted-dist
           run-id: ${{ steps.build-run.outputs.run_id }}
           github-token: ${{ github.token }}
+
+      - name: Verify immutable frontend artifact digest
+        id: frontend-digest
+        run: |
+          set -euo pipefail
+          test -f promoted-dist/index.html
+          DIGEST=$(find promoted-dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Apply environment configuration
         env:
@@ -616,6 +635,28 @@ jobs:
               exit 1
             fi
           done <<< "$EXPECTED_ASSETS"
+
+      - name: Record verified release manifest
+        env:
+          SHA: ${{ inputs.sha }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          BACKEND_DIGEST: ${{ steps.image-digest.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend-digest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          jq -n --arg environment "$ENVIRONMENT" --arg sha "$SHA" \
+            --arg backend_digest "$BACKEND_DIGEST" --arg frontend_digest "$FRONTEND_DIGEST" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
+          cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable release manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest-${{ inputs.environment }}-${{ inputs.sha }}
+          path: release-manifest.json
+          retention-days: 90
 
       - name: Deployment summary
         env:
