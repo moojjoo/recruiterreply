@@ -16,7 +16,7 @@ When invoked with `/execute` and an issue number, use that issue number. If miss
 2. Read acceptance criteria and inspect the actual repository and tests. Clarify ambiguous or unsafe requirements before making changes.
 3. Create `feature/<issue-number>-<slug>` from the current default branch. Make focused changes with appropriate tests, preserving existing behavior.
 4. Run relevant lint, type checks, frontend build, backend tests, and any applicable integration/security checks. Fix introduced failures. Never report checks as passed unless they actually ran.
-5. Commit and push the feature branch; create a PR against `main` with `Closes #<issue-number>`, test evidence, change summary, and risks. Include the exact marker `<!-- dev-acceptance-verified -->` only after every acceptance criterion has a documented passing test or validation result and no manual validation remains. Otherwise omit the marker; the post-Dev reconciliation will leave the issue open. Assign the PR to repository owner `moojjoo` using GitHub's assignee capability when available. Reuse an existing open PR for the issue instead of creating a duplicate. A draft PR is a temporary implementation stage, not the final result of `/execute`.
+5. Commit and push the feature branch; create a PR against `main` with `Refs #<issue-number>` (never use `Closes #N` before Dev acceptance), test evidence, change summary, and risks. Include the exact marker `<!-- dev-acceptance-verified -->` only after every acceptance criterion has a documented passing test or validation result and no manual validation remains. Otherwise omit the marker; the post-Dev reconciliation will leave the issue open. Assign the PR to repository owner `moojjoo` using GitHub's assignee capability when available. Reuse an existing open PR for the issue instead of creating a duplicate. A draft PR is a temporary implementation stage, not the final result of `/execute`.
 
 ## 2. Request Copilot code review automatically
 1. Once the PR is ready for review (not a draft), request **GitHub Copilot** as a reviewer automatically using the GitHub PR review-request API (Copilot reviewer identity, where available). Do not request the PR author's own approval. If the repository supports GitHub's automatic Copilot code review setting, it may additionally trigger on PR creation or new pushes; do not assume it is enabled.
@@ -33,7 +33,14 @@ When invoked with `/execute` and an issue number, use that issue number. If miss
 
 The user reviews changes in the deployed **dev environment**, not by manually reviewing PR code. Never require the user to review a PR before deploying to dev if all automated gates and repository protection rules allow merging. Always provide the dev URL and verification status after deployment.
 
-## 4. TEST and PROD are separate
+## 4. Verified issue completion after Dev
+- The post-Dev job reconciles an issue only when the merged PR body includes a dedicated `Dev-Completes: #<issue-number>` line and the issue has the `dev-acceptance-verified` label.
+- Add the completion marker and label **only after** all acceptance criteria, including any manual checks, have been demonstrably verified. For incomplete features, use `Refs #N` and leave the issue open.
+- Never use GitHub auto-closing keywords (`Closes`, `Fixes`, `Resolves`) in PR bodies before Dev acceptance: GitHub may close the issue on merge before the Dev deployment succeeds.
+- A project-capable `PROJECTS_WRITE_TOKEN` repository secret must have permission to edit the owner's GitHub Project and repository issues. If missing, report reconciliation as skipped; never claim completion.
+- Report the reconciliation job result separately from the Dev deployment result. Do not claim project Status Done until verified.
+
+## 5. TEST and PROD are separate
 - `.github/workflows/promote-test.yml` promotes a validated commit SHA to `test` by manual `workflow_dispatch`.
 - `.github/workflows/promote-prod.yml` promotes a SHA already verified on test to `prod` by manual `workflow_dispatch`.
 - Do **not** automatically dispatch test or prod promotions. Ask for explicit environment-specific approval, confirm the exact SHA and successful prerequisite verification, and use only these existing workflows.
