@@ -401,3 +401,26 @@
   [data-theme="dark"] :is(.success-text, .badge-success) { border-left: 3px solid #86efac; padding-left: 0.4rem; }
   [data-theme="dark"] :is(.warning-text, .badge-warning) { border-left: 3px solid #fde68a; padding-left: 0.4rem; }
 }
+
+/* #247: Ensure the responsive primary menu uses a dark surface with white text.
+   Scoped to the mobile dropdown to preserve desktop and light-theme styling. */
+@layer utilities {
+  @media (max-width: 767px) {
+    [data-theme="dark"] .nav-actions.nav-actions-open {
+      background-color: #172235;
+      border-bottom-color: #475569;
+      color: #ffffff;
+    }
+    [data-theme="dark"] .nav-actions.nav-actions-open :is(a, button, span) {
+      color: #ffffff;
+    }
+    [data-theme="dark"] .nav-actions.nav-actions-open a:hover {
+      background-color: #334155;
+      color: #ffffff;
+    }
+    [data-theme="dark"] .nav-actions.nav-actions-open a {
+      border-radius: 0.375rem;
+      padding-inline: 0.75rem;
+    }
+  }
+}
