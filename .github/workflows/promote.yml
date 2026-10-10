@@ -247,8 +247,7 @@ jobs:
           printf '%s\n' "${ASSET_PATHS[@]}" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout promoted commit (for migrations)
-        if: inputs.environment == 'prod'
+      - name: Checkout promoted commit
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.sha }}
@@ -415,6 +414,11 @@ jobs:
             exit 1
           fi
 
+          BACKUP_SCRIPTS_ARCHIVE=$(tar -czf - -C src \
+            scripts/aws/install_postgres_backup_schedule.sh \
+            scripts/aws/backup_postgres.sh \
+            scripts/aws/test_postgres_backup_restore.sh | base64 -w0)
+
           echo "Checking SSM agent connectivity for instance $EC2_INSTANCE_ID..."
           for i in $(seq 1 20); do
             PING_STATUS=$(aws ssm describe-instance-information \
@@ -445,6 +449,7 @@ jobs:
             --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
+            --arg backup_scripts_archive "$BACKUP_SCRIPTS_ARCHIVE" \
             '{
               commands: [
                 "set -eu",
@@ -453,6 +458,8 @@ jobs:
                 "cd \($deploy_path)",
                 "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
+                "mkdir -p scripts/aws",
+                "printf %s \($backup_scripts_archive) | base64 -d | tar -xz",
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
                 "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
