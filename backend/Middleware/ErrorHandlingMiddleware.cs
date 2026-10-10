@@ -21,12 +21,18 @@ public class ErrorHandlingMiddleware
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Validation error while processing {Path}", context.Request.Path);
+            _logger.LogWarning(
+                ex,
+                "Validation error while processing {Path}",
+                context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""));
             await WriteErrorAsync(context, StatusCodes.Status400BadRequest, ex.Message);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception while processing {Path}", context.Request.Path);
+            _logger.LogError(
+                ex,
+                "Unhandled exception while processing {Path}",
+                context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""));
             await WriteErrorAsync(context, StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
         }
     }

@@ -119,7 +119,9 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            _logger.LogWarning("Google OAuth callback missing code. Google error: {GoogleError}", error ?? "(none)");
+            _logger.LogWarning(
+                "Google OAuth callback missing code. Google error: {GoogleError}",
+                error?.Replace("\r", "").Replace("\n", "") ?? "(none)");
             var frontendBase = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
             return Redirect($"{frontendBase}/login?error=google_auth_failed");
         }

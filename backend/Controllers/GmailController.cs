@@ -47,7 +47,9 @@ public class GmailController : ControllerBase
     {
         if (!string.IsNullOrEmpty(error))
         {
-            _logger.LogWarning("Gmail OAuth consent denied or failed: {Error}", error);
+            _logger.LogWarning(
+                "Gmail OAuth consent denied or failed: {Error}",
+                error.Replace("\r", "").Replace("\n", ""));
             return Redirect(BuildFrontendRedirect(success: false, "consent_denied"));
         }
 
