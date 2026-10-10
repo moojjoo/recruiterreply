@@ -446,6 +446,7 @@ jobs:
             --arg backend_image "$BACKEND_IMAGE" \
             --arg backend_service "$BACKEND_SERVICE" \
             --arg environment "$ENVIRONMENT" \
+            --arg sha "$SHA" \
             --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
