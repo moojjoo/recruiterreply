@@ -52,6 +52,41 @@ GitHub Actions variable on the corresponding GitHub Environment (`dev`, `test`,
 `prod`) so `deploy-<env>.yml` targets the right instance — see
 [`MIGRATION.md`](./MIGRATION.md) for why this matters today.
 
+## PostgreSQL backups
+
+The `global` root creates a dedicated private S3 bucket named
+`<app_name>-postgres-backups-<account_id>`. It blocks public access, requires
+TLS and AES-256 server-side encryption, and expires objects after 30 days.
+Each environment EC2 role can list, read, and upload objects only under its own
+`dev/`, `test/`, or `prod/` prefix. The bucket is protected from accidental
+Terraform destruction.
+
+Apply the `global` root first, followed by each environment root, so the bucket
+and scoped EC2 permissions exist before a deployment enables the schedule. The
+promotion workflow installs a daily 02:00 UTC backup timer and a monthly 03:00
+UTC restore-test timer on the target host. The backup job reads the deployed
+backend's connection string from Secrets Manager, verifies it identifies that
+environment, stages a mode-0600 custom-format `pg_dump` on the encrypted EC2
+root disk, validates it, and uploads it to S3 with AES-256 encryption. The
+temporary dump is removed on exit; a failed dump does not replace an earlier
+object.
+
+The monthly restore check downloads the latest environment backup into a
+temporary PostgreSQL container with a `tmpfs` data directory and no network.
+It never connects to a live database or mounts, stops, or modifies an existing
+Docker volume. To run it manually on the environment host:
+
+```bash
+sudo /usr/local/libexec/recruiterreply/test_postgres_backup_restore.sh prod
+```
+
+Substitute `dev` or `test` for those environments. Check timer/service results
+with `systemctl list-timers 'recruiterreply-postgres-*'` and
+`journalctl -u 'recruiterreply-postgres-backup@prod.service'` (or the matching
+restore-test unit). The `global` and environment Terraform applies and an
+environment promotion are still explicit operator actions; this change does
+not run them.
+
 ## Notes
 
 - Replace `ami_id` values with current region-appropriate AMIs as needed.

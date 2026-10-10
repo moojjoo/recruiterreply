@@ -35,3 +35,11 @@ variable "enable_public_ip" {
   type    = bool
   default = true
 }
+
+variable "backup_bucket_arn" {
+  type = string
+}
+
+variable "backup_environment" {
+  type = string
+}

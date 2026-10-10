@@ -19,6 +19,38 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy" "postgres_backup" {
+  name = "${var.name_prefix}-postgres-backup"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListEnvironmentBackups"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = var.backup_bucket_arn
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["${var.backup_environment}/*"]
+          }
+        }
+      },
+      {
+        Sid    = "ReadWriteEnvironmentBackups"
+        Effect = "Allow"
+        Action = [
+          "s3:AbortMultipartUpload",
+          "s3:GetObject",
+          "s3:PutObject",
+        ]
+        Resource = "${var.backup_bucket_arn}/${var.backup_environment}/*"
+      },
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2.name

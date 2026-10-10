@@ -17,3 +17,8 @@ output "cloudfront_domain_names" {
   description = "CloudFront domain names keyed by environment label."
   value       = module.frontend.cloudfront_domain_names
 }
+
+output "postgres_backup_bucket_name" {
+  description = "Private S3 bucket that stores encrypted PostgreSQL backups."
+  value       = aws_s3_bucket.postgres_backups.id
+}
