@@ -16,12 +16,12 @@ When invoked with `/execute` and an issue number, use that issue number. If miss
 2. Read acceptance criteria and inspect the actual repository and tests. Clarify ambiguous or unsafe requirements before making changes.
 3. Create `feature/<issue-number>-<slug>` from the current default branch. Make focused changes with appropriate tests, preserving existing behavior.
 4. Run relevant lint, type checks, frontend build, backend tests, and any applicable integration/security checks. Fix introduced failures. Never report checks as passed unless they actually ran.
-5. Commit and push the feature branch; create a PR against `main` with `Closes #<issue-number>`, test evidence, change summary, and risks.
+5. Commit and push the feature branch; automatically create a PR against `main` with `Closes #<issue-number>`, test evidence, change summary, and risks. Assign the PR to repository owner `moojjoo` using GitHub's assignee capability when available. Do not request a formal review from the PR author; GitHub does not allow self-approval.
 
 ## 2. Validate, merge, and deploy to DEV
 1. Inspect PR checks and reviews; require all applicable required checks to pass. Do not bypass branch protection or security checks.
 2. If checks are pending, wait and recheck when supported. If failing, fix and rerun. If checks cannot be verified or necessary tests are missing, stop and report the blocker rather than merging.
-3. When the implementation is complete, required checks have passed, and no blockers remain, merge the PR into `main` using the repository's supported merge strategy. **The user has authorized automatic merge and development deployment as part of the `/execute` workflow.** Do not merge unrelated PRs.
+3. When implementation is complete, required checks have passed, and no blockers remain, post a PR comment or update its summary with exactly `Approved` under a clearly labeled `Automated validation result` section, along with check evidence. This is a status record, NOT a formal GitHub approval review, and must not claim to be authored by `moojjoo` if posted by an automation or bot. Do not mark Approved if checks are incomplete, failing, or unknown. Then merge the PR into `main` using the repository's supported merge strategy. **The user has authorized automatic merge and development deployment as part of the `/execute` workflow.** Do not merge unrelated PRs.
 4. Use the EXISTING GitHub Actions workflow `.github/workflows/build.yml`. It runs verification and, on a `main` push, builds and deploys to `dev` via `.github/workflows/promote.yml`. Do not duplicate deployment logic or deploy manually to AWS.
 5. Verify the relevant GitHub Actions run completed successfully, including its `deploy-dev` job. Where feasible, check `https://dev.recruiterreply.com` and affected API behavior. Report the commit SHA, run URL, deployment outcome, and any failures. A merge is not proof of successful deployment.
 
