@@ -71,7 +71,7 @@ resource "aws_cloudwatch_metric_alarm" "disk" {
   alarm_name          = "${local.name_prefix}-root-disk"
   namespace           = "CWAgent"
   metric_name         = "disk_used_percent"
-  dimensions          = { InstanceId = var.instance_id, path = "/" }
+  dimensions          = { InstanceId = var.instance_id }
   statistic           = "Average"
   period              = 300
   evaluation_periods  = 2
