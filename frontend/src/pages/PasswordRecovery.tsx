@@ -45,7 +45,7 @@ export function PasswordRecovery() {
       {!token && <label className="block">Six-digit code from email
         <input className="w-full border rounded p-2 text-gray-900" type="text" inputMode="numeric"
           autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code}
-          onChange={e => setCode(e.target.value.replace(/\\D/g, "").slice(0, 6))} required />
+          onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required />
       </label>}
       <label className="block">New password (12 characters minimum)
         <input className="w-full border rounded p-2 text-gray-900" type="password" minLength={12}
