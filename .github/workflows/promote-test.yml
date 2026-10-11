@@ -39,8 +39,30 @@ jobs:
             }
             core.setFailed(`No successful ${environment} deployment with a full SHA was found. Refusing promotion.`);
 
-  promote:
+  preflight-backend-image:
     needs: resolve-source
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}
+      - name: Require immutable backend image for approved Dev SHA
+        env:
+          SHA: ${{ needs.resolve-source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if ! aws ecr describe-images --repository-name recruiterreply-backend --image-ids "imageTag=$SHA" --query 'imageDetails[0].imageDigest' --output text; then
+            echo "::error::Dev deployment SHA $SHA has no backend image in ECR. Do not promote; restore the original image or approve a new complete Dev release."
+            exit 1
+          fi
+
+  promote:
+    needs: [resolve-source, preflight-backend-image]
     concurrency:
       group: promote-test
       cancel-in-progress: false
