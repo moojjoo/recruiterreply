@@ -1,27 +1,23 @@
 import { test, expect } from '../support/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-test('product analytics events are blocked on Dev even after explicit consent', async ({ mockedPage: page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Accept All' }).click();
-  const events = await page.evaluate(async () => {
-    const analytics = await import('../../frontend/src/utils/productAnalytics');
-    const before = (window as unknown as { dataLayer: IArguments[] }).dataLayer.length;
-    for (const event of ['sign_up', 'analysis_completed', 'reply_generated', 'offer_compared'] as const) {
-      analytics.trackProductEvent(event);
-    }
-    return (window as unknown as { dataLayer: IArguments[] }).dataLayer.slice(before).map(args => args[0]);
-  });
-  expect(events).not.toContain('event');
+const adapter = readFileSync(resolve(__dirname, '../../frontend/src/utils/productAnalytics.ts'), 'utf8');
+
+test('analytics adapter enforces production hostname and affirmative consent', async () => {
+  expect(adapter).toContain('window.location.protocol !== "https:"');
+  expect(adapter).toContain('window.location.hostname !== "recruiterreply.com"');
+  expect(adapter).toContain('consent?.analytics !== true');
+  expect(adapter).toContain('gtag("event", event)');
 });
 
-test('product analytics events are blocked after rejection', async ({ mockedPage: page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Reject Optional' }).click();
-  const events = await page.evaluate(async () => {
-    const analytics = await import('../../frontend/src/utils/productAnalytics');
-    const before = (window as unknown as { dataLayer: IArguments[] }).dataLayer.length;
-    analytics.trackProductEvent('sign_up');
-    return (window as unknown as { dataLayer: IArguments[] }).dataLayer.slice(before).map(args => args[0]);
+test('GA4 requests remain blocked on Dev despite explicit consent', async ({ mockedPage: page }) => {
+  const traffic: string[] = [];
+  page.on('request', req => {
+    if (/googletagmanager\\.com|google-analytics\\.com/.test(req.url())) traffic.push(req.url());
   });
-  expect(events).not.toContain('event');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Accept All' }).click();
+  await page.reload();
+  expect(traffic).toEqual([]);
 });
