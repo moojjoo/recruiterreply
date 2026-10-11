@@ -32,3 +32,10 @@ Never send user-entered text, resume content, recruiter messages, emails, accoun
 
 ## Release constraints
 This document is an implementation checkpoint, **not** finished instrumentation or deployment. Keep Test and Production explicitly approval-gated. Do not auto-merge until functional code and CI validation are complete.
+
+## GA4 property configuration (user-reported)
+- Production web stream measurement ID: `G-LRR12SSGH7`.
+- The user reports configuring GA4 key events: `sign_up`, `analysis_completed`, `reply_generated`, `offer_compared`, and `purchase`. **Not independently verified through GA4 Admin.**
+- The application must emit these names exactly, only after their corresponding verified success condition and affirmative analytics consent on the production hostname.
+- GA4 Admin configuration is external to this repository: this section documents the intended contract; it does not synchronize Google Analytics settings or prove any events have been received.
+- `purchase` must not be emitted merely on checkout redirect. Implement webhook-confirmed, deduplicated, consent-compatible conversion reporting or document why attribution cannot safely be achieved.
