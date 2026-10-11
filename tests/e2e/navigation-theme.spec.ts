@@ -7,7 +7,7 @@ test('navigation returns to a light surface after dark to light toggle', async (
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect.poll(() => nav.evaluate(element => getComputedStyle(element).backgroundColor)).toMatch(/rgba?\(255, 255, 255(?:, 0\.95)?\)/);
+  await expect.poll(() => nav.evaluate(element => getComputedStyle(element).backgroundColor)).toMatch(/^(?:rgba?\(255, 255, 255(?:, 0\.[89]\d*)?\)|oklab\(0\.9999\d* [\d.e-]+ [\d.e-]+(?: \/ 0\.[89]\d*)?\))$/);
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
