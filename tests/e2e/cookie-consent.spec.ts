@@ -143,3 +143,26 @@ test('built frontend includes a fail-closed canonical production hostname gate',
   expect(html).toContain("if (!isProduction || window.rrAnalyticsLoaded) return;");
   expect(html).not.toContain("location.hostname.endsWith(");
 });
+
+
+test('audit endpoint outage cannot block reject or withdrawal', async ({ mockedPage: page }) => {
+  await page.route('**/consent-events', route => route.abort('failed'));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Reject Optional' }).click();
+  await expect(page.getByRole('dialog', { name: 'Cookie preferences' })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('rr-cookie-consent-v1') || '{}').analytics
+  )).toBe(false);
+
+  await page.getByRole('button', { name: 'Cookie Settings' }).click();
+  await page.getByRole('button', { name: 'Accept All' }).click();
+  await page.evaluate(() => { document.cookie = '_ga=synthetic; path=/'; });
+  await page.getByRole('button', { name: 'Cookie Settings' }).click();
+  await page.getByRole('button', { name: 'Reject Optional' }).click();
+  await page.reload();
+
+  expect(await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('rr-cookie-consent-v1') || '{}').analytics
+  )).toBe(false);
+  expect(await page.evaluate(() => document.cookie)).not.toContain('_ga=');
+});
