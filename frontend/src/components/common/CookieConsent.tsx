@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const KEY = "rr-cookie-consent-v1";
 type Choice = { version: 1; analytics: boolean; timestamp: string };
