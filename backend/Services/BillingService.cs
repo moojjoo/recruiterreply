@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using RecruiterReply.Data;
 using RecruiterReply.Models;
 using RecruiterReply.Repositories;
 using Stripe;
@@ -12,13 +14,15 @@ public class BillingService : IBillingService
     private readonly IConfiguration _configuration;
     private readonly ILogger<BillingService> _logger;
     private readonly IStripeClient? _stripeClient;
+    private readonly RecruiterReplyDbContext? _dbContext;
 
-    public BillingService(IUserRepository userRepository, IConfiguration configuration, ILogger<BillingService> logger, IStripeClient? stripeClient = null)
+    public BillingService(IUserRepository userRepository, IConfiguration configuration, ILogger<BillingService> logger, IStripeClient? stripeClient = null, RecruiterReplyDbContext? dbContext = null)
     {
         _userRepository = userRepository;
         _configuration = configuration;
         _logger = logger;
         _stripeClient = stripeClient;
+        _dbContext = dbContext;
     }
 
     public async Task<string> CreateCheckoutSessionAsync(Guid userId, string tier, CancellationToken cancellationToken = default)
@@ -99,6 +103,9 @@ public class BillingService : IBillingService
 
         switch (stripeEvent.Type)
         {
+            case "invoice.paid":
+                await HandleInvoicePaidAsync(stripeEvent, cancellationToken);
+                break;
             case "checkout.session.completed":
                 await HandleCheckoutSessionCompletedAsync(stripeEvent, cancellationToken);
                 break;
@@ -112,6 +119,38 @@ public class BillingService : IBillingService
                 _logger.LogInformation("Unhandled Stripe webhook event type {EventType}", stripeEvent.Type);
                 break;
         }
+    }
+
+    private async Task HandleInvoicePaidAsync(Event stripeEvent, CancellationToken cancellationToken)
+    {
+        if (stripeEvent.Data.Object is not Invoice invoice) return;
+
+        // Stripe API 2025-04-30.basil puts subscription details under invoice.parent.
+        // Trial invoices and one-off invoices are excluded from paid conversions.
+        if (!PaidInvoiceRules.IsEligible(invoice.Id, invoice.Status, invoice.AmountPaid,
+            invoice.Currency, invoice.Parent?.SubscriptionDetails is not null))
+            return;
+
+        if (string.IsNullOrWhiteSpace(invoice.CustomerId))
+        {
+            _logger.LogWarning("Paid invoice missing customer; cannot record payment");
+            return;
+        }
+
+        if (_dbContext is null)
+            throw new InvalidOperationException("Database context is required for paid invoice persistence.");
+
+        // Unique invoice ID provides atomic idempotency across concurrent webhook retries.
+        // Do not log customer identifiers or send them to GA4.
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO stripe_paid_invoices
+                (id, stripe_invoice_id, stripe_event_id, stripe_customer_id,
+                 amount_paid, currency, paid_at)
+            VALUES
+                ({Guid.NewGuid()}, {invoice.Id}, {stripeEvent.Id}, {invoice.CustomerId},
+                 {invoice.AmountPaid}, {invoice.Currency}, {DateTime.UtcNow})
+            ON CONFLICT (stripe_invoice_id) DO NOTHING
+            """, cancellationToken);
     }
 
     private async Task HandleCheckoutSessionCompletedAsync(Event stripeEvent, CancellationToken cancellationToken)
