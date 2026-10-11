@@ -23,35 +23,6 @@ namespace RecruiterReply.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("RecruiterReply.Entities.ConsentAuditEventEntity", b =>
-                {
-                    b.Property<Guid>("EventId").HasColumnType("uuid").HasColumnName("event_id");
-                    b.Property<Guid>("ConsentId").HasColumnType("uuid").HasColumnName("consent_id");
-                    b.Property<string>("Action").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)").HasColumnName("action");
-                    b.Property<bool>("AnalyticsEnabled").HasColumnType("boolean").HasColumnName("analytics_enabled");
-                    b.Property<int>("PolicyVersion").HasColumnType("integer").HasColumnName("policy_version");
-                    b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
-                    b.HasKey("EventId");
-                    b.HasIndex("ConsentId");
-                    b.HasIndex("CreatedAt");
-                    b.ToTable("consent_audit_events");
-                });
-
-            modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
-                {
-                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
-                    b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
-                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("token_hash");
-                    b.Property<string>("CodeHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("code_hash");
-                    b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
-                    b.Property<DateTime>("ExpiresAt").HasColumnType("timestamp with time zone").HasColumnName("expires_at");
-                    b.Property<DateTime?>("ConsumedAt").HasColumnType("timestamp with time zone").HasColumnName("consumed_at");
-                    b.Property<int>("Attempts").HasColumnType("integer").HasColumnName("attempts");
-                    b.HasKey("Id");
-                    b.HasIndex("UserId", "CreatedAt");
-                    b.ToTable("password_recoveries");
-                });
-
             modelBuilder.Entity("RecruiterReply.Entities.CareerProfileEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -270,6 +241,44 @@ namespace RecruiterReply.Migrations
                     b.HasIndex("ComparisonId");
 
                     b.ToTable("comparison_items", (string)null);
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.ConsentAuditEventEntity", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("action");
+
+                    b.Property<bool>("AnalyticsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("analytics_enabled");
+
+                    b.Property<Guid>("ConsentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("consent_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("policy_version");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("ConsentId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("consent_audit_events", (string)null);
                 });
 
             modelBuilder.Entity("RecruiterReply.Entities.GeneratedReplyEntity", b =>
@@ -656,6 +665,52 @@ namespace RecruiterReply.Migrations
                     b.ToTable("opportunities", (string)null);
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("password_recoveries", (string)null);
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.RecruiterEmailEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1016,6 +1071,15 @@ namespace RecruiterReply.Migrations
                 });
 
             modelBuilder.Entity("RecruiterReply.Entities.OpportunityEntity", b =>
+                {
+                    b.HasOne("RecruiterReply.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
                 {
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
                         .WithMany()
