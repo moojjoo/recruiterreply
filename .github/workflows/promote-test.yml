@@ -42,10 +42,22 @@ jobs:
   preflight-backend-image:
     needs: resolve-source
     runs-on: ubuntu-latest
+    # AWS_ROLE_TO_ASSUME is scoped to the GitHub test environment.
+    # This job must use that environment to access its variables and protections.
+    environment: test
     permissions:
       id-token: write
       contents: read
     steps:
+      - name: Validate Test AWS OIDC configuration
+        env:
+          ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ROLE_TO_ASSUME" ]]; then
+            echo "::error::Missing AWS role ARN in GitHub test environment. Configure AWS_ROLE_TO_ASSUME (or AWS_ROLE_ARN) under Settings > Environments > test."
+            exit 1
+          fi
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
