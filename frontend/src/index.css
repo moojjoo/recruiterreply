@@ -507,3 +507,16 @@
     outline-offset: 3px;
   }
 }
+
+/* #270: accessible notification surfaces in both themes. */
+@layer components {
+  .alert-error { background-color: #fff1f2; color: #881337; border-left-color: #be123c; }
+  .alert-success { background-color: #f0fdf4; color: #166534; border-left-color: #15803d; }
+  .alert-warning { background-color: #fffbeb; color: #92400e; border-left-color: #b45309; }
+  .alert-info { background-color: #eff6ff; color: #1e40af; border-left-color: #1d4ed8; }
+  [data-theme="dark"] .alert-error { background-color: #4c0519; color: #ffe4e6; border-left-color: #fda4af; }
+  [data-theme="dark"] .alert-success { background-color: #052e16; color: #dcfce7; border-left-color: #86efac; }
+  [data-theme="dark"] .alert-warning { background-color: #451a03; color: #fef3c7; border-left-color: #fcd34d; }
+  [data-theme="dark"] .alert-info { background-color: #172554; color: #dbeafe; border-left-color: #93c5fd; }
+  .alert button { color: inherit; }
+}
