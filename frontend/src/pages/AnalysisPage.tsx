@@ -16,7 +16,7 @@ export const AnalysisPage: React.FC = () => {
     <MainLayout>
       <main>
         {/* Page Header */}
-        <section className="bg-[#142238] text-white py-12 -mx-4 -mt-8 mb-8 px-4">
+        <section className="tool-page-hero py-12 -mx-4 -mt-8 mb-8 px-4">
           <div className="container">
             <h1 className="section-title">📊 Message Analyzer</h1>
             <p className="section-subtitle text-lg">
