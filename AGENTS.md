@@ -184,4 +184,4 @@ cd frontend && npm run build
 - AWS Secrets Manager is the intended source for deployed dev/test/prod secrets; never commit .env files. Local .env and .NET user-secrets are local-only.
 - Never change working GitHub Actions workflows without an explicitly approved issue.
 - Never generate or execute destructive EF migrations without separate explicit approval, verified backup, and data-preservation review.
-- Plan first in a GitHub Issue, implement on an issue-linked feature branch, review by PR, and deploy only after owner approval.
+- Plan first in a GitHub Issue, implement on an issue-linked feature branch, and open a ready-for-review PR. The owner's /execute or /execute-dev command authorizes CI-gated auto-merge and Dev deployment through the existing main push workflow; do not require a Copilot reviewer for solo development. Never bypass required checks or promote to Test/Prod without separate explicit owner commands.
