@@ -10,21 +10,13 @@ namespace RecruiterReply.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddForeignKey(
-                name: "FK_password_recoveries_users_user_id",
-                table: "password_recoveries",
-                column: "user_id",
-                principalTable: "users",
-                principalColumn: "id",
-                onDelete: ReferentialAction.Cascade);
+            // Foreign key is already created by AddPasswordRecoveries.
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_password_recoveries_users_user_id",
-                table: "password_recoveries");
+            // No schema changes to revert.
         }
     }
 }
