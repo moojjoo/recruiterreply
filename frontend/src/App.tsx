@@ -5,6 +5,8 @@ import { UIProvider } from "./contexts/UIContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { Toast } from "./components/common/Toast";
+import { CookieConsent } from "./components/common/CookieConsent";
+import { CookiePolicy } from "./pages/CookiePolicy";
 import "./index.css";
 
 // Pages
@@ -39,6 +41,7 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/policy" element={<PrivacyPolicy />} />
+                <Route path="/cookies" element={<CookiePolicy />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/pricing" element={<Pricing />} />
 
@@ -123,6 +126,7 @@ function App() {
               </Routes>
 
               <Toast />
+              <CookieConsent />
             </UIProvider>
           </ToastProvider>
         </AuthProvider>
