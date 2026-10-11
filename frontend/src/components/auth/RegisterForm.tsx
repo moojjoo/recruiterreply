@@ -46,7 +46,7 @@ export const RegisterForm: React.FC = () => {
     <Card elevated>
       <h2 className="text-2xl font-bold mb-6">Create Account</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {formError && <p role="alert" className="error-text">{formError}</p>}
+        {formError && <p role="status" className="error-text">{formError}</p>}
         <Input
           type="text"
           label="Full Name"
