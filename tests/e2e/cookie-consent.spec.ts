@@ -134,19 +134,12 @@ test('authenticated route does not send GA4 or synthetic PII', async ({ authedPa
   expect(traffic.join(' ')).not.toMatch(/email|resume|stripe|recruiter|token/i);
 });
 
-test('host allowlist refuses explicit dev and test hostnames even with prior opt-in', async ({ mockedPage: page }) => {
-  // Route a production build under simulated hosts; intercept document so CI never calls real environments.
-  const html = await page.request.get('/');
-  expect(html.ok()).toBe(true);
-  const content = await html.text();
-  const analyticsBlock = content.match(/<script>\\s*\\(function \\(\\) \\{[\\s\\S]*?rrLoadAnalytics[\\s\\S]*?<\\/script>/)?.[0];
-  expect(analyticsBlock).toBeTruthy();
-  for (const host of ['dev.recruiterreply.com', 'test.recruiterreply.com', 'localhost', 'preview.recruiterreply.com']) {
-    const state = await page.evaluate(({ source, host }) => {
-      const allowed = source.includes("location.hostname === 'recruiterreply.com'");
-      return { allowed, host };
-    }, { source: analyticsBlock!, host });
-    expect(state.allowed, 'production hostname must be explicitly gated').toBe(true);
-    expect(state.host).not.toBe('recruiterreply.com');
-  }
+test('built frontend includes a fail-closed canonical production hostname gate', async ({ mockedPage: page }) => {
+  const response = await page.request.get('/');
+  expect(response.ok()).toBe(true);
+  const html = await response.text();
+  expect(html).toContain("location.protocol === 'https:'");
+  expect(html).toContain("location.hostname === 'recruiterreply.com'");
+  expect(html).toContain("if (!isProduction || window.rrAnalyticsLoaded) return;");
+  expect(html).not.toContain("location.hostname.endsWith(");
 });
