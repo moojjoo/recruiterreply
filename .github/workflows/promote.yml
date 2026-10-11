@@ -435,6 +435,31 @@ jobs:
 
           echo "Frontend deployment files verified in S3: index.html, config.js, robots.txt"
 
+      - name: Preflight CloudFront invalidation permissions (non-mutating)
+        env:
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          : "${CLOUDFRONT_DISTRIBUTION_ID:?CLOUDFRONT_DISTRIBUTION_ID is required}"
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          ROLE_ARN="$(aws sts get-caller-identity --query Arn --output text)"
+          DISTRIBUTION_ARN="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${CLOUDFRONT_DISTRIBUTION_ID}"
+          echo "AWS account: ${ACCOUNT_ID}; caller: ${ROLE_ARN}; distribution: ${DISTRIBUTION_ARN}"
+          # IAM's simulation API may be unavailable to deploy roles. Instead use
+          # a read-only CloudFront request to validate GetInvalidation authorization.
+          # A nonexistent invalidation ID returns NoSuchInvalidation if authorized;
+          # AccessDenied indicates the required permission is missing.
+          set +e
+          RESULT="$(aws cloudfront get-invalidation --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --id "I0000000000000000000000000000000" 2>&1)"
+          STATUS=$?
+          set -e
+          if [[ $STATUS -eq 0 || "$RESULT" == *NoSuchInvalidation* ]]; then
+            echo "GetInvalidation permission preflight passed"
+          else
+            echo "::error::CloudFront GetInvalidation preflight failed: $RESULT"
+            exit 1
+          fi
+
       - name: Invalidate CloudFront cache
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
