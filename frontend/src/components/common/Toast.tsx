@@ -15,7 +15,7 @@ export const Toast: React.FC = () => {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-center gap-3 rounded-lg border-l-4 p-4 shadow-xl animate-fade-in ${palette[toast.type]}`}
+          className={`alert alert-${toast.type} flex items-center gap-3 rounded-lg border-l-4 p-4 shadow-xl animate-fade-in ${palette[toast.type]}`}
           style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
           role="alert"
         >
