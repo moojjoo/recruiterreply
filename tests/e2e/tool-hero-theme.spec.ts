@@ -40,7 +40,7 @@ async function checkColors(page: import('@playwright/test').Page, mode: 'light' 
   }
 }
 for (const { path, title, active } of routes) {
-  test(path + ' hero and tabs follow light/dark/light', async ({ mockedPage: page }) => {
+  test(path + ' hero and tabs follow light/dark/light', async ({ authedPage: page }) => {
     await page.addInitScript(() => localStorage.setItem('recruiterreply-theme', 'light'));
     await page.goto(path);
     await expect(page.getByRole('heading', { name: new RegExp(title) })).toBeVisible();
