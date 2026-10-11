@@ -1,0 +1,41 @@
+name: Consent Audit PostgreSQL Integration
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/consent-audit-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: consent_test
+          POSTGRES_PASSWORD: consent_test_only
+          POSTGRES_DB: consent_audit_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U consent_test -d consent_audit_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CONSENT_AUDIT_TEST_DATABASE_URL: Host=localhost;Port=5432;Database=consent_audit_ci;Username=consent_test;Password=consent_test_only
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore tests
+        run: dotnet restore backend/RecruiterReply.Tests/RecruiterReply.Tests.csproj
+      - name: Run PostgreSQL consent audit integration test
+        run: dotnet test backend/RecruiterReply.Tests/RecruiterReply.Tests.csproj --no-restore --filter FullyQualifiedName~ConsentAuditPostgresTests --logger 'console;verbosity=normal'
