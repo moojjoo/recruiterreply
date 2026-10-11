@@ -32,7 +32,7 @@ export const RegisterForm: React.FC = () => {
       showToast("Account created successfully!", "success");
       window.location.href = "/dashboard";
     } catch (error) {
-      const message = getRegistrationErrorMessage(error);
+      const message = getRegistrationErrorMessage(error instanceof Error && error.cause ? error.cause : error);
       setFormError(message);
       showToast(message, "error");
     } finally {
