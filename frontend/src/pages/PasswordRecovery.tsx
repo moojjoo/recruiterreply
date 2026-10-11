@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { authService } from "../services/api/authService";
@@ -12,7 +12,7 @@ export function PasswordRecovery() {
   const [requested, setRequested] = useState(Boolean(token));
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const request = async (e: React.FormEvent) => {
+  const request = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true);
     try {
       await authService.requestPasswordRecovery(email);
@@ -21,7 +21,7 @@ export function PasswordRecovery() {
     } catch { setMessage("If an account exists, recovery instructions will be sent."); }
     finally { setBusy(false); }
   };
-  const finish = async (e: React.FormEvent) => {
+  const finish = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true);
     try {
       await authService.completePasswordRecovery(email, password, token ? undefined : code, token || undefined);
