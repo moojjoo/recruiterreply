@@ -147,6 +147,18 @@ jobs:
           docker tag "$LOCAL_BACKEND_IMAGE" "$ECR_IMAGE"
           docker push "$ECR_IMAGE"
 
+          # Fail at the build boundary if the deploy role cannot read back the
+          # exact immutable image tag; do not mask IAM failures as missing images.
+          IMAGE_DIGEST=$(aws ecr describe-images --region "$AWS_REGION" \
+            --repository-name "$BACKEND_IMAGE_NAME" \
+            --image-ids "imageTag=$GITHUB_SHA" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || {
+            echo "::error::ECR read-after-write returned an invalid image digest"
+            exit 1
+          }
+          echo "Verified pushed image: account=$ACCOUNT_ID region=$AWS_REGION repository=$BACKEND_IMAGE_NAME sha=$GITHUB_SHA digest=$IMAGE_DIGEST"
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
