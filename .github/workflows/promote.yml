@@ -125,7 +125,7 @@ jobs:
           set -e
           if [[ $ECR_STATUS -ne 0 ]]; then
             echo "::error::ECR describe-images failed (exit $ECR_STATUS): $ECR_RESULT"
-            if [[ "$ECR_RESULT" == *AccessDenied* || "$ECR_RESULT" == *not authorized* ]]; then
+            if [[ "$ECR_RESULT" == *AccessDenied* || "$ECR_RESULT" == *"not authorized"* ]]; then
               echo "::error::GitHub Actions role needs ecr:DescribeImages on repository $BACKEND_IMAGE_NAME. Review and apply the Terraform IAM policy."
             elif [[ "$ECR_RESULT" == *ImageNotFoundException* ]]; then
               echo "::error::Image tag $SHA is absent in ECR account $ACCOUNT_ID, region $AWS_REGION."
