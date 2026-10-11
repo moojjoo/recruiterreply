@@ -39,3 +39,18 @@ This document is an implementation checkpoint, **not** finished instrumentation 
 - The application must emit these names exactly, only after their corresponding verified success condition and affirmative analytics consent on the production hostname.
 - GA4 Admin configuration is external to this repository: this section documents the intended contract; it does not synchronize Google Analytics settings or prove any events have been received.
 - `purchase` must not be emitted merely on checkout redirect. Implement webhook-confirmed, deduplicated, consent-compatible conversion reporting or document why attribution cannot safely be achieved.
+
+## Stripe purchase event: verified implementation constraint
+The existing `BillingService.CreateCheckoutSessionAsync` creates subscriptions with a **7-day trial**. The signed webhook handles `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`; it does **not** currently process `invoice.paid`. A completed checkout is not proof of a paid invoice. **Do not emit GA4 `purchase` from checkout completion or from a `?checkout=success` query parameter.**
+
+A future server-side paid conversion implementation requires:
+1. Process verified `invoice.paid` (or the Stripe API-version-appropriate paid-invoice event) with a persisted unique Stripe invoice/event ID to deduplicate webhook retries; confirm positive paid amount, currency and subscription status.
+2. Define whether the metric is first paid subscription, renewals, or both, and distinguish trial starts separately from purchases.
+3. Design privacy-compliant attribution: the backend cannot assume consent or recover a GA client ID from a Stripe webhook. Do not send email, user ID, Stripe customer ID, subscription ID, or invoice ID to GA4. Do not persist or transmit analytics identifiers without the required consent and policy review.
+4. If compliant GA4 attribution cannot be established, keep `purchase` unimplemented and report verified paid invoices/revenue through Stripe aggregates instead. Never manufacture browser-side purchase events on the success URL.
+
+## GA4 configuration and dashboard steps
+- The user reports creating key events `sign_up`, `analysis_completed`, `reply_generated`, `offer_compared`, and `purchase` in the GA4 property `G-LRR12SSGH7`.
+- In GA4 Explorations, create a funnel: `sign_up` → `analysis_completed` → `reply_generated`; create a separate path for `offer_compared`. Events will only populate after separately approved production deployment and consented real usage.
+- Connect the GA4 property to Looker Studio for daily event counts and funnel steps; use Stripe as the authoritative revenue source until verified, consent-compatible paid conversion attribution exists.
+- Validate using GA4 DebugView and browser Network tab after opt-in on production; reject/withdraw and verify no subsequent event collection. Never enable GA4 on Dev/Test to force test data into production analytics.
