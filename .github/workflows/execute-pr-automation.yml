@@ -3,21 +3,23 @@ name: Execute PR Automation
 # Runs from the trusted default branch. Never checks out or executes PR code.
 on:
   pull_request_target:
-    types: [opened, ready_for_review, synchronize, reopened, labeled]
+    types: [opened, ready_for_review, synchronize, reopened, labeled, converted_to_draft]
   workflow_run:
-    workflows: ["Build and Deploy to Dev"]
+    workflows: ["Build and Deploy to Dev", "CodeQL", "Playwright Tests"]
     types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
+  issues: write
+  checks: read
 
 jobs:
   execute:
     runs-on: ubuntu-latest
     steps:
-      - name: Enable CI-gated protected auto-merge for execute-dev PRs
+      - name: Prepare execute-dev PRs and enable protected auto-merge
         uses: actions/github-script@v7
         with:
           script: |
@@ -26,15 +28,33 @@ jobs:
               ? [context.payload.pull_request]
               : (await github.paginate(github.rest.pulls.list, {owner, repo, state: 'open', per_page: 100}));
             for (const pr of prs) {
-              if (pr.base.ref !== 'main' || pr.draft || !pr.labels.some(l => l.name === 'execute-dev')) continue;
+              if (pr.base.ref !== 'main') continue;
               const {data: full} = await github.rest.pulls.get({owner, repo, pull_number: pr.number});
-              if (full.head.repo.full_name !== context.repo.owner + '/' + context.repo.repo) continue;
+              if (full.head.repo.full_name !== owner + '/' + repo) continue;
+              const managed = /^((feature|fix|bugfix)\/\d+-|execute\/\d+-)/.test(full.head.ref) || /(?:^|\s)\/(?:execute)\s+\d+/.test(full.body || '');
+              const labeled = full.labels.some(l => l.name === 'execute-dev');
+              if (!labeled && !managed) continue;
+              if (!labeled) {
+                await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['execute-dev']});
+                core.notice('PR #' + full.number + ': applied execute-dev label');
+              }
+              if (full.draft) {
+                if (!managed) { core.notice('PR #' + full.number + ': draft retained; not an /execute-managed PR'); continue; }
+                try {
+                  await github.graphql(`mutation($id:ID!) { markPullRequestReadyForReview(input:{pullRequestId:$id}) { clientMutationId } }`, {id:full.node_id});
+                  core.notice('PR #' + full.number + ': marked ready for review');
+                } catch (e) { core.warning('PR #' + full.number + ': cannot mark ready: ' + e.message); continue; }
+              }
               const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
               const names = ['verify','test','analyze (javascript-typescript)','analyze (csharp)'];
               const required = checks.check_runs.filter(c => names.includes(c.name));
-              if (names.some(name => !required.some(c => c.name === name && c.status === 'completed' && c.conclusion === 'success'))) continue;
+              const blocked = names.filter(name => !required.some(c => c.name === name && c.status === 'completed' && c.conclusion === 'success'));
+              if (blocked.length) {
+                core.notice('PR #' + full.number + ': waiting for successful current-SHA checks: ' + blocked.join(', '));
+                continue;
+              }
               const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
-              if (reviews.some(r => r.state === 'CHANGES_REQUESTED')) continue;
+              if (reviews.some(r => r.state === 'CHANGES_REQUESTED')) { core.notice('PR #' + full.number + ': changes requested'); continue; }
               const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
                 repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
                   id reviewThreads(first:100) { nodes { isResolved isOutdated } }
