@@ -7,7 +7,10 @@
         var key = 'rr-cookie-consent-v1';
         var consent;
         try { consent = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) {}
-        var allowed = !!(consent && consent.version === 1 && consent.analytics === true);
+        // Identical frontend artifact is promoted across Dev, Test, and Prod.
+        // Fail closed: only the canonical HTTPS production hostname can load GA4.
+        var isProduction = location.protocol === 'https:' && location.hostname === 'recruiterreply.com';
+        var allowed = isProduction && !!(consent && consent.version === 1 && consent.analytics === true);
         window.dataLayer = window.dataLayer || [];
         window.gtag = function () { window.dataLayer.push(arguments); };
         window.gtag('consent', 'default', {
@@ -15,7 +18,7 @@
           ad_user_data: 'denied', ad_personalization: 'denied'
         });
         window.rrLoadAnalytics = function () {
-          if (window.rrAnalyticsLoaded) return;
+          if (!isProduction || window.rrAnalyticsLoaded) return;
           window.rrAnalyticsLoaded = true;
           var script = document.createElement('script');
           script.async = true;

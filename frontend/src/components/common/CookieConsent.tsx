@@ -37,7 +37,8 @@ export function CookieConsent() {
   function save(value: boolean) {
     const next: Choice = { version: 1, analytics: value, timestamp: new Date().toISOString() };
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
-    window.gtag?.("consent", "update", { analytics_storage: value ? "granted" : "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+    const production = location.protocol === "https:" && location.hostname === "recruiterreply.com";
+    window.gtag?.("consent", "update", { analytics_storage: production && value ? "granted" : "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
     if (value) window.rrLoadAnalytics?.();
     else {
       removeAnalyticsCookies();
