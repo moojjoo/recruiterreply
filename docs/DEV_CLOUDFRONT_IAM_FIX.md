@@ -45,3 +45,7 @@ Expected result: `allowed`. IAM simulator permissions are separate from the depl
 Then rerun **Dev only** `Build and Deploy to Dev` on the approved `main` SHA. Verify invalidation completes and backend/frontend health checks pass. Do not promote to Test or Production. If the global Terraform state is not reconciled/imported yet, **do not apply** until the state is reviewed; see `infra/aws/terraform/MIGRATION.md`.
 
 No AWS policy was applied by this repository change alone.
+
+## Test promotion follow-up
+
+The Test promote job failed the same way on distribution `E2IGR9MYMWVQFI` (run [38162167523](https://github.com/moojjoo/recruiterreply/actions/runs/38162167523)). The `cloudfront:GetInvalidation` statement is now `CloudFrontGetInvalidation`, scoped to all distributions in the account (`distribution/*`) so Dev, Test and Prod waiters are covered. As above, the live role must be reconciled via a reviewed Terraform plan (or `scripts/aws/create_github_oidc_role.sh`) before re-running the Test promotion.
