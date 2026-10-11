@@ -100,7 +100,7 @@ const sections = [
     title: "8. Cookies and Similar Technologies",
     content: (
       <p>
-        RecruiterReply may use essential cookies or local storage to keep you signed in, preserve preferences, and protect the service. We may use limited diagnostic technologies to understand reliability and performance. You can control cookies through your browser, but disabling essential storage may prevent parts of the service from working.
+        RecruiterReply may use essential cookies or local storage to keep you signed in, preserve preferences, and protect the service. With your affirmative consent, we use Google Analytics 4 to measure website usage. Optional analytics is disabled until you allow it, and you may withdraw consent using Cookie Settings in the website footer. We do not enable Google advertising personalization. See our Cookie Policy for details. You can control cookies through your browser, but disabling essential storage may prevent parts of the service from working.
       </p>
     ),
   },

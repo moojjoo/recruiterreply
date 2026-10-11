@@ -25,7 +25,7 @@ test('navbar and footer links navigate', async ({ mockedPage: page }) => {
   await page.getByRole('link', { name: 'Terms and Conditions' }).click();
   await expect(page).toHaveURL('/terms');
 
-  await page.getByRole('link', { name: 'Privacy Policy' }).click();
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy Policy' }).click();
   await expect(page).toHaveURL('/policy');
 
   await page.getByRole('link', { name: 'Login' }).click();
