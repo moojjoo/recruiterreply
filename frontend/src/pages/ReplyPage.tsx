@@ -12,7 +12,7 @@ export const ReplyPage: React.FC = () => {
     <MainLayout>
       <main>
         {/* Page Header */}
-        <section className="bg-gradient-to-r from-accent-50 to-primary-50 py-12">
+        <section className="bg-[#142238] text-white py-12">
           <div className="container">
             <h1 className="section-title">✉️ Reply Generator</h1>
             <p className="section-subtitle text-lg">

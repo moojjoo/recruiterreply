@@ -8,7 +8,7 @@ private_subnet_cidrs = ["10.30.101.0/24", "10.30.102.0/24"]
 vpc_cidr             = "10.30.0.0/16"
 
 ami_id        = "ami-04b4f1a9cf54c11d0"
-instance_type = "t3.small"
+instance_type = "t3.medium"
 
 # SSH disabled; use AWS SSM Session Manager (EC2 role already has AmazonSSMManagedInstanceCore)
 allowed_ssh_cidrs = []

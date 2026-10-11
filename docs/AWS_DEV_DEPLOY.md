@@ -68,7 +68,14 @@ Recommended start:
    3. 443 from 0.0.0.0/0
    4. No public 5432
 
-Install packages:
+   The currently deployed shared API host uses the Elastic IP managed by
+   `infra/aws/terraform/envs/dev`. Use that stack's `ec2_elastic_ip` output as
+   `api_target_ipv4` in `infra/aws/rout53`; the three API DNS records share this
+   address. Review Terraform and DNS plans and obtain owner approval before
+   applying either. AWS charges for public IPv4 addresses; check current EC2
+   pricing for applicable rates.
+
+   Install packages:
 
 ```bash
 sudo apt update && sudo apt -y upgrade
@@ -228,7 +235,12 @@ For each environment, set variables:
 6. EC2_DEPLOY_PATH (usually /home/ubuntu/recruiterreply)
 7. ECR_BACKEND_REPOSITORY (optional, default: recruiterreply-backend)
 
-Note: API/OpenAI/JWT/DB runtime secrets are read on EC2 from /home/ubuntu/recruiterreply/.env.
+Google OAuth credentials (`Google:ClientId` and `Google:ClientSecret`) are loaded by
+the backend from the environment-specific AWS Secrets Manager secret
+`recruiterreply/{dev,test,prod}/backend-app-secrets`. The backend adds that secret after
+environment variables, so AWS values take precedence over same-named `.env` or Compose
+settings. See [AUTHENTICATION_DESIGN.md](./AUTHENTICATION_DESIGN.md) for the per-environment
+callback and frontend return URLs.
 Note: Deploy now uses AWS SSM Run Command and does not require inbound SSH from GitHub runners.
 
 ## 8) Branch to Environment Mapping

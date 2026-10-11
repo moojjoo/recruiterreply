@@ -193,6 +193,18 @@ Files changed:
 - Google sign-in and standard registration both work end-to-end on dev, test, and prod.
 - Root causes spanned five independent layers: Google Console config, Postgres
   credentials/schema, an undersized DB column, stale DNS, and a missing TLS
+
+## Current Google Credential Source
+
+The EC2 `.env` references above describe the historical remediation performed at that
+time. Deployed Google authentication credentials are now sourced from AWS Secrets
+Manager: `Google:ClientId` and `Google:ClientSecret` are stored in each environment's
+`recruiterreply/{dev,test,prod}/backend-app-secrets` secret and loaded by
+`AwsSecretsLoader`. Secret values override same-named Compose or `.env` settings. The
+environment-specific callback and frontend return URLs are configured in
+`infra/aws/docker-compose.multi-env.yml` unless overridden by corresponding values in
+the AWS secret. See [AUTHENTICATION_DESIGN.md](./AUTHENTICATION_DESIGN.md) for current
+configuration guidance.
   cert/security-group rule — each masked the next until fixed in sequence.
 - `AuthController` now logs real exceptions instead of collapsing everything into
   `google_auth_failed`.

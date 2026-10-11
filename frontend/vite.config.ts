@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 // ships a safe "disallow all" default for any build that skips promotion.
 
 export default defineConfig({
-  envDir: '../docs',
+  envDir: '.',
   plugins: [react()],
   server: {
     port: 5173,
@@ -14,8 +14,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:5002',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '/api')
+        changeOrigin: true
       }
     }
   }

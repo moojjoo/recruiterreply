@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 module "network" {
   source = "../../modules/network"
 
@@ -29,6 +31,8 @@ module "compute" {
   root_volume_size      = var.ec2_root_volume_size
   user_data             = local.ec2_user_data
   enable_public_ip      = true
+  backup_bucket_arn     = "arn:aws:s3:::${var.app_name}-postgres-backups-${data.aws_caller_identity.current.account_id}"
+  backup_environment    = "test"
 }
 
 module "secrets" {

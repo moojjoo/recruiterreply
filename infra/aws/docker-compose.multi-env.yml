@@ -7,8 +7,9 @@ services:
       POSTGRES_USER: ${POSTGRES_SUPERUSER}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERPASS}
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-      - ./infra/aws/postgres-init:/docker-entrypoint-initdb.d:ro
+      # Deploys run this file from a throwaway temp dir, so the data dir must be an absolute, persistent path.
+      - ${POSTGRES_DATA_DIR:-/home/ubuntu/recruiterreply/data/postgres}:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER}"]
       interval: 10s
@@ -41,7 +42,6 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5001:5000"
-      - "127.0.0.1:5432"
     networks:
       - recruiterreply
 

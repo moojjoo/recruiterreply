@@ -29,11 +29,17 @@ public class GoogleAuthService : IGoogleAuthService
     public string BuildAuthorizationUrl()
     {
         var clientId = _configuration["Google:ClientId"] ?? string.Empty;
-        var redirectUri = _configuration["Google:RedirectUri"] ?? "http://localhost:5002/api/auth/google/callback";
+        var clientSecret = _configuration["Google:ClientSecret"] ?? string.Empty;
+        var redirectUri = GetRequiredRedirectUri();
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
             throw new InvalidOperationException("Google:ClientId is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(clientSecret))
+        {
+            throw new InvalidOperationException("Google:ClientSecret is not configured.");
         }
 
         var query = new Dictionary<string, string>
@@ -55,7 +61,7 @@ public class GoogleAuthService : IGoogleAuthService
     {
         var clientId = _configuration["Google:ClientId"] ?? string.Empty;
         var clientSecret = _configuration["Google:ClientSecret"] ?? string.Empty;
-        var redirectUri = _configuration["Google:RedirectUri"] ?? "http://localhost:5002/api/auth/google/callback";
+        var redirectUri = GetRequiredRedirectUri();
 
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
         {
@@ -170,5 +176,18 @@ public class GoogleAuthService : IGoogleAuthService
                 CreatedAt = existingUser.CreatedAt
             }
         };
+    }
+
+    private string GetRequiredRedirectUri()
+    {
+        var redirectUri = _configuration["Google:RedirectUri"];
+        if (string.IsNullOrWhiteSpace(redirectUri)
+            || !Uri.TryCreate(redirectUri, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException("Google:RedirectUri must be configured as an absolute HTTP or HTTPS URL.");
+        }
+
+        return redirectUri;
     }
 }

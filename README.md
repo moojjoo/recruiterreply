@@ -1,3 +1,5 @@
+> **Documentation notice (2026-10-09):** See [Current Architecture](docs/CURRENT_ARCHITECTURE.md), [Development Workflow](docs/DEVELOPMENT_WORKFLOW.md), and [Database Migration Policy](docs/DATABASE_MIGRATION_POLICY.md) for source-aligned guidance. Some historical setup examples below reference superseded workflows or HTTP localhost URLs; the current repository files are authoritative. Existing GitHub Actions remain unchanged.
+
 # RecruiterReply MVP - AI-Powered Job Search Assistant
 
 An intelligent AI-powered web application for job seekers to analyze recruiter messages, generate professional replies, and compare job offers.
@@ -11,7 +13,7 @@ An intelligent AI-powered web application for job seekers to analyze recruiter m
 ## 🏗️ Architecture
 
 - **Backend**: ASP.NET CORE 10 (.NET) with OpenAI integration
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
+- **Frontend**: React 19 + TypeScript + Tailwind CSS
 - **API**: REST with Axios
 - **AI Engine**: OpenAI GPT-4-Turbo
 
@@ -43,7 +45,7 @@ recruiterreply/
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
+- **Frontend**: React 19 + TypeScript + Tailwind CSS
 - **Backend**: ASP.NET CORE 10 + C#
 - **API**: RESTful with JSON
 - **AI**: OpenAI API (GPT-4)

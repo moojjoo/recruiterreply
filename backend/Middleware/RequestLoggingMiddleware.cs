@@ -19,8 +19,8 @@ public class RequestLoggingMiddleware
 
         _logger.LogInformation(
             "{Method} {Path} => {StatusCode} in {ElapsedMs}ms",
-            context.Request.Method,
-            context.Request.Path,
+            context.Request.Method.Replace("\r", "").Replace("\n", ""),
+            context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""),
             context.Response.StatusCode,
             Math.Round(elapsedMs, 2));
     }

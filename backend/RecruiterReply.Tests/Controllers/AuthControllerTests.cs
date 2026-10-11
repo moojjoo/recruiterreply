@@ -164,6 +164,26 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public async Task GoogleCallback_WithoutValidFrontendBase_Returns500()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Frontend:BaseUrl"] = "not-a-url",
+        }).Build();
+        var controller = new AuthController(
+            _db,
+            _passwordHashService,
+            _jwtTokenService,
+            _googleAuthService.Object,
+            config,
+            NullLogger<AuthController>.Instance);
+
+        var result = await controller.GoogleCallback(null!, CancellationToken.None);
+
+        Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
     public async Task GoogleCallback_OnSuccess_RedirectsWithToken()
     {
         _googleAuthService.Setup(s => s.ExchangeCodeForTokenAsync("good-code", It.IsAny<CancellationToken>()))
@@ -173,6 +193,33 @@ public class AuthControllerTests
 
         var redirect = Assert.IsType<RedirectResult>(result);
         Assert.Contains("token=jwt-token", redirect.Url);
+    }
+
+    [Theory]
+    [InlineData("https://dev.recruiterreply.com", "https://dev.recruiterreply.com/auth/google/callback?token=jwt-token")]
+    [InlineData("https://test.recruiterreply.com", "https://test.recruiterreply.com/auth/google/callback?token=jwt-token")]
+    [InlineData("https://recruiterreply.com", "https://recruiterreply.com/auth/google/callback?token=jwt-token")]
+    public async Task GoogleCallback_RedirectsToEnvironmentSpecificFrontend(string frontendBaseUrl, string expectedUrl)
+    {
+        _googleAuthService.Setup(s => s.ExchangeCodeForTokenAsync("good-code", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AuthResponse { Token = "jwt-token", User = new AuthUserDto { Email = "jane@example.com" } });
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = "a-sufficiently-long-test-signing-key-1234567890",
+            ["Frontend:BaseUrl"] = frontendBaseUrl,
+        }).Build();
+        var controller = new AuthController(
+            _db,
+            _passwordHashService,
+            _jwtTokenService,
+            _googleAuthService.Object,
+            config,
+            NullLogger<AuthController>.Instance);
+
+        var result = await controller.GoogleCallback("good-code", CancellationToken.None);
+
+        Assert.Equal(expectedUrl, Assert.IsType<RedirectResult>(result).Url);
     }
 
     [Fact]

@@ -126,6 +126,16 @@ jobs:
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME:$SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve immutable backend image digest
+        id: image-digest
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          DIGEST=$(aws ecr describe-images --repository-name "$BACKEND_IMAGE_NAME" --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Invalid ECR image digest"; exit 1; }
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Resolve successful build run
         id: build-run
         env:
@@ -164,6 +174,15 @@ jobs:
           path: promoted-dist
           run-id: ${{ steps.build-run.outputs.run_id }}
           github-token: ${{ github.token }}
+
+      - name: Verify immutable frontend artifact digest
+        id: frontend-digest
+        run: |
+          set -euo pipefail
+          test -f promoted-dist/index.html
+          DIGEST=$(find promoted-dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Apply environment configuration
         env:
@@ -247,8 +266,7 @@ jobs:
           printf '%s\n' "${ASSET_PATHS[@]}" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout promoted commit (for migrations)
-        if: inputs.environment == 'prod'
+      - name: Checkout promoted commit
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.sha }}
@@ -415,6 +433,11 @@ jobs:
             exit 1
           fi
 
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SHA must be a 40-character commit SHA"
+            exit 1
+          fi
+
           echo "Checking SSM agent connectivity for instance $EC2_INSTANCE_ID..."
           for i in $(seq 1 20); do
             PING_STATUS=$(aws ssm describe-instance-information \
@@ -441,26 +464,40 @@ jobs:
             --arg image_var "$BACKEND_IMAGE_VAR" \
             --arg backend_image "$BACKEND_IMAGE" \
             --arg backend_service "$BACKEND_SERVICE" \
+            --arg environment "$ENVIRONMENT" \
+            --arg sha "$SHA" \
+            --arg region "$AWS_REGION" \
             --arg ecr_registry "$ECR_REGISTRY" \
             --arg ecr_password "$ECR_PASSWORD" \
-            '{
+            "$(cat <<'JQ'
+          {
               commands: [
                 "set -eu",
                 "exec 9>/tmp/recruiterreply-deploy.lock",
                 "flock -w 600 9 || { echo Timed out waiting for deploy lock; exit 1; }",
                 "cd \($deploy_path)",
-                "if [ ! -f infra/aws/docker-compose.multi-env.yml ]; then echo Missing compose file: \($deploy_path)/infra/aws/docker-compose.multi-env.yml; exit 1; fi",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
+                "if ! command -v git >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y git; fi",
+                "DEPLOY_SOURCE_PATH=$(mktemp -d /tmp/recruiterreply-deploy.XXXXXX); trap 'rm -rf -- \"$DEPLOY_SOURCE_PATH\"' EXIT",
+                "git clone --quiet --no-checkout https://github.com/moojjoo/recruiterreply.git \"$DEPLOY_SOURCE_PATH\" || { echo Failed to clone the public repository; exit 1; }",
+                "git -C \"$DEPLOY_SOURCE_PATH\" fetch --all --tags --prune || { echo Failed to fetch repository refs; exit 1; }",
+                "git -C \"$DEPLOY_SOURCE_PATH\" checkout --detach \($sha) || { echo Failed to check out promoted SHA \($sha); exit 1; }",
+                "CHECKED_OUT_SHA=$(git -C \"$DEPLOY_SOURCE_PATH\" rev-parse HEAD); if [ \"$CHECKED_OUT_SHA\" != \($sha) ]; then echo Promoted checkout SHA mismatch: expected \($sha), got $CHECKED_OUT_SHA; exit 1; fi",
+                "if [ ! -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ]; then echo Missing compose file for promoted SHA \($sha); exit 1; fi",
+                "if [ ! -f \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" ]; then echo Missing backup schedule installer for promoted SHA \($sha); exit 1; fi",
                 "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
                 "if ! sudo docker compose version >/dev/null 2>&1; then echo docker compose plugin missing after install; exit 1; fi",
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
                 "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env; fi",
                 "sudo grep \"^\($image_var)=\" .env",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
-                "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml ps; exit 1; }",
+                "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
+                "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ps; exit 1; }",
+                "sudo bash \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" \($environment) \($region)",
                 "sudo docker image prune -f"
               ]
-            }')
+            }
+          JQ
+            )")
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
@@ -598,6 +635,28 @@ jobs:
               exit 1
             fi
           done <<< "$EXPECTED_ASSETS"
+
+      - name: Record verified release manifest
+        env:
+          SHA: ${{ inputs.sha }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          BACKEND_DIGEST: ${{ steps.image-digest.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend-digest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          jq -n --arg environment "$ENVIRONMENT" --arg sha "$SHA" \
+            --arg backend_digest "$BACKEND_DIGEST" --arg frontend_digest "$FRONTEND_DIGEST" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
+          cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable release manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest-${{ inputs.environment }}-${{ inputs.sha }}
+          path: release-manifest.json
+          retention-days: 90
 
       - name: Deployment summary
         env:

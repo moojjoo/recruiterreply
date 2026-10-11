@@ -19,8 +19,13 @@ output "ec2_instance_id" {
 }
 
 output "ec2_public_ip" {
-  description = "Public IP of the EC2 instance."
+  description = "Public IP of the EC2 instance; the Elastic IP when enabled."
   value       = module.compute.public_ip
+}
+
+output "ec2_elastic_ip" {
+  description = "Stable Elastic IP attached to the shared API host."
+  value       = module.compute.elastic_ip
 }
 
 output "ec2_public_dns" {

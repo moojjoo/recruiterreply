@@ -30,6 +30,10 @@ const Footer: React.FC = () => {
           Privacy Policy
         </a>
         <span className="mx-2 text-gray-400">|</span>
+        <a href="/cookies" className="text-primary-600 hover:underline">Cookie Policy</a>
+        <span className="mx-2 text-gray-400">|</span>
+        <button type="button" className="text-primary-600 hover:underline" onClick={() => window.dispatchEvent(new Event("rr-open-cookie-settings"))}>Cookie Settings</button>
+        <span className="mx-2 text-gray-400">|</span>
         <a href="/terms" className="text-primary-600 hover:underline">
           Terms and Conditions
         </a>

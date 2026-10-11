@@ -22,6 +22,48 @@ Add login with Google, GitHub, LinkedIn, and Facebook to the existing authentica
 - Do not break the existing email/password auth flow
 - Use the existing JWT-based user session pattern
 
+## Google OAuth configuration by environment
+
+The backend requires `Google:ClientId`, `Google:ClientSecret`, and
+`Google:RedirectUri`; the callback also requires `Frontend:BaseUrl`. In deployed
+environments, `Google:ClientId` and `Google:ClientSecret` are supplied by the
+environment's AWS Secrets Manager secret:
+`recruiterreply/{dev,test,prod}/backend-app-secrets`. `AwsSecretsLoader` adds those
+secret values after environment variables, so they take precedence over same-named
+Compose or `.env` settings. Do not put Google credentials in frontend configuration or
+commit them to the repository.
+
+`Google:RedirectUri` and `Frontend:BaseUrl` are configured per environment in
+`infra/aws/docker-compose.multi-env.yml`; if either key is also present in the AWS
+secret, its secret value takes precedence and must match the values below. The Google
+start endpoint rejects a missing client ID, client secret, or redirect URI before
+redirecting the user, without returning any secret values. Redirect and frontend URLs
+must be absolute HTTP(S) URLs. Missing or invalid URLs are rejected rather than silently
+falling back to localhost.
+
+Keep each environment's effective OAuth callback and frontend return URL aligned with
+these values:
+
+| Environment | `Google:RedirectUri` | `Frontend:BaseUrl` |
+| --- | --- | --- |
+| Dev | `https://api-dev.recruiterreply.com/api/auth/google/callback` | `https://dev.recruiterreply.com` |
+| Test | `https://api-test.recruiterreply.com/api/auth/google/callback` | `https://test.recruiterreply.com` |
+| Prod | `https://api.recruiterreply.com/api/auth/google/callback` | `https://recruiterreply.com` |
+
+In Google Cloud Console, register all three exact callback URLs under the OAuth web
+client used by each environment's `Google:ClientId`. Register the corresponding
+frontend origins (`https://dev.recruiterreply.com`,
+`https://test.recruiterreply.com`, and `https://recruiterreply.com`) as authorized
+JavaScript origins. The frontend build selects its environment's API base URL
+separately; using the same frontend build does not set the backend OAuth callback or
+frontend return URL.
+
+Before enabling sign-in, verify that the environment's AWS secret contains the required
+Google client ID and client secret without printing or sharing either value. Request
+`GET /api/auth/google/start` on each API host; its `redirect_uri` must exactly match
+that environment's callback above. Complete a browser sign-in on each environment to
+verify the callback and return URL end to end.
+
 ## Files likely to change
 - [backend/Controllers/AuthController.cs](backend/Controllers/AuthController.cs)
 - [backend/Entities/UserEntity.cs](backend/Entities/UserEntity.cs)

@@ -3,6 +3,8 @@ name: Build and Deploy to Dev
 on:
   push:
     branches: ["**"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +27,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Test issue reconciliation logic
+        run: node --test .github/scripts/tests/reconcile-dev-issues.test.cjs
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -54,6 +59,9 @@ jobs:
 
   build:
     needs: verify
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: dev
 
@@ -201,3 +209,27 @@ jobs:
       robots_txt: |
         User-agent: *
         Disallow: /
+
+  reconcile-dev-issues:
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Reconcile completed issues
+        uses: actions/github-script@v8
+        env:
+          PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
+        with:
+          github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
+          script: |
+            const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
+            await reconcile({github, context, core});

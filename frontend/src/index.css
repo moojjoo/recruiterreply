@@ -190,3 +190,237 @@
 .loading {
   @apply inline-block animate-spin h-4 w-4 border-2 border-blue-600 border-r-transparent rounded-full;
 }
+
+/* Issue #226: theme switch. Existing light styles remain untouched. */
+@layer components {
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    color: #0f172a;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+  .theme-toggle:hover { background: #cbd5e1; }
+  .theme-toggle svg { width: 22px; height: 22px; }
+  [data-theme="dark"] .theme-toggle { background: #334155; color: #f8fafc; }
+  [data-theme="dark"] .theme-toggle:hover { background: #475569; }
+}
+
+/* Target existing Tailwind utility surfaces used across public and protected routes. */
+@layer utilities {
+  [data-theme="dark"] body { background: #0b1220; color: #e2e8f0; }
+  [data-theme="dark"] .bg-white,
+  [data-theme="dark"] .bg-white\/80 { background-color: #172235; }
+  [data-theme="dark"] .bg-gray-50,
+  [data-theme="dark"] .bg-gray-100 { background-color: #202e42; }
+  [data-theme="dark"] .bg-gray-200 { background-color: #334155; }
+  [data-theme="dark"] .text-gray-900,
+  [data-theme="dark"] .text-gray-800,
+  [data-theme="dark"] .text-gray-700 { color: #f1f5f9; }
+  [data-theme="dark"] .text-gray-600,
+  [data-theme="dark"] .text-gray-500 { color: #cbd5e1; }
+  [data-theme="dark"] .border-gray-200,
+  [data-theme="dark"] .border-gray-300 { border-color: #475569; }
+  [data-theme="dark"] input,
+  [data-theme="dark"] textarea,
+  [data-theme="dark"] select { background-color: #1e293b; color: #f8fafc; border-color: #64748b; }
+  [data-theme="dark"] input::placeholder,
+  [data-theme="dark"] textarea::placeholder { color: #cbd5e1; }
+  [data-theme="dark"] .card,
+  [data-theme="dark"] .card-elevated { background-color: #172235; }
+  [data-theme="dark"] .btn-secondary { background: #334155; color: #f8fafc; }
+  [data-theme="dark"] .btn-secondary:hover { background: #475569; }
+  [data-theme="dark"] .bg-gradient-subtle { background: #0b1220; }
+  [data-theme="dark"] .bg-primary-50,
+  [data-theme="dark"] .bg-success-50,
+  [data-theme="dark"] .bg-amber-50,
+  [data-theme="dark"] .bg-red-50 { background-color: #26364d; }
+  [data-theme="dark"] .text-primary-900,
+  [data-theme="dark"] .text-success-900,
+  [data-theme="dark"] .text-amber-900,
+  [data-theme="dark"] .text-red-900 { color: #f1f5f9; }
+  [data-theme="dark"] .text-primary-600 { color: #93c5fd; }
+  [data-theme="dark"] .bg-clip-text { color: transparent; }
+}
+
+
+/* Issue #231: semantic, responsive navigation and legible theme foregrounds. */
+@layer components {
+  .brand-wordmark {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.08;
+    font-size: 0.95rem;
+    letter-spacing: -0.015em;
+    color: #1e3a8a;
+  }
+  .brand-wordmark span { display: block; }
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 0.5rem;
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+  .nav-actions { display: flex; align-items: center; gap: 1rem; }
+  @media (max-width: 767px) {
+    .nav-actions {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      padding: 1rem;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+      background: #ffffff;
+      border-bottom: 1px solid #cbd5e1;
+      box-shadow: 0 8px 18px rgb(15 23 42 / 0.12);
+    }
+    .nav-actions-open { display: flex; }
+    .nav-actions > a, .nav-actions > button { min-height: 44px; display: inline-flex; align-items: center; }
+  }
+  @media (min-width: 768px) {
+    .brand-wordmark { font-size: 1.15rem; }
+  }
+  [data-theme="dark"] .brand-wordmark { color: #f8fafc; }
+  [data-theme="dark"] .mobile-menu-toggle { background: #334155; color: #f8fafc; }
+  [data-theme="dark"] .nav-actions { background-color: #172235; }
+}
+
+/* Explicit high-contrast dark-theme text on dark surfaces; light surfaces keep dark text. */
+@layer utilities {
+  [data-theme="dark"] body,
+  [data-theme="dark"] .card,
+  [data-theme="dark"] .card-elevated,
+  [data-theme="dark"] .bg-white,
+  [data-theme="dark"] .bg-gray-50,
+  [data-theme="dark"] .bg-gray-100 { color: #f1f5f9; }
+  [data-theme="dark"] .text-gray-400 { color: #cbd5e1; }
+  [data-theme="dark"] .text-primary-700,
+  [data-theme="dark"] .text-primary-800,
+  [data-theme="dark"] .text-blue-600,
+  [data-theme="dark"] .text-blue-700 { color: #bfdbfe; }
+  [data-theme="dark"] .error-text,
+  [data-theme="dark"] .badge-danger { color: #fecaca; }
+  [data-theme="dark"] .success-text,
+  [data-theme="dark"] .badge-success { color: #bbf7d0; }
+  [data-theme="dark"] .warning-text,
+  [data-theme="dark"] .badge-warning { color: #fde68a; }
+  [data-theme="dark"] .badge-info { color: #bfdbfe; }
+  [data-theme="dark"] .badge-success,
+  [data-theme="dark"] .badge-warning,
+  [data-theme="dark"] .badge-danger,
+  [data-theme="dark"] .badge-info { background: #243247; }
+  [data-theme="dark"] .bg-primary-100,
+  [data-theme="dark"] .bg-success-100,
+  [data-theme="dark"] .bg-amber-100,
+  [data-theme="dark"] .bg-red-100 { background-color: #243247; }
+  [data-theme="dark"] .input-field,
+  [data-theme="dark"] .textarea-field { background-color: #1e293b; color: #f8fafc; border-color: #64748b; }
+  [data-theme="dark"] .btn-primary,
+  [data-theme="dark"] .btn-danger { color: #ffffff; }
+  [data-theme="dark"] .bg-clip-text.text-transparent { color: #f8fafc; background-image: none; }
+  [data-theme="dark"] :is(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 3px solid #fbbf24;
+    outline-offset: 3px;
+  }
+}
+
+/* #231 Copilot review: retain semantic contrast and disabled-state affordance. */
+@layer utilities {
+  [data-theme="dark"] .text-accent-800,
+  [data-theme="dark"] .text-accent-900 { color: #c4b5fd; }
+  [data-theme="dark"] .text-success-600,
+  [data-theme="dark"] .text-success-700,
+  [data-theme="dark"] .text-success-800,
+  [data-theme="dark"] .text-green-600,
+  [data-theme="dark"] .text-green-700 { color: #86efac; }
+  [data-theme="dark"] .text-amber-600,
+  [data-theme="dark"] .text-amber-700,
+  [data-theme="dark"] .text-amber-800,
+  [data-theme="dark"] .text-yellow-600 { color: #fde68a; }
+  [data-theme="dark"] .text-red-600,
+  [data-theme="dark"] .text-red-700,
+  [data-theme="dark"] .text-red-800 { color: #fca5a5; }
+  [data-theme="dark"] .input-field:disabled,
+  [data-theme="dark"] .textarea-field:disabled,
+  [data-theme="dark"] input:disabled,
+  [data-theme="dark"] textarea:disabled,
+  [data-theme="dark"] select:disabled { background-color: #334155; color: #cbd5e1; border-color: #475569; opacity: 0.7; cursor: not-allowed; }
+}
+
+/* #233: Headings on dark theme surfaces must not inherit light-theme dark text. */
+@layer utilities {
+  [data-theme="dark"] :is(h1, h2, h3, h4, h5, h6) {
+    color: #f8fafc;
+  }
+  /* Explicit light surfaces keep dark heading text. */
+  [data-theme="dark"] :is(.bg-yellow-100, .bg-amber-100) :is(h1, h2, h3, h4, h5, h6) {
+    color: #0f172a;
+  }
+}
+
+/* #235: User-selected pure white typography across dark-theme UI.
+   Apply after utility overrides so muted and semantic text do not become gray.
+   Preserve focus outlines, SVG fills, and background-driven status affordances. */
+@layer utilities {
+  [data-theme="dark"] body,
+  [data-theme="dark"] body :is(
+    h1, h2, h3, h4, h5, h6, p, span, small, strong, em, label,
+    a, button, li, dt, dd, th, td, legend, summary, blockquote,
+    input, textarea, select, option, [role="status"], [role="alert"]
+  ) {
+    color: #ffffff;
+  }
+  [data-theme="dark"] body :is(input, textarea)::placeholder {
+    color: #ffffff;
+    opacity: 1;
+  }
+  /* Avoid making intentionally light surfaces unreadable. */
+  [data-theme="dark"] body :is(.bg-yellow-100, .bg-amber-100):not(.badge):not(.badge-warning) {
+    background-color: #26364d;
+  }
+  [data-theme="dark"] body :is(input, textarea, select):disabled {
+    color: #ffffff;
+    opacity: 1;
+    border-style: dashed;
+  }
+  /* Semantic states remain recognizable without tinted text. */
+  [data-theme="dark"] :is(.error-text, .badge-danger) { border-left: 3px solid #fca5a5; padding-left: 0.4rem; }
+  [data-theme="dark"] :is(.success-text, .badge-success) { border-left: 3px solid #86efac; padding-left: 0.4rem; }
+  [data-theme="dark"] :is(.warning-text, .badge-warning) { border-left: 3px solid #fde68a; padding-left: 0.4rem; }
+}
+
+/* #247: Ensure the responsive primary menu uses a dark surface with white text.
+   Scoped to the mobile dropdown to preserve desktop and light-theme styling. */
+@layer utilities {
+  @media (max-width: 767px) {
+    [data-theme="dark"] .nav-actions.nav-actions-open {
+      background-color: #172235;
+      border-bottom-color: #475569;
+      color: #ffffff;
+    }
+    [data-theme="dark"] .nav-actions.nav-actions-open :is(a, button, span) {
+      color: #ffffff;
+    }
+    [data-theme="dark"] .nav-actions.nav-actions-open a:hover {
+      background-color: #334155;
+      color: #ffffff;
+    }
+    [data-theme="dark"] .nav-actions.nav-actions-open a {
+      border-radius: 0.375rem;
+      padding-inline: 0.75rem;
+    }
+  }
+}

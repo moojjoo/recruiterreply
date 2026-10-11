@@ -3,7 +3,13 @@ output "instance_id" {
 }
 
 output "public_ip" {
-  value = aws_instance.this.public_ip
+  description = "Public IPv4 address, using the Elastic IP when enabled."
+  value       = var.enable_elastic_ip ? aws_eip.this[0].public_ip : aws_instance.this.public_ip
+}
+
+output "elastic_ip" {
+  description = "Elastic IP address when enabled; otherwise null."
+  value       = var.enable_elastic_ip ? aws_eip.this[0].public_ip : null
 }
 
 output "public_dns" {
