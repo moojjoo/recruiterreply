@@ -5,7 +5,7 @@ on:
   pull_request_target:
     types: [opened, ready_for_review, synchronize, reopened, labeled, converted_to_draft]
   workflow_run:
-    workflows: ["Build and Deploy to Dev"]
+    workflows: ["Build and Deploy to Dev", "CodeQL", "Playwright Tests"]
     types: [completed]
   workflow_dispatch:
 
