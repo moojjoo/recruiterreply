@@ -12,7 +12,7 @@
 2. **Discuss:** define user value, scope, non-goals, acceptance criteria, affected frontend/backend/database components, security, cost and tests.
 3. **Approve:** review the proposed Issue body before ChatGPT creates the issue.
 4. **Implement:** after explicit approval, create a feature branch from `main` (or assign an authorized coding agent). Reference the issue number in the branch and PR.
-5. **Review:** coding agent opens a PR, automatically requests GitHub Copilot review, addresses findings and passes required checks. For `/execute`, the owner's instruction authorizes merge and deployment to **dev** so the owner can inspect the running feature there; Windows + VS Code review is optional for dev.
+5. **Review:** coding agent opens a ready-for-review PR, addresses any review findings and passes required checks; Copilot review is optional, not a blocking requirement for a solo developer. For `/execute`, the owner's instruction authorizes merge and deployment to **dev** so the owner can inspect the running feature there; Windows + VS Code review is optional for dev.
 6. **Release:** follow the repository's **existing** GitHub Actions build and promotion process; do not alter workflows or promote to production without explicit authorization.
 7. **Close:** merge the validated PR under the authorized `/execute` dev workflow, link it to the issue, and close the issue when acceptance criteria are met. Test and production require separate explicit owner approval.
 
@@ -53,3 +53,11 @@
 - Local HTTPS-only is a **desired future change**, not yet established by the repository.
 - No destructive EF migrations without explicit review and approval.
 - Owner invocation of `/execute <issue>` expressly authorizes coding-agent source modifications, validated PR merge and deployment **to dev only** via existing GitHub Actions. Never bypass required checks or protection rules. Changes to GitHub Actions workflows, manual AWS deployments, and promotions to test/prod require separate explicit owner approval.
+
+## Owner-approved solo-developer automation (#256)
+
+- `/execute <issue>` and `/execute-dev <issue>` authorize implementation on a feature branch, a ready-for-review PR, CI-gated auto-merge, and deployment to Dev using the existing `main` push workflow.
+- Apply the `execute-dev` PR label to opt in to the existing automation; it checks successful verify, Playwright and CodeQL checks and unresolved review threads. GitHub branch protection remains authoritative.
+- A Copilot reviewer is optional and must not block a solo developer's CI-gated PR merge. A failed or pending check prevents merge.
+- `/execute test` and `/execute prod` require separate owner commands and promote the approved immutable SHA; never automatically promote them.
+- If required GitHub rules/settings cannot be verified through repository permissions, validate them in repository Settings before claiming enforcement.
