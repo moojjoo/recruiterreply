@@ -146,6 +146,12 @@ test('built frontend includes a fail-closed canonical production hostname gate',
 
 
 test('audit endpoint outage cannot block reject or withdrawal', async ({ mockedPage: page }) => {
+  const analyticsRequests: string[] = [];
+  page.on('request', request => {
+    if (/googletagmanager\.com\/gtag|google-analytics\.com\/(g\/collect|collect)/.test(request.url())) {
+      analyticsRequests.push(request.url());
+    }
+  });
   await page.route('**/consent-events', route => route.abort('failed'));
   await page.goto('/');
   await page.getByRole('button', { name: 'Reject Optional' }).click();
@@ -165,4 +171,5 @@ test('audit endpoint outage cannot block reject or withdrawal', async ({ mockedP
     JSON.parse(localStorage.getItem('rr-cookie-consent-v1') || '{}').analytics
   )).toBe(false);
   expect(await page.evaluate(() => document.cookie)).not.toContain('_ga=');
+  expect(analyticsRequests).toEqual([]);
 });
