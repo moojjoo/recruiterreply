@@ -40,6 +40,8 @@ services:
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
+    volumes:
+      - recruiterreply-dev-dataprotection-keys:/app/keys
     ports:
       - "127.0.0.1:5001:5000"
     networks:
@@ -94,3 +96,6 @@ services:
 networks:
   recruiterreply:
     name: recruiterreply
+volumes:
+  recruiterreply-dev-dataprotection-keys:
+    name: recruiterreply-dev-dataprotection-keys
