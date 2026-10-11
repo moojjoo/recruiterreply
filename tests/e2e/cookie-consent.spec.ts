@@ -34,7 +34,7 @@ test('preferences remain available and withdrawal removes optional analytics', a
 test('persisted consent never activates GA4 outside production', async ({ mockedPage: page }) => {
   const analyticsRequests: string[] = [];
   page.on('request', request => {
-    if (/googletagmanager\\.com\\/gtag|google-analytics\\.com\\/(g\\/collect|collect)/.test(request.url())) analyticsRequests.push(request.url());
+    if (/googletagmanager\.com\/gtag|google-analytics\.com\/(g\/collect|collect)/.test(request.url())) analyticsRequests.push(request.url());
   });
   await page.addInitScript(() => {
     localStorage.setItem('rr-cookie-consent-v1', JSON.stringify({ version: 1, analytics: true, timestamp: new Date().toISOString() }));
