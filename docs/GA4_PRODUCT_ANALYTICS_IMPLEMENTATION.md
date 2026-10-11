@@ -54,3 +54,9 @@ A future server-side paid conversion implementation requires:
 - In GA4 Explorations, create a funnel: `sign_up` → `analysis_completed` → `reply_generated`; create a separate path for `offer_compared`. Events will only populate after separately approved production deployment and consented real usage.
 - Connect the GA4 property to Looker Studio for daily event counts and funnel steps; use Stripe as the authoritative revenue source until verified, consent-compatible paid conversion attribution exists.
 - Validate using GA4 DebugView and browser Network tab after opt-in on production; reject/withdraw and verify no subsequent event collection. Never enable GA4 on Dev/Test to force test data into production analytics.
+
+## Paid invoice implementation checkpoint (PR #304)
+- Additive migration `20261011170000_AddStripePaidInvoices` creates `stripe_paid_invoices` with a unique `stripe_invoice_id`; review SQL and take a database backup before deployment. Note: Dev/Test may auto-apply migrations on startup when `Database:AutoMigrate=true`.
+- `BillingService` now handles signed `invoice.paid` webhooks and uses parameterized `INSERT ... ON CONFLICT (stripe_invoice_id) DO NOTHING` to persist positive paid subscription invoices only. No GA4 purchase event is emitted.
+- Unit tests cover paid, zero-dollar, unpaid and non-subscription eligibility. **Still required before ready-for-review:** compile/CI validation against the pinned Stripe.NET invoice model, integration tests against PostgreSQL for sequential and concurrent duplicate signed webhook deliveries, Stripe test-mode webhook validation, and migration preflight/recovery review.
+- For the Stripe webhook endpoint to receive these events, subscribe it to `invoice.paid` in the Stripe dashboard for each approved environment. Do not configure production until production approval.
