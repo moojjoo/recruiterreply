@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getRegistrationErrorMessage } from "../../utils/registrationError";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { Input } from "../common/Input";
@@ -31,10 +32,7 @@ export const RegisterForm: React.FC = () => {
       showToast("Account created successfully!", "success");
       window.location.href = "/dashboard";
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Registration failed. Please try again.";
+      const message = getRegistrationErrorMessage(error);
       setFormError(message);
       showToast(message, "error");
     } finally {
