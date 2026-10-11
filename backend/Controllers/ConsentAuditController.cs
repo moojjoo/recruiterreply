@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using RecruiterReply.Data;
@@ -15,10 +16,22 @@ public sealed record ConsentAuditRequest(Guid EventId, Guid ConsentId, string Ac
 [EnableRateLimiting("consent-audit")]
 public sealed class ConsentAuditController(RecruiterReplyDbContext db) : ControllerBase
 {
+    // Reject browser-origin writes from untrusted sites. Requests without Origin (e.g. server clients)
+    // remain permitted; browser CORS is not itself a CSRF/abuse boundary.
+    private static readonly HashSet<string> AllowedOrigins = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "https://recruiterreply.com", "https://dev.recruiterreply.com", "https://test.recruiterreply.com",
+        "http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"
+    };
+
     [HttpPost]
     [RequestSizeLimit(1024)]
     public async Task<IActionResult> Record([FromBody] ConsentAuditRequest request, CancellationToken ct)
     {
+        var origin = Request.Headers.Origin.ToString();
+        if (!string.IsNullOrWhiteSpace(origin) && !AllowedOrigins.Contains(origin))
+            return StatusCode(StatusCodes.Status403Forbidden);
+
         if (request.EventId == Guid.Empty || request.ConsentId == Guid.Empty ||
             request.PolicyVersion != 1 ||
             request.Action is not ("accept" or "reject" or "customize" or "withdraw") ||
