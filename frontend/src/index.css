@@ -452,3 +452,58 @@
     }
   }
 }
+
+
+/* #254: Shared tool page hero and navigation, with explicit theme surfaces and contrast. */
+@layer utilities {
+  [data-theme="light"] .tool-page-hero {
+    background-color: #f8fafc;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+  }
+  [data-theme="light"] .tool-page-hero .section-title { color: #0f172a; }
+  [data-theme="light"] .tool-page-hero .section-subtitle { color: #334155; }
+  [data-theme="dark"] .tool-page-hero {
+    background-color: #142238;
+    color: #ffffff;
+    border: 1px solid #334155;
+  }
+  [data-theme="dark"] .tool-page-hero .section-title,
+  [data-theme="dark"] .tool-page-hero .section-subtitle { color: #ffffff; }
+  [data-theme="light"] .tool-nav-tab {
+    background-color: #ffffff;
+    color: #1e293b;
+    border-color: #94a3b8;
+  }
+  [data-theme="light"] .tool-nav-tab:hover {
+    background-color: #eff6ff;
+    color: #1e3a8a;
+    border-color: #2563eb;
+  }
+  [data-theme="light"] .tool-nav-tab-active,
+  [data-theme="light"] .tool-nav-tab-active:hover {
+    background-color: #075985;
+    color: #ffffff;
+    border-color: #075985;
+  }
+  [data-theme="dark"] .tool-nav-tab {
+    background-color: #243247;
+    color: #ffffff;
+    border-color: #94a3b8;
+  }
+  [data-theme="dark"] .tool-nav-tab:hover {
+    background-color: #334155;
+    color: #ffffff;
+    border-color: #cbd5e1;
+  }
+  [data-theme="dark"] .tool-nav-tab-active,
+  [data-theme="dark"] .tool-nav-tab-active:hover {
+    background-color: #0369a1;
+    color: #ffffff;
+    border-color: #38bdf8;
+  }
+  .tool-page-hero .tool-nav-tab:focus-visible {
+    outline: 3px solid #f59e0b;
+    outline-offset: 3px;
+  }
+}
