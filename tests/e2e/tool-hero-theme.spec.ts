@@ -34,9 +34,11 @@ async function checkColors(page: import('@playwright/test').Page, mode: 'light' 
   const tabs = hero.locator('.tool-nav-tab');
   await expect(tabs).toHaveCount(3);
   for (const tab of await tabs.all()) {
-    const bg = rgb(await tab.evaluate(element => getComputedStyle(element).backgroundColor));
-    const fg = rgb(await tab.evaluate(element => getComputedStyle(element).color));
-    expect(contrast(fg, bg), 'tool navigation tab contrast').toBeGreaterThanOrEqual(4.5);
+    await expect.poll(async () => {
+      const bg = rgb(await tab.evaluate(element => getComputedStyle(element).backgroundColor));
+      const fg = rgb(await tab.evaluate(element => getComputedStyle(element).color));
+      return contrast(fg, bg);
+    }, 'tool navigation tab contrast').toBeGreaterThanOrEqual(4.5);
   }
 }
 for (const { path, title, active } of routes) {
