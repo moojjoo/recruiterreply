@@ -149,7 +149,7 @@ jobs:
           set -euo pipefail
 
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid approved SHA"; exit 1; }
-          ARTIFACT_NAME="frontend-dist-$SHA"
+          export ARTIFACT_NAME="frontend-dist-$SHA"
 
           # Prefer the exact build run when invoked from Build (Dev).
           if [[ -n "$BUILD_RUN_ID" ]]; then
