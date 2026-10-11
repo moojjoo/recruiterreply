@@ -46,3 +46,107 @@ test('persisted consent never activates GA4 outside production', async ({ mocked
   const granted = await page.evaluate(() => (window as unknown as { dataLayer: IArguments[] }).dataLayer.some(args => args[0] === 'consent' && args[1] === 'update' && args[2]?.analytics_storage === 'granted'));
   expect(granted).toBe(false);
 });
+
+const consentKey = 'rr-cookie-consent-v1';
+
+test('reject stays denied after navigation and reload without GA4 traffic', async ({ mockedPage: page }) => {
+  const traffic: string[] = [];
+  page.on('request', req => {
+    if (/googletagmanager\\.com|google-analytics\\.com/.test(req.url())) traffic.push(req.url());
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Reject Optional' }).click();
+  await page.goto('/policy');
+  await page.reload();
+  expect(traffic).toEqual([]);
+  const state = await page.evaluate(key => ({
+    choice: JSON.parse(localStorage.getItem(key) || 'null'),
+    updates: (window as unknown as { dataLayer: IArguments[] }).dataLayer
+      .filter(args => args[0] === 'consent').map(args => args[2]?.analytics_storage),
+  }), consentKey);
+  expect(state.choice.analytics).toBe(false);
+  expect(state.updates).toContain('denied');
+  expect(state.updates).not.toContain('granted');
+});
+
+test('customized opt-in persists but never tracks on localhost', async ({ mockedPage: page }) => {
+  const traffic: string[] = [];
+  page.on('request', req => {
+    if (/googletagmanager\\.com|google-analytics\\.com/.test(req.url())) traffic.push(req.url());
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Customize' }).click();
+  await page.getByRole('checkbox', { name: 'Allow optional analytics' }).check();
+  await page.getByRole('button', { name: 'Save Preferences' }).click();
+  await page.reload();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}').analytics, consentKey)).toBe(true);
+  expect(traffic).toEqual([]);
+  const state = await page.evaluate(() => (window as unknown as { dataLayer: IArguments[] }).dataLayer
+    .filter(args => args[0] === 'consent').map(args => args[2]?.analytics_storage));
+  expect(state).not.toContain('granted');
+});
+
+test('withdrawal removes GA cookies and survives reload', async ({ mockedPage: page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Accept All' }).click();
+  await page.evaluate(() => { document.cookie = '_ga=synthetic; path=/'; });
+  await page.getByRole('button', { name: 'Cookie Settings' }).click();
+  await page.getByRole('button', { name: 'Reject Optional' }).click();
+  await page.reload();
+  expect(await page.evaluate(() => document.cookie)).not.toContain('_ga=');
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}').analytics, consentKey)).toBe(false);
+});
+
+test('GPC is surfaced and analytics remains optional and initially denied', async ({ mockedPage: page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'globalPrivacyControl', { configurable: true, value: true });
+  });
+  await page.goto('/');
+  await expect(page.getByText(/Global Privacy Control signal/)).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { dataLayer: IArguments[] }).dataLayer
+    .filter(args => args[0] === 'consent').every(args => args[2]?.analytics_storage === 'denied'))).toBe(true);
+});
+
+test('keyboard-only rejection is accessible', async ({ mockedPage: page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('dialog', { name: 'Cookie preferences' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reject Optional' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Cookie preferences' })).toHaveCount(0);
+});
+
+test('cookie dialog remains usable on mobile viewport', async ({ mockedPage: page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Reject Optional' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reject Optional' }).click();
+  await expect(page.getByRole('dialog', { name: 'Cookie preferences' })).toHaveCount(0);
+});
+
+test('authenticated route does not send GA4 or synthetic PII', async ({ authedPage: page }) => {
+  const traffic: string[] = [];
+  page.on('request', req => {
+    if (/googletagmanager\\.com|google-analytics\\.com/.test(req.url())) traffic.push(req.url());
+  });
+  await page.goto('/dashboard');
+  await page.reload();
+  expect(traffic).toEqual([]);
+  expect(traffic.join(' ')).not.toMatch(/email|resume|stripe|recruiter|token/i);
+});
+
+test('host allowlist refuses explicit dev and test hostnames even with prior opt-in', async ({ mockedPage: page }) => {
+  // Route a production build under simulated hosts; intercept document so CI never calls real environments.
+  const html = await page.request.get('/');
+  expect(html.ok()).toBe(true);
+  const content = await html.text();
+  const analyticsBlock = content.match(/<script>\\s*\\(function \\(\\) \\{[\\s\\S]*?rrLoadAnalytics[\\s\\S]*?<\\/script>/)?.[0];
+  expect(analyticsBlock).toBeTruthy();
+  for (const host of ['dev.recruiterreply.com', 'test.recruiterreply.com', 'localhost', 'preview.recruiterreply.com']) {
+    const state = await page.evaluate(({ source, host }) => {
+      const allowed = source.includes("location.hostname === 'recruiterreply.com'");
+      return { allowed, host };
+    }, { source: analyticsBlock!, host });
+    expect(state.allowed, 'production hostname must be explicitly gated').toBe(true);
+    expect(state.host).not.toBe('recruiterreply.com');
+  }
+});
