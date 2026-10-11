@@ -10,6 +10,7 @@ public class RecruiterReplyDbContext : DbContext
     {
     }
 
+    public DbSet<ConsentAuditEventEntity> ConsentAuditEvents => Set<ConsentAuditEventEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<MessageAnalysisEntity> MessageAnalyses => Set<MessageAnalysisEntity>();
@@ -25,6 +26,19 @@ public class RecruiterReplyDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ConsentAuditEventEntity>(entity =>
+        {
+            entity.ToTable("consent_audit_events");
+            entity.HasKey(e => e.EventId);
+            entity.Property(e => e.EventId).HasColumnName("event_id");
+            entity.Property(e => e.ConsentId).HasColumnName("consent_id");
+            entity.Property(e => e.Action).HasColumnName("action").HasMaxLength(16).IsRequired();
+            entity.Property(e => e.AnalyticsEnabled).HasColumnName("analytics_enabled");
+            entity.Property(e => e.PolicyVersion).HasColumnName("policy_version");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.ConsentId);
+        });
         modelBuilder.Entity<UserEntity>(entity =>
         {
             entity.ToTable("users");

@@ -14,6 +14,27 @@ function readChoice(): Choice | null {
     return value?.version === 1 && typeof value.analytics === "boolean" ? value : null;
   } catch { return null; }
 }
+const CONSENT_ID_KEY = "rr-consent-audit-id-v1";
+function recordConsent(action: "accept" | "reject" | "customize" | "withdraw", analyticsEnabled: boolean) {
+  // This is intentionally best-effort: a network failure must never block opting out.
+  try {
+    let consentId = localStorage.getItem(CONSENT_ID_KEY);
+    if (!consentId) {
+      consentId = crypto.randomUUID();
+      localStorage.setItem(CONSENT_ID_KEY, consentId);
+    }
+    const runtimeBase = window.__APP_CONFIG__?.API_BASE_URL;
+    const base = runtimeBase && !runtimeBase.startsWith("__RUNTIME_")
+      ? runtimeBase : import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "/api";
+    const url = base.replace(/\/$/, "") + "/consent-events";
+    void fetch(url, {
+      method: "POST", mode: "cors", credentials: "omit", keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: crypto.randomUUID(), consentId, action, analyticsEnabled, policyVersion: 1 }),
+    }).catch(() => {});
+  } catch { /* consent choice always wins */ }
+}
+
 function removeAnalyticsCookies() {
   for (const cookie of document.cookie.split(";")) {
     const name = cookie.split("=")[0]?.trim();
@@ -36,6 +57,7 @@ export function CookieConsent() {
   }, [choice]);
   function save(value: boolean) {
     const next: Choice = { version: 1, analytics: value, timestamp: new Date().toISOString() };
+    recordConsent(!value && choice?.analytics ? "withdraw" : customize ? "customize" : value ? "accept" : "reject", value);
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
     const production = location.protocol === "https:" && location.hostname === "recruiterreply.com";
     window.gtag?.("consent", "update", { analytics_storage: production && value ? "granted" : "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });

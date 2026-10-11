@@ -23,6 +23,20 @@ namespace RecruiterReply.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("RecruiterReply.Entities.ConsentAuditEventEntity", b =>
+                {
+                    b.Property<Guid>("EventId").HasColumnType("uuid").HasColumnName("event_id");
+                    b.Property<Guid>("ConsentId").HasColumnType("uuid").HasColumnName("consent_id");
+                    b.Property<string>("Action").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)").HasColumnName("action");
+                    b.Property<bool>("AnalyticsEnabled").HasColumnType("boolean").HasColumnName("analytics_enabled");
+                    b.Property<int>("PolicyVersion").HasColumnType("integer").HasColumnName("policy_version");
+                    b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
+                    b.HasKey("EventId");
+                    b.HasIndex("ConsentId");
+                    b.HasIndex("CreatedAt");
+                    b.ToTable("consent_audit_events");
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.CareerProfileEntity", b =>
                 {
                     b.Property<Guid>("Id")
