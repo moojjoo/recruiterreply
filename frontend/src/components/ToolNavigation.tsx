@@ -24,14 +24,14 @@ export const ToolNavigation: React.FC<ToolNavigationProps> = ({
             <span
               aria-current="page"
               aria-disabled="true"
-              className="inline-flex rounded-md border border-primary-600 bg-primary-600 px-4 py-2 text-sm font-semibold text-white"
+              className="tool-nav-tab tool-nav-tab-active inline-flex rounded-md border px-4 py-2 text-sm font-semibold"
             >
               {tool.label}
             </span>
           ) : (
             <Link
               to={tool.path}
-              className="inline-flex rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-primary-600 hover:text-primary-700"
+              className="tool-nav-tab inline-flex rounded-md border px-4 py-2 text-sm font-medium transition-colors"
             >
               {tool.label}
             </Link>
