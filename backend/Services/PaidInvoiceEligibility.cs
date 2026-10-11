@@ -17,7 +17,7 @@ public static class PaidInvoiceEligibility
         if (string.IsNullOrWhiteSpace(invoice.Currency)) return false;
         if (string.IsNullOrWhiteSpace(invoice.Id)) return false;
         // Do not count a one-off invoice as a subscription purchase.
-        if (invoice.Parent?.SubscriptionDetails?.SubscriptionId is null) return false;
+        if (invoice.Parent?.SubscriptionDetails is null) return false;
         return true;
     }
 }
