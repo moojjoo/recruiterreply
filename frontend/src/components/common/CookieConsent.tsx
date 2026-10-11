@@ -26,7 +26,7 @@ function recordConsent(action: "accept" | "reject" | "customize" | "withdraw", a
     const runtimeBase = window.__APP_CONFIG__?.API_BASE_URL;
     const base = runtimeBase && !runtimeBase.startsWith("__RUNTIME_")
       ? runtimeBase : import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "/api";
-    const url = base.replace(/\\/$/, "") + "/consent-events";
+    const url = base.replace(/\/$/, "") + "/consent-events";
     void fetch(url, {
       method: "POST", mode: "cors", credentials: "omit", keepalive: true,
       headers: { "Content-Type": "application/json" },
