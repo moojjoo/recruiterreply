@@ -14,6 +14,10 @@ export const authService = {
       password,
       name,
     }),
+  requestPasswordRecovery: (email: string) =>
+    apiClient.post("/auth/password-recovery/request", { email }),
+  completePasswordRecovery: (email: string, password: string, code?: string, token?: string) =>
+    apiClient.post("/auth/password-recovery/complete", { email, password, code, token }),
   googleLoginStart: () => apiClient.get<{ redirectUrl: string }>('/auth/google/start'),
   getCurrentUser: () => apiClient.get<User>("/auth/me"),
 };
