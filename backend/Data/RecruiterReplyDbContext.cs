@@ -11,6 +11,7 @@ public class RecruiterReplyDbContext : DbContext
     }
 
     public DbSet<ConsentAuditEventEntity> ConsentAuditEvents => Set<ConsentAuditEventEntity>();
+    public DbSet<PasswordRecoveryEntity> PasswordRecoveries => Set<PasswordRecoveryEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<MessageAnalysisEntity> MessageAnalyses => Set<MessageAnalysisEntity>();
@@ -38,6 +39,21 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.ConsentId);
+        });
+        modelBuilder.Entity<PasswordRecoveryEntity>(entity =>
+        {
+            entity.ToTable("password_recoveries");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TokenHash).HasColumnName("token_hash").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.CodeHash).HasColumnName("code_hash").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.ConsumedAt).HasColumnName("consumed_at");
+            entity.Property(e => e.Attempts).HasColumnName("attempts");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
         });
         modelBuilder.Entity<UserEntity>(entity =>
         {

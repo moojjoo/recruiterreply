@@ -12,6 +12,7 @@ import "./index.css";
 // Pages
 import { HomePage } from "./pages/HomePage";
 import { Login } from "./pages/Login";
+import { PasswordRecovery } from "./pages/PasswordRecovery";
 import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
 import { AnalysisPage } from "./pages/AnalysisPage";
@@ -40,6 +41,8 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<PasswordRecovery />} />
+                <Route path="/reset-password" element={<PasswordRecovery />} />
                 <Route path="/policy" element={<PrivacyPolicy />} />
                 <Route path="/cookies" element={<CookiePolicy />} />
                 <Route path="/terms" element={<Terms />} />

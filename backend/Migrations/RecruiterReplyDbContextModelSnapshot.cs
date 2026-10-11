@@ -37,6 +37,21 @@ namespace RecruiterReply.Migrations
                     b.ToTable("consent_audit_events");
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
+                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("token_hash");
+                    b.Property<string>("CodeHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("code_hash");
+                    b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
+                    b.Property<DateTime>("ExpiresAt").HasColumnType("timestamp with time zone").HasColumnName("expires_at");
+                    b.Property<DateTime?>("ConsumedAt").HasColumnType("timestamp with time zone").HasColumnName("consumed_at");
+                    b.Property<int>("Attempts").HasColumnType("integer").HasColumnName("attempts");
+                    b.HasKey("Id");
+                    b.HasIndex("UserId", "CreatedAt");
+                    b.ToTable("password_recoveries");
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.CareerProfileEntity", b =>
                 {
                     b.Property<Guid>("Id")
