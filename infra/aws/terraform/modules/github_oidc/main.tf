@@ -122,9 +122,14 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "s3:DeleteObject",
           "cloudfront:GetDistribution",
           "cloudfront:CreateInvalidation",
-          "cloudfront:GetInvalidation",
         ]
         Resource = "*"
+      },
+      {
+        Sid      = "DevCloudFrontGetInvalidation"
+        Effect   = "Allow"
+        Action   = ["cloudfront:GetInvalidation"]
+        Resource = "arn:aws:cloudfront::${var.aws_account_id}:distribution/E2JWU1TLDA6YRS"
       },
       {
         Sid    = "SsmEc2Deploy"
