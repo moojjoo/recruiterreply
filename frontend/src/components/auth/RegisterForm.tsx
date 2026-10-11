@@ -11,12 +11,16 @@ export const RegisterForm: React.FC = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
   const { register } = useAuth();
   const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    setFormError("");
     if (password !== confirmPassword) {
+      setFormError("Passwords do not match");
       showToast("Passwords do not match", "error");
       return;
     }
@@ -31,6 +35,7 @@ export const RegisterForm: React.FC = () => {
         error instanceof Error
           ? error.message
           : "Registration failed. Please try again.";
+      setFormError(message);
       showToast(message, "error");
     } finally {
       setLoading(false);
@@ -41,6 +46,7 @@ export const RegisterForm: React.FC = () => {
     <Card elevated>
       <h2 className="text-2xl font-bold mb-6">Create Account</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {formError && <p role="alert" className="error-text">{formError}</p>}
         <Input
           type="text"
           label="Full Name"
@@ -73,7 +79,7 @@ export const RegisterForm: React.FC = () => {
           placeholder="••••••••"
           required
         />
-        <Button type="submit" isLoading={loading} className="w-full">
+        <Button type="submit" isLoading={loading} disabled={loading} className="w-full">
           Create Account
         </Button>
       </form>

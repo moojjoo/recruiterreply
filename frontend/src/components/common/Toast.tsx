@@ -21,7 +21,7 @@ export const Toast: React.FC = () => {
           <span>{toast.message}</span>
           <button
             onClick={() => removeToast(toast.id)}
-            className="ml-auto text-lg leading-none hover:opacity-70"
+            className="ml-auto min-w-11 min-h-11 text-lg leading-none hover:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2"
             aria-label="Close notification"
           >
             ×

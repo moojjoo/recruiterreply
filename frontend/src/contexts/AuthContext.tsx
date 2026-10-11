@@ -65,7 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           error instanceof AxiosError
             ? error.response?.data?.error
             : undefined;
-        throw new Error(message || "Registration failed", { cause: error });
+        const status = error instanceof AxiosError ? error.response?.status : undefined;
+        const safeMessage = typeof message === "string" && message.length <= 250 && (status === 400 || status === 409) ? message : undefined;
+        const fallback = status === 409 ? "An account with this email already exists. Try signing in."
+          : status === 400 ? "Please check your registration details and try again."
+          : status === 429 ? "Too many attempts. Please try again later."
+          : !status ? "Unable to connect to the registration service. Please try again."
+          : "Registration is temporarily unavailable. Please try again later.";
+        throw new Error(safeMessage || fallback, { cause: error });
       } finally {
         setIsLoading(false);
       }
