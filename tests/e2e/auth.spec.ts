@@ -142,7 +142,11 @@ test('error toast has WCAG AA text contrast in light and dark themes', async ({ 
     const a = luminance(fg), b = luminance(bg);
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   };
-  const rgb = (value: string) => [...value.matchAll(/[\\d.]+/g)].slice(0, 3).map(m => Number(m[0]));
+  const rgb = (value: string) => {
+    const channels = value.match(/\\d+(?:\\.\\d+)?/g)?.map(Number).slice(0, 3) ?? [];
+    expect(channels, `Unexpected CSS color: ${value}`).toHaveLength(3);
+    return channels;
+  };
   for (const theme of ['light', 'dark']) {
     await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
     await page.getByLabel('Password', { exact: true }).fill('Secret123!');
