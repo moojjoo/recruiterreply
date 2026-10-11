@@ -108,6 +108,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "ecr:PutImage",
           "ecr:BatchGetImage",
           "ecr:DescribeRepositories",
+          "ecr:DescribeImages",
           "ecr:CreateRepository",
         ]
         Resource = "*"

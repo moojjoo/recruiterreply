@@ -117,10 +117,23 @@ jobs:
           SHA: ${{ inputs.sha }}
         run: |
           set -euo pipefail
-          if ! aws ecr describe-images --repository-name "$BACKEND_IMAGE_NAME" --image-ids imageTag="$SHA" >/dev/null 2>&1; then
-            echo "::error::No backend image found in ECR for SHA $SHA. Run the Build (Dev) workflow on that commit first."
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ECR lookup: account=$ACCOUNT_ID region=$AWS_REGION repository=$BACKEND_IMAGE_NAME sha=$SHA"
+          set +e
+          ECR_RESULT=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$BACKEND_IMAGE_NAME" --image-ids "imageTag=$SHA" --query 'imageDetails[0].imageDigest' --output text 2>&1)
+          ECR_STATUS=$?
+          set -e
+          if [[ $ECR_STATUS -ne 0 ]]; then
+            echo "::error::ECR describe-images failed (exit $ECR_STATUS): $ECR_RESULT"
+            if [[ "$ECR_RESULT" == *AccessDenied* || "$ECR_RESULT" == *not authorized* ]]; then
+              echo "::error::GitHub Actions role needs ecr:DescribeImages on repository $BACKEND_IMAGE_NAME. Review and apply the Terraform IAM policy."
+            elif [[ "$ECR_RESULT" == *ImageNotFoundException* ]]; then
+              echo "::error::Image tag $SHA is absent in ECR account $ACCOUNT_ID, region $AWS_REGION."
+            fi
             exit 1
           fi
+          [[ "$ECR_RESULT" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::ECR returned invalid digest: $ECR_RESULT"; exit 1; }
+          echo "Verified backend image digest: $ECR_RESULT"
 
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
