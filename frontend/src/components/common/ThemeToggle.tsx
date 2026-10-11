@@ -18,6 +18,7 @@ export const ThemeToggle: React.FC = () => {
           ? stored
           : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
         document.documentElement.dataset.theme = next;
+        document.documentElement.style.colorScheme = next;
         setTheme(next);
       }
     };
