@@ -6,13 +6,13 @@ export function getRegistrationErrorMessage(error: unknown): string {
   }
 
   if (!error.response) {
-    return "Cannot connect to RecruiterReply. Check your connection and try again.";
+    return "Unable to connect to the registration service. Check your connection and try again.";
   }
 
   const status = error.response.status;
   const data: unknown = error.response.data;
   if (status === 409) {
-    return "An account with this email already exists. Please sign in or reset your password.";
+    return "A user with this email already exists. Please sign in or reset your password.";
   }
   if (status === 400) {
     if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
@@ -22,11 +22,13 @@ export function getRegistrationErrorMessage(error: unknown): string {
         "Name is required",
         "Email is required",
         "Password is required",
+        "Email and password are required.",
       ];
       if (allowed.includes(data.error)) return data.error;
     }
     return "Please check your registration details and try again.";
   }
+  if (status === 429) return "Too many attempts. Please wait and try again.";
   if (status >= 500) {
     return "Registration is temporarily unavailable. Please try again later.";
   }
