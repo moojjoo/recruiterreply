@@ -143,7 +143,7 @@ test('error toast has WCAG AA text contrast in light and dark themes', async ({ 
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   };
   const rgb = (value: string) => {
-    const channels = value.match(/\\d+(?:\\.\\d+)?/g)?.map(Number).slice(0, 3) ?? [];
+    const channels = value.match(/[0-9]+(?:[.][0-9]+)?/g)?.map(Number).slice(0, 3) ?? [];
     expect(channels, `Unexpected CSS color: ${value}`).toHaveLength(3);
     return channels;
   };
