@@ -58,8 +58,10 @@ jobs:
                 const {data: dep} = await github.rest.pulls.get({owner, repo, pull_number:number});
                 if (!dep.merged) dependenciesMerged = false;
               }
+              const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
               const result = validateReadiness({
                 pr:full, checks:checkResponse.check_runs, reviews,
+                changedFiles: changedFiles.map(f => f.filename),
                 threads:item.reviewThreads.nodes, dependenciesMerged
               });
               if (!result.eligible) {

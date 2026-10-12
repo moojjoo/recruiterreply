@@ -1,9 +1,16 @@
 'use strict';
 
 // Pure policy. PR metadata is untrusted; no code from a PR is executed here.
-function validateReadiness({pr, checks = [], reviews = [], threads = [], dependenciesMerged = true}) {
+function classifyRisk(files) {
+  if (!Array.isArray(files) || !files.length) return 'high';
+  const sensitive = /(^|\/)(\.github|terraform|infra|infrastructure|migrations|secrets|iam)(\/|$)|(^|\/)(Dockerfile|docker-compose[^/]*|package-lock\.json|.*\.tf(?:vars)?|.*\.ya?ml)$/i;
+  const low = /^(docs\/[^/]+(?:\/[^/]+)*|README\.md|frontend\/src\/[^/]+(?:\/[^/]+)*\.(?:css|scss))$/i;
+  return files.every(f => typeof f === 'string' && !f.includes('..') && !sensitive.test(f) && low.test(f)) ? 'low' : 'high';
+}
+function validateReadiness({pr, checks = [], reviews = [], threads = [], dependenciesMerged = true, changedFiles = []}) {
   const reasons = [];
   if (pr.draft) reasons.push('PR is draft');
+  if (classifyRisk(changedFiles) !== 'low') reasons.push('High/unknown risk change requires manual merge review');
   if (!(pr.labels || []).some(x => (typeof x === 'string' ? x : x.name) === 'automation-ready')) reasons.push('Missing automation-ready label');
   const body = pr.body || '';
   const evidence = body.match(/^## Implementation evidence\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/mi);
@@ -24,4 +31,4 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   if (threads.some(t => !t.isResolved && !t.isOutdated)) reasons.push('Unresolved review thread');
   return {eligible: reasons.length === 0, reasons};
 }
-module.exports = {validateReadiness};
+module.exports = {validateReadiness,classifyRisk};
