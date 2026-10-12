@@ -15,3 +15,12 @@ assert.ok(jsonLd.some(obj => obj['@graph']?.some(node => node['@type'] === 'Orga
 assert.ok(jsonLd.some(obj => obj['@graph']?.some(node => node['@type'] === 'WebSite')), 'WebSite schema');
 assert.ok(!/https:\/\/recruiterreply\.com\/(login|register|dashboard|profile)</.test(sitemap), 'no auth pages in sitemap');
 console.log('SEO metadata and sitemap checks passed');
+
+for (const slug of ['seo-recruiter-replies', 'seo-job-offer-comparison']) {
+  const page = readFileSync(new URL(`../dist/${slug}.html`, import.meta.url), 'utf8');
+  assert.match(page, /<h1>[^<]+<\/h1>/i, `${slug} has a readable H1`);
+  assert.match(page, /<meta name="description" content="[^"]+"/i, `${slug} has description`);
+  assert.match(page, new RegExp(`<link rel="canonical" href="https://recruiterreply.com/${slug}\\.html"`));
+  assert.match(sitemap, new RegExp(`https://recruiterreply.com/${slug}\\.html`));
+}
+console.log('Static landing page SEO checks passed');
