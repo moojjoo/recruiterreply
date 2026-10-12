@@ -10,7 +10,7 @@ import {
 
 // API configuration - runtime config.js (deploy-time) takes priority, then
 // build-time Vite env vars for local dev, then a relative-path default.
-const runtimeApiBaseUrl = window.__APP_CONFIG__?.API_BASE_URL;
+const runtimeApiBaseUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.API_BASE_URL : undefined;
 const API_BASE_URL =
   runtimeApiBaseUrl && !runtimeApiBaseUrl.startsWith('__RUNTIME_')
     ? runtimeApiBaseUrl
@@ -27,7 +27,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('authToken') : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
