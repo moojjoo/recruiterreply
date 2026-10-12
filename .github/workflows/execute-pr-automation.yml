@@ -19,6 +19,11 @@ jobs:
   execute:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout trusted default-branch automation
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
       - name: Prepare execute-dev PRs and enable protected auto-merge
         uses: actions/github-script@v7
         with:
@@ -39,33 +44,26 @@ jobs:
                 await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['execute-dev']});
                 core.notice('PR #' + full.number + ': applied execute-dev label');
               }
-              // Draft PRs may contain incomplete work. Never promote them automatically.
-              if (full.draft) {
-                core.notice('PR #' + full.number + ': draft retained; implementation must be completed and explicitly marked ready');
-                continue;
-              }
-              // Explicit readiness prevents partial /execute checkpoints from auto-merging.
-              if (!full.labels.some(l => l.name === 'automation-ready')) {
-                core.notice('PR #' + full.number + ': waiting for automation-ready label after implementation review');
-                continue;
-              }
-              const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
-              const names = ['verify','test','analyze (javascript-typescript)','analyze (csharp)'];
-              const required = checks.check_runs.filter(c => names.includes(c.name));
-              const blocked = names.filter(name => !required.some(c => c.name === name && c.status === 'completed' && c.conclusion === 'success'));
-              if (blocked.length) {
-                core.notice('PR #' + full.number + ': waiting for successful current-SHA checks: ' + blocked.join(', '));
-                continue;
-              }
+              const {validateReadiness} = require('./.github/scripts/pr-readiness.cjs');
+              const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
               const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
-              if (reviews.some(r => r.state === 'CHANGES_REQUESTED')) { core.notice('PR #' + full.number + ': changes requested'); continue; }
               const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
                 repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
                   id reviewThreads(first:100) { nodes { isResolved isOutdated } }
                 } } }`, {owner, repo, number:pr.number});
               const item = q.repository.pullRequest;
-              if (item.reviewThreads.nodes.some(t => !t.isResolved && !t.isOutdated)) {
-                core.notice('Unresolved review findings on PR #' + pr.number);
+              const dependencyRefs = [...(full.body || '').matchAll(/(?:depends on|blocked by)\\s+#(\\d+)/gi)].map(m => Number(m[1]));
+              let dependenciesMerged = true;
+              for (const number of dependencyRefs) {
+                const {data: dep} = await github.rest.pulls.get({owner, repo, pull_number:number});
+                if (!dep.merged) dependenciesMerged = false;
+              }
+              const result = validateReadiness({
+                pr:full, checks:checkResponse.check_runs, reviews,
+                threads:item.reviewThreads.nodes, dependenciesMerged
+              });
+              if (!result.eligible) {
+                core.notice('PR #' + full.number + ': blocked: ' + result.reasons.join('; '));
                 continue;
               }
               // GitHub branch protection and required checks still govern the merge.
