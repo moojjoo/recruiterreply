@@ -4,6 +4,28 @@ This Terraform stack provisions AWS infrastructure for RecruiterReply, split int
 one **global** root and one root per **environment** (`dev`, `test`, `prod`),
 each with its own S3 remote state.
 
+## Current deployed topology (Issue #342)
+
+**The shared EC2 API host is managed only by `envs/dev`.** Dev, Test,
+and Production use separate backend containers and PostgreSQL databases on
+that host; their actual database isolation and Docker configuration must be
+verified operationally, not inferred from Terraform. The global root owns the
+three frontend CloudFront/S3 stacks. Existing backend secrets are named
+`recruiterreply/{dev,test,prod}/backend-app-secrets` and are referenced by
+metadata lookups, not created or populated by Terraform.
+
+The `envs/test` and `envs/prod` roots deliberately contain **no managed
+infrastructure resources**. They only resolve existing secret metadata. Their
+former prospective standalone VPC/EC2/RDS configurations are archived as
+`main.tf.dedicated-stack.example` and `outputs.tf.dedicated-stack.example`.
+Do not rename those examples to `.tf` or apply them without a separately
+reviewed architecture/cost/migration approval.
+
+**Important:** Terraform plans can still show output-only state changes.
+Review all plans, especially the Dev EC2 security-group ingress change and
+`frontend_buckets` output removal, before any apply. No Test/Production
+infrastructure deployment or state mutation is authorized by this change.
+
 ## Structure
 
 - `global/`: account-wide resources, applied once
@@ -12,18 +34,11 @@ each with its own S3 remote state.
   - Frontend S3 buckets + CloudFront distributions for all three environments
     (`modules/frontend`, which fans out per environment internally via `for_each`)
   - State key: `recruiterreply/global/terraform.tfstate`
-- `envs/dev/`, `envs/test/`, `envs/prod/`: one root per environment, each wiring:
-  - `modules/network`: VPC, subnets, routing
-  - `modules/security`: security groups
-  - `modules/compute`: one EC2 instance and IAM instance profile
-  - `modules/secrets`: Secrets Manager secret for backend runtime config
-  - `modules/database`: optional RDS PostgreSQL (`enable_rds` in that env's tfvars)
-  - State key: `recruiterreply/<env>/terraform.tfstate`
-- `modules/`: shared, reusable modules referenced by the roots above
+- `envs/dev/`: owns the existing shared EC2 API host, network, IAM, and optional RDS configuration.
+- `envs/test/`, `envs/prod/`: metadata-only roots for existing per-environment secrets; no dedicated EC2, VPC, or RDS.
+- `modules/`: shared reusable modules.
 
-Each environment root gets its own VPC and its own EC2 instance, isolated in
-its own state file — a `terraform apply` in `envs/prod` can't touch `envs/dev`'s
-resources or vice versa.
+All four roots have separate Terraform state. Only `envs/dev` manages the shared API host.
 
 ## Usage
 
@@ -45,32 +60,25 @@ Each `envs/<name>/terraform.tfvars` is loaded automatically by Terraform
 (the file is literally named `terraform.tfvars`), so no `-var-file` flag is
 needed.
 
-## After applying an environment
+## Deployments
 
-`envs/<name>` outputs `ec2_instance_id`. Set that as the `EC2_INSTANCE_ID`
-GitHub Actions variable on the corresponding GitHub Environment (`dev`, `test`,
-`prod`) so `deploy-<env>.yml` targets the right instance — see
-[`MIGRATION.md`](./MIGRATION.md) for why this matters today.
-
-The currently deployed shared API host is managed by `envs/dev`. Its stable
-public address is available with `terraform output -raw ec2_elastic_ip`. The
-separate `infra/aws/rout53` configuration uses this value for
-`api_target_ipv4`; all three API records point to this shared host. Review and
-approve the Terraform and Route 53 plans separately before applying either.
-AWS charges for public IPv4 addresses; check current EC2 pricing for applicable
-rates.
+The shared API host is managed by `envs/dev`; Test/Production deployment
+workflows must continue targeting that existing host, with environment-specific
+containers, secret names, and database names. Do not set a Test/Production
+`EC2_INSTANCE_ID` from these metadata-only roots. Review deployment workflow
+variables before changing any target.
 
 ## PostgreSQL backups
 
 The `global` root creates a dedicated private S3 bucket named
 `<app_name>-postgres-backups-<account_id>`. It blocks public access, requires
 TLS and AES-256 server-side encryption, and expires objects after 30 days.
-Each environment EC2 role can list, read, and upload objects only under its own
-`dev/`, `test/`, or `prod/` prefix. The bucket is protected from accidental
+The existing shared-host IAM role must be reviewed for least-privilege access
+to each required environment backup prefix. The prospective per-environment
+EC2-role policies in the compute module are not deployed for Test/Production. The bucket is protected from accidental
 Terraform destruction.
 
-Apply the `global` root first, followed by each environment root, so the bucket
-and scoped EC2 permissions exist before a deployment enables the schedule. The
+Do not apply any root until its plan is reviewed and explicitly approved. The
 promotion workflow installs a daily 02:00 UTC backup timer and a monthly 03:00
 UTC restore-test timer on the target host. The backup job reads the deployed
 backend's connection string from Secrets Manager, verifies it identifies that
