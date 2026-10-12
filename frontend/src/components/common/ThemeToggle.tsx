@@ -10,6 +10,11 @@ function currentTheme(): Theme {
 export const ThemeToggle: React.FC = () => {
   const [theme, setTheme] = useState<Theme>(() => currentTheme());
 
+  useEffect(() => {
+    // Read the theme after hydration to avoid SSR mismatches.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTheme(currentTheme());
+  }, []);
 
   useEffect(() => {
     const listener = (event: StorageEvent) => {
