@@ -1,0 +1,11 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const {blockers} = require('../issue-reconciliation-report.cjs');
+const pr = {body:'Dev-Completes: #320'};
+const issue = {number:320,labels:[{name:'dev-acceptance-verified'}]};
+test('verified candidate has no report blockers',()=>assert.deepEqual(blockers({pr,issue,deployed:true}),[]));
+test('missing owner approval blocks',()=>assert.match(blockers({pr,issue:{number:320,labels:[]},deployed:true}).join(' '),/approval/));
+test('missing deployment blocks',()=>assert.match(blockers({pr,issue,deployed:false}).join(' '),/deployment/));
+test('partial PR cannot be treated as final',()=>assert.match(blockers({pr:{body:'Refs #320'},issue,deployed:true}).join(' '),/Dev-Completes/));
+test('failing checks reported',()=>assert.match(blockers({pr,issue,deployed:true,checks:[{name:'CodeQL',conclusion:'failure'}]}).join(' '),/CodeQL/));
