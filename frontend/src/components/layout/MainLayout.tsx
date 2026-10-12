@@ -26,15 +26,15 @@ const Footer: React.FC = () => {
     <footer className="bg-gray-50 border-t border-gray-200 py-8 mt-12">
       <div className="container text-center text-sm text-gray-600">
         <p>&copy; 2026 RecruiterReply. All rights reserved.</p>
-        <a href="/policy" className="inline-block mt-2 text-primary-600 hover:underline">
+        <a href="/policy" className="inline-block mt-2 text-primary-800 hover:underline">
           Privacy Policy
         </a>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/cookies" className="text-primary-600 hover:underline">Cookie Policy</a>
+        <a href="/cookies" className="text-primary-800 hover:underline">Cookie Policy</a>
         <span className="mx-2 text-gray-400">|</span>
-        <button type="button" className="text-primary-600 hover:underline" onClick={() => window.dispatchEvent(new Event("rr-open-cookie-settings"))}>Cookie Settings</button>
+        <button type="button" className="text-primary-800 hover:underline" onClick={() => window.dispatchEvent(new Event("rr-open-cookie-settings"))}>Cookie Settings</button>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/terms" className="text-primary-600 hover:underline">
+        <a href="/terms" className="text-primary-800 hover:underline">
           Terms and Conditions
         </a>
       </div>
