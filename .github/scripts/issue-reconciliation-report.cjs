@@ -24,11 +24,25 @@ async function report({github,context,core}) {
    const {data:issue}=await github.rest.issues.get({owner,repo,issue_number:number});
    if(issue.state!=='open'||issue.pull_request) continue;
    const {data:checkResponse}=await github.rest.checks.listForRef({owner,repo,ref:pr.head.sha,per_page:100});
-   const runs=await github.paginate(github.rest.actions.listWorkflowRunsForRepo,{owner,repo,head_sha:pr.merge_commit_sha,per_page:100});
+   const runsResponse=await github.rest.actions.listWorkflowRunsForRepo({owner,repo,head_sha:pr.merge_commit_sha,per_page:100});
+   const runs=runsResponse.data.workflow_runs||[];
    const run=runs.find(r=>r.name==='Build and Deploy to Dev'&&r.head_sha===pr.merge_commit_sha&&r.conclusion==='success');
    // A successful workflow alone does not prove the smoke test. Require explicit trusted evidence.
-   const deployment=run?{sha:run.head_sha,conclusion:run.conclusion,smokePassed:false,runUrl:run.html_url}:null;
-   const reasons=blockers({pr,issue:{...issue,number},checks:checkResponse.check_runs,deployment,projectMember:false,tokenConfigured:!!process.env.PROJECTS_WRITE_TOKEN});
+   let smokePassed=false;
+   if(run) {
+    const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRun,{owner,repo,run_id:run.id,per_page:100});
+    const deploy=jobs.find(j=>j.name==='deploy-dev / promote' && j.conclusion==='success');
+    smokePassed=!!deploy && (deploy.steps||[]).some(s=>/smoke|health/i.test(s.name)&&s.conclusion==='success');
+   }
+   const deployment=run?{sha:run.head_sha,conclusion:run.conclusion,smokePassed,runUrl:run.html_url}:null;
+   let projectMember=false;
+   if(issue.node_id) {
+    try {
+     const data=await github.graphql('query($id:ID!){node(id:$id){... on Issue{projectItems(first:100){nodes{project{title}}}}}}',{id:issue.node_id});
+     projectMember=!!data.node?.projectItems?.nodes?.some(i=>['recruiterreply project',"@moojjoo\'s recruiterreply project"].includes((i.project?.title||'').toLowerCase()));
+    } catch(e) { core.warning('Project membership unavailable for #'+number+': '+e.message); }
+   }
+   const reasons=blockers({pr,issue:{...issue,number},checks:checkResponse.check_runs,deployment,projectMember,tokenConfigured:!!process.env.PROJECTS_WRITE_TOKEN});
    rows.push({issue:number,pr:pr.number,sha:pr.merge_commit_sha,reasons});
   }
  }
