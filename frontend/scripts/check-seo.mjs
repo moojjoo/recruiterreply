@@ -22,7 +22,7 @@ assert.ok(jsonLd.some(obj => obj['@graph']?.some(node => node['@type'] === 'WebS
 assert.ok(!/https:\/\/recruiterreply\.com\/(login|register|dashboard|profile)</.test(sitemap), 'no auth pages in sitemap');
 console.log('SEO metadata and sitemap checks passed');
 
-for (const slug of ['seo-recruiter-replies', 'seo-job-offer-comparison']) {
+for (const slug of ['seo-recruiter-replies', 'seo-job-offer-comparison', 'seo-salary-negotiation']) {
   const page = readFileSync(new URL(`../dist/${slug}.html`, import.meta.url), 'utf8');
   assert.match(page, /<h1>[^<]+<\/h1>/i, `${slug} has a readable H1`);
   assert.match(page, /<meta name="description" content="[^"]+"/i, `${slug} has description`);
