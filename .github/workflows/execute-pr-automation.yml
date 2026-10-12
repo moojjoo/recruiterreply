@@ -39,12 +39,15 @@ jobs:
                 await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['execute-dev']});
                 core.notice('PR #' + full.number + ': applied execute-dev label');
               }
+              // Draft PRs may contain incomplete work. Never promote them automatically.
               if (full.draft) {
-                if (!managed) { core.notice('PR #' + full.number + ': draft retained; not an /execute-managed PR'); continue; }
-                try {
-                  await github.graphql(`mutation($id:ID!) { markPullRequestReadyForReview(input:{pullRequestId:$id}) { clientMutationId } }`, {id:full.node_id});
-                  core.notice('PR #' + full.number + ': marked ready for review');
-                } catch (e) { core.warning('PR #' + full.number + ': cannot mark ready: ' + e.message); continue; }
+                core.notice('PR #' + full.number + ': draft retained; implementation must be completed and explicitly marked ready');
+                continue;
+              }
+              // Explicit readiness prevents partial /execute checkpoints from auto-merging.
+              if (!full.labels.some(l => l.name === 'automation-ready')) {
+                core.notice('PR #' + full.number + ': waiting for automation-ready label after implementation review');
+                continue;
               }
               const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
               const names = ['verify','test','analyze (javascript-typescript)','analyze (csharp)'];
