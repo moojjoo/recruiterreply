@@ -31,9 +31,14 @@ resource "aws_iam_role_policy" "postgres_backup" {
         Effect   = "Allow"
         Action   = ["s3:ListBucket"]
         Resource = var.backup_bucket_arn
+
         Condition = {
           StringLike = {
-            "s3:prefix" = ["${var.backup_environment}/*"]
+            "s3:prefix" = [
+              "dev/*",
+              "test/*",
+              "prod/*"
+            ]
           }
         }
       },
@@ -43,10 +48,14 @@ resource "aws_iam_role_policy" "postgres_backup" {
         Action = [
           "s3:AbortMultipartUpload",
           "s3:GetObject",
-          "s3:PutObject",
+          "s3:PutObject"
         ]
-        Resource = "${var.backup_bucket_arn}/${var.backup_environment}/*"
-      },
+        Resource = [
+          "${var.backup_bucket_arn}/dev/*",
+          "${var.backup_bucket_arn}/test/*",
+          "${var.backup_bucket_arn}/prod/*"
+        ]
+      }
     ]
   })
 }

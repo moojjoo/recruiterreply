@@ -1,3 +1,4 @@
+
 resource "aws_security_group" "ec2" {
   name        = "${var.name_prefix}-ec2-sg"
   description = "Security group for app EC2 host"
@@ -12,6 +13,16 @@ resource "aws_security_group" "ec2" {
       protocol    = "tcp"
       cidr_blocks = [ingress.value]
     }
+  }
+
+  # Preserve existing AWS EC2 Instance Connect SSH access.
+  # AWS-managed prefix list verified for us-east-1.
+  ingress {
+    description     = "EC2 Instance Connect"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    prefix_list_ids = ["pl-0e4bcff02b13bef1e"]
   }
 
   dynamic "ingress" {
