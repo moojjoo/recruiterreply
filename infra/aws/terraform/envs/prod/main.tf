@@ -40,6 +40,7 @@ module "secrets" {
 
   name_prefix   = local.name_prefix
   ec2_role_name = module.compute.role_name
+  backend_secret_name = "recruiterreply/prod/backend-app-secrets"
 }
 
 module "database" {
