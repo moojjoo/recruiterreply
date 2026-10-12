@@ -2,6 +2,15 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+assert.match(html.slice(0, 300), /<meta\\s+charset=["']?utf-8["']?\\s*\\/?\\s*>/i, 'UTF-8 declaration must appear early in raw HTML');
+const llms = readFileSync(new URL('../dist/llms.txt', import.meta.url), 'utf8');
+assert.match(llms, /^# RecruiterReply\\s*$/m, 'llms.txt must have a heading');
+assert.match(llms, /https:\\/\\/recruiterreply\\.com\\/seo-recruiter-replies\\.html/, 'llms.txt links public canonical page');
+const catalog = JSON.parse(readFileSync(new URL('../dist/ai-catalog.json', import.meta.url), 'utf8'));
+assert.equal(catalog.name, 'RecruiterReply', 'AI catalog must be valid JSON');
+assert.match(JSON.stringify(catalog), /https:\\/\\/recruiterreply\\.com\\//, 'AI catalog uses canonical host');
+const layoutSource = readFileSync(new URL('../src/components/layout/MainLayout.tsx', import.meta.url), 'utf8');
+assert.ok(!layoutSource.includes('text-primary-600 hover:underline'), 'footer links must use high-contrast class');
 const sitemap = readFileSync(new URL('../dist/sitemap.xml', import.meta.url), 'utf8');
 
 const robots = readFileSync(new URL('../dist/robots.txt', import.meta.url), 'utf8');
