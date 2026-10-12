@@ -9,6 +9,12 @@ assert.match(title, /AI Recruiter Reply/);
 assert.equal((html.match(/<link rel="canonical"/g) ?? []).length, 1, 'one canonical URL');
 assert.match(html, /<meta\s+name="description"/i);
 assert.match(html, /<meta property="og:title"/);
+const root = html.match(/<div id="root"[^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? '';
+assert.match(root, /<h1\b[^>]*>[\s\S]*?<\/h1>/i, 'homepage must render H1 in raw HTML');
+assert.match(root, /recruiter|job search/i, 'homepage must render meaningful copy in raw HTML');
+assert.match(root, /<a\s+[^>]*href=/i, 'homepage must render navigable links in raw HTML');
+assert.equal((root.match(/<h1\b/gi) ?? []).length, 1, 'one homepage H1');
+
 const jsonLd = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => JSON.parse(m[1]));
 assert.ok(jsonLd.some(obj => obj['@type'] === 'SoftwareApplication'), 'SoftwareApplication schema');
 assert.ok(jsonLd.some(obj => obj['@graph']?.some(node => node['@type'] === 'Organization')), 'Organization schema');
