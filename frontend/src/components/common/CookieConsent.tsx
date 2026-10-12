@@ -9,6 +9,7 @@ declare global {
   }
 }
 function readChoice(): Choice | null {
+  if (typeof localStorage === "undefined") return null;
   try {
     const value = JSON.parse(localStorage.getItem(KEY) || "null");
     return value?.version === 1 && typeof value.analytics === "boolean" ? value : null;
