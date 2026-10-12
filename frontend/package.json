@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "test:seo": "node scripts/check-seo.mjs"
   },
   "dependencies": {
     "axios": "^1.20.0",
