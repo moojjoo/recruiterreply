@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 
-const runtimeApiBaseUrl = window.__APP_CONFIG__?.API_BASE_URL;
+const runtimeApiBaseUrl = (typeof window !== "undefined" ? window.__APP_CONFIG__ : undefined)?.API_BASE_URL;
 const API_BASE_URL =
   runtimeApiBaseUrl && !runtimeApiBaseUrl.startsWith("__RUNTIME_")
     ? runtimeApiBaseUrl

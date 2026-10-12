@@ -10,7 +10,7 @@ import {
 
 // API configuration - runtime config.js (deploy-time) takes priority, then
 // build-time Vite env vars for local dev, then a relative-path default.
-const runtimeApiBaseUrl = window.__APP_CONFIG__?.API_BASE_URL;
+const runtimeApiBaseUrl = (typeof window !== "undefined" ? window.__APP_CONFIG__ : undefined)?.API_BASE_URL;
 const API_BASE_URL =
   runtimeApiBaseUrl && !runtimeApiBaseUrl.startsWith('__RUNTIME_')
     ? runtimeApiBaseUrl
