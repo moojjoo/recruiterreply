@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Test PR readiness policy
+        run: node --test .github/scripts/tests/pr-readiness.test.cjs
+
       - name: Test issue reconciliation logic
         run: node --test .github/scripts/tests/reconcile-dev-issues.test.cjs
 
