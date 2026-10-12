@@ -8,7 +8,9 @@ function currentTheme(): Theme {
 }
 
 export const ThemeToggle: React.FC = () => {
-  const [theme, setTheme] = useState<Theme>(currentTheme);
+  const [theme, setTheme] = useState<Theme>('light');
+
+  useEffect(() => { setTheme(currentTheme()); }, []);
 
   useEffect(() => {
     const listener = (event: StorageEvent) => {
