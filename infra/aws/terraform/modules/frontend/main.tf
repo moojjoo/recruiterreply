@@ -99,6 +99,24 @@ resource "aws_cloudfront_origin_access_control" "this" {
   origin_access_control_origin_type = "s3"
 }
 
+# Viewer-response function adds noindex to all Dev/Test responses, including SPA fallbacks.
+# CloudFront Functions cannot run on viewer-response for origin 4xx/5xx; error
+# responses require separate validation and potentially response-headers policy.
+resource "aws_cloudfront_function" "noindex" {
+  for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if contains(["dev", "test"], key) }
+  name    = "recruiterreply-${each.key}-noindex"
+  runtime = "cloudfront-js-2.0"
+  comment = "Prevent indexing of ${each.key} environment"
+  publish = true
+  code    = <<-JS
+    function handler(event) {
+      var response = event.response;
+      response.headers['x-robots-tag'] = {value: 'noindex, nofollow'};
+      return response;
+    }
+  JS
+}
+
 resource "aws_cloudfront_distribution" "this" {
   for_each = aws_s3_bucket.this
 
@@ -123,6 +141,13 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods        = local.cloudfront_config[each.key].allowed_methods
     cached_methods         = ["HEAD", "GET"]
     compress               = true
+    dynamic "function_association" {
+      for_each = contains(["dev", "test"], each.key) ? [1] : []
+      content {
+        event_type   = "viewer-response"
+        function_arn = aws_cloudfront_function.noindex[each.key].arn
+      }
+    }
     cache_policy_id        = local.cloudfront_config[each.key].use_forwarded_values ? null : "658327ea-f89d-4fab-a63d-7e88639e58f6"
 
     dynamic "forwarded_values" {
