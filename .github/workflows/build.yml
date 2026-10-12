@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Test CI remediation comments
+        run: node --test .github/scripts/tests/ci-remediation-comment.test.cjs
+
       - name: Test CI remediation reporting
         run: node --test .github/scripts/tests/ci-remediation-report.test.cjs
 
