@@ -501,7 +501,15 @@ jobs:
           set -euo pipefail
 
           curl -fsSL "$FRONTEND_URL/" -o /tmp/index.html
-          grep -Eq '<div id="root">' /tmp/index.html
+          # Validate the actual prerendered React homepage, not an empty SPA shell.
+          if ! grep -Eq '<div id="root"[^>]*data-prerendered="react"[^>]*>' /tmp/index.html; then
+            echo "::error::Deployed homepage is missing the prerendered React root"
+            exit 1
+          fi
+          if ! grep -Eqi '<h1([[:space:]>])' /tmp/index.html; then
+            echo "::error::Deployed homepage is missing a server-rendered H1"
+            exit 1
+          fi
 
           curl -fsSL "$FRONTEND_URL/config.js" -o /tmp/config.js
           grep -Eq 'API_BASE_URL|https://api|http://.*api' /tmp/config.js
