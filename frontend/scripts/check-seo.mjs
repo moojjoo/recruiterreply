@@ -8,12 +8,12 @@ const robots = readFileSync(new URL('../dist/robots.txt', import.meta.url), 'utf
 assert.match(robots, /^User-agent:\\s*\\*/mi, 'robots has crawler policy');
 assert.match(robots, /^Sitemap:\\s*https:\/\/recruiterreply\\.com\/sitemap\\.xml\\s*$/mi, 'robots links canonical sitemap');
 assert.ok(!/<html\\b/i.test(sitemap), 'sitemap must be XML, not SPA fallback');
-const urls = [...sitemap.matchAll(/<loc>([^<]+)<\\/loc>/g)].map(m => m[1]);
+const urls = [...sitemap.matchAll(new RegExp('<loc>([^<]+)</loc>', 'g'))].map(m => m[1]);
 assert.ok(urls.length > 0, 'sitemap must contain canonical public pages');
 assert.equal(new Set(urls).size, urls.length, 'sitemap URLs must be unique');
 for (const url of urls) {
   assert.ok(url.startsWith('https://recruiterreply.com/'), 'sitemap contains only canonical host: ' + url);
-  assert.ok(!/\\/(?:login|register|forgot-password|reset-password|dashboard|analyze|reply|compare|profile|opportunities|career-profile|recruiter-inbox)(?:[/?#]|$)/i.test(url), 'sitemap excludes private/auth routes: ' + url);
+  assert.ok(!new RegExp('/(?:login|register|forgot-password|reset-password|dashboard|analyze|reply|compare|profile|opportunities|career-profile|recruiter-inbox)(?:[/?#]|$)', 'i').test(url), 'sitemap excludes private/auth routes: ' + url);
 }
 
 const title = html.match(/<title>([^<]+)<\/title>/i)?.[1] ?? '';
