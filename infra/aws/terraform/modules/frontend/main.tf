@@ -99,7 +99,29 @@ resource "aws_cloudfront_origin_access_control" "this" {
   origin_access_control_origin_type = "s3"
 }
 
-# Viewer-response function adds noindex to all Dev/Test responses, including SPA fallbacks.
+# Dev-only SPA rewrite: resolve client-side routes to index.html before S3 is queried.
+# Preserve real files, SEO prerendered pages, robots.txt, and sitemap.xml.
+resource "aws_cloudfront_function" "dev_spa_rewrite" {
+  for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if key == "dev" }
+  name    = "recruiterreply-dev-spa-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite Dev SPA routes to index.html before S3 lookup"
+  publish = true
+  code    = <<-JS
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+      // Leave the homepage and file-like paths (including SEO pages) untouched.
+      if (uri === '/' || uri.substring(uri.lastIndexOf('/') + 1).includes('.')) return request;
+      // Rewrite client-side paths and unknown extensionless paths to the SPA shell.
+      request.uri = '/index.html';
+      return request;
+    }
+  JS
+}
+
+# Viewer-response function adds noindex to normal Dev/Test responses.
+# CloudFront viewer-response functions do not run for origin error responses.
 # CloudFront Functions cannot run on viewer-response for origin 4xx/5xx; error
 # responses require separate validation and potentially response-headers policy.
 resource "aws_cloudfront_function" "noindex" {
@@ -141,6 +163,13 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods        = local.cloudfront_config[each.key].allowed_methods
     cached_methods         = ["HEAD", "GET"]
     compress               = true
+    dynamic "function_association" {
+      for_each = each.key == "dev" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.dev_spa_rewrite[each.key].arn
+      }
+    }
     dynamic "function_association" {
       for_each = contains(["dev", "test"], each.key) ? [1] : []
       content {
