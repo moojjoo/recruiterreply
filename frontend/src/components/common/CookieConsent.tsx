@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 const KEY = "rr-cookie-consent-v1";
 type Choice = { version: 1; analytics: boolean; timestamp: string };
@@ -14,6 +14,17 @@ function readChoice(): Choice | null {
     const value = JSON.parse(localStorage.getItem(KEY) || "null");
     return value?.version === 1 && typeof value.analytics === "boolean" ? value : null;
   } catch { return null; }
+}
+function subscribeConsent(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener("rr-consent-changed", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener("rr-consent-changed", callback);
+  };
+}
+function consentSnapshot() {
+  try { return localStorage.getItem(KEY); } catch { return null; }
 }
 const CONSENT_ID_KEY = "rr-consent-audit-id-v1";
 function recordConsent(action: "accept" | "reject" | "customize" | "withdraw", analyticsEnabled: boolean) {
@@ -46,37 +57,32 @@ function removeAnalyticsCookies() {
   }
 }
 export function CookieConsent() {
-  const [choice, setChoice] = useState<Choice | null>(null);
+  const storedChoice = useSyncExternalStore(subscribeConsent, consentSnapshot, () => null);
+  const [choice, setChoice] = useState<Choice | null>(() => null);
   const [open, setOpen] = useState(false);
   const [customize, setCustomize] = useState(false);
   const [analytics, setAnalytics] = useState(false);
-  const [gpc, setGpc] = useState(false);
+  const effectiveChoice = choice ?? (storedChoice ? readChoice() : null);
+  const gpc = useSyncExternalStore(() => () => {}, () => (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true, () => false);
   useEffect(() => {
-    // Browser-only state is read after hydration to avoid SSR mismatches.
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setChoice(readChoice());
-    setGpc((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
-  useEffect(() => {
-    const listener = () => { setOpen(true); setCustomize(true); setAnalytics(choice?.analytics ?? false); };
+    const listener = () => { setOpen(true); setCustomize(true); setAnalytics(effectiveChoice?.analytics ?? false); };
     window.addEventListener("rr-open-cookie-settings", listener);
     return () => window.removeEventListener("rr-open-cookie-settings", listener);
-  }, [choice]);
+  }, [effectiveChoice?.analytics]);
   function save(value: boolean) {
     const next: Choice = { version: 1, analytics: value, timestamp: new Date().toISOString() };
-    recordConsent(!value && choice?.analytics ? "withdraw" : customize ? "customize" : value ? "accept" : "reject", value);
-    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+    recordConsent(!value && effectiveChoice?.analytics ? "withdraw" : customize ? "customize" : value ? "accept" : "reject", value);
+    try { localStorage.setItem(KEY, JSON.stringify(next)); window.dispatchEvent(new Event("rr-consent-changed")); } catch { /* storage unavailable */ }
     const production = location.protocol === "https:" && location.hostname === "recruiterreply.com";
     window.gtag?.("consent", "update", { analytics_storage: production && value ? "granted" : "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
     if (value) window.rrLoadAnalytics?.();
     else {
       removeAnalyticsCookies();
-      if (choice?.analytics) { location.reload(); return; }
+      if (effectiveChoice?.analytics) { location.reload(); return; }
     }
     setChoice(next); setOpen(false); setCustomize(false);
   }
-  if (choice && !open) return null;
+  if (effectiveChoice && !open) return null;
   return (
     <section role="dialog" aria-modal="false" aria-label="Cookie preferences" className="fixed bottom-4 left-4 right-4 z-[9999] mx-auto max-w-2xl rounded-xl border border-gray-300 bg-white p-5 text-gray-950 shadow-2xl dark:border-gray-600 dark:bg-gray-950 dark:text-white">
       <h2 className="mb-2 text-xl font-bold">Your privacy choices</h2>
