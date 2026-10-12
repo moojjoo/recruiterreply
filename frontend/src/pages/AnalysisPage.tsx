@@ -1,3 +1,4 @@
+import { trackProductEvent } from "../utils/productAnalytics";
 import React, { useState, useCallback } from "react";
 import { MessageAnalyzer } from "../components/MessageAnalyzer";
 import { AnalysisResult } from "../components/AnalysisResult";
@@ -10,6 +11,7 @@ export const AnalysisPage: React.FC = () => {
 
   const handleResult = useCallback((res: AnalyzeMessageResponse) => {
     setResult(res);
+    trackProductEvent("analysis_completed");
   }, []);
 
   return (

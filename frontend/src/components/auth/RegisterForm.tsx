@@ -1,3 +1,4 @@
+import { trackProductEvent } from "../../utils/productAnalytics";
 import React, { useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
@@ -28,6 +29,7 @@ export const RegisterForm: React.FC = () => {
     setLoading(true);
     try {
       await register(email, password, name);
+      trackProductEvent("sign_up");
       showToast("Account created successfully!", "success");
       window.location.href = "/dashboard";
     } catch (error) {

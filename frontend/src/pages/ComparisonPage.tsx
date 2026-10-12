@@ -1,3 +1,4 @@
+import { trackProductEvent } from "../utils/productAnalytics";
 import React, { useState } from "react";
 import { ComparisonTool } from "../components/ComparisonTool";
 import { ComparisonResult } from "../components/ComparisonResult";
@@ -27,7 +28,7 @@ export const ComparisonPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Form */}
             <div className="lg:col-span-2">
-              <ComparisonTool onResult={(res) => setResult(res)} />
+              <ComparisonTool onResult={(res) => { setResult(res); trackProductEvent("offer_compared"); }} />
             </div>
 
             {/* Info Sidebar */}
