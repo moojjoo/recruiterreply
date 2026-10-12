@@ -1,19 +1,13 @@
-# Provisions the container for the backend's runtime secrets (JWT key, OpenAI API key,
-# Gmail OAuth client credentials, DB connection string). Deliberately does NOT create an
-# aws_secretsmanager_secret_version — populate the actual value out-of-band via:
-#   aws secretsmanager put-secret-value --secret-id <name> --secret-string file://secret.json
-# so the plaintext never lands in Terraform state.
-
-resource "aws_secretsmanager_secret" "backend" {
-  name                    = "${var.name_prefix}-backend"
-  description             = "RecruiterReply backend runtime config (Jwt, OpenAI, Gmail, ConnectionStrings) for ${var.name_prefix}."
-  recovery_window_in_days = var.recovery_window_in_days
+# Look up the existing per-environment backend secret. Terraform must not create,
+# replace, or read secret values; only its metadata/ARN is required for IAM.
+data "aws_secretsmanager_secret" "backend" {
+  name = var.backend_secret_name
 }
 
 data "aws_iam_policy_document" "read_secret" {
   statement {
     actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = [aws_secretsmanager_secret.backend.arn]
+    resources = [data.aws_secretsmanager_secret.backend.arn]
   }
 }
 

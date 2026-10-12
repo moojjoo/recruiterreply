@@ -7,8 +7,7 @@ variable "ec2_role_name" {
   type        = string
 }
 
-variable "recovery_window_in_days" {
-  description = "Days AWS retains a deleted secret before permanent removal. 0 deletes immediately."
-  type        = number
-  default     = 7
+variable "backend_secret_name" {
+  description = "Existing per-environment backend secret name; Terraform looks up metadata only."
+  type        = string
 }

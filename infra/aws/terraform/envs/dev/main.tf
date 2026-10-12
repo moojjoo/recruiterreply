@@ -39,8 +39,9 @@ module "compute" {
 module "secrets" {
   source = "../../modules/secrets"
 
-  name_prefix   = local.name_prefix
-  ec2_role_name = module.compute.role_name
+  name_prefix         = local.name_prefix
+  ec2_role_name       = module.compute.role_name
+  backend_secret_name = "recruiterreply/dev/backend-app-secrets"
 }
 
 module "database" {
