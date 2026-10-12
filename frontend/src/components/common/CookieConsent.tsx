@@ -46,15 +46,11 @@ function removeAnalyticsCookies() {
   }
 }
 export function CookieConsent() {
-  const [choice, setChoice] = useState<Choice | null>(null);
+  const [choice, setChoice] = useState<Choice | null>(() => readChoice());
   const [open, setOpen] = useState(false);
   const [customize, setCustomize] = useState(false);
   const [analytics, setAnalytics] = useState(false);
-  const [gpc, setGpc] = useState(false);
-  useEffect(() => {
-    setChoice(readChoice());
-    setGpc((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true);
-  }, []);
+  const [gpc, setGpc] = useState(() => typeof navigator !== "undefined" && (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true);
   useEffect(() => {
     const listener = () => { setOpen(true); setCustomize(true); setAnalytics(choice?.analytics ?? false); };
     window.addEventListener("rr-open-cookie-settings", listener);
