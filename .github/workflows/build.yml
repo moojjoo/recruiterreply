@@ -234,8 +234,19 @@ jobs:
         User-agent: *
         Disallow: /
 
-  reconcile-dev-issues:
+  verify-dev-seo-http:
     needs: deploy-dev
+    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify live Dev SEO responses
+        env:
+          SEO_BASE_URL: https://dev.recruiterreply.com
+        run: node .github/scripts/dev-seo-http-smoke.cjs
+
+  reconcile-dev-issues:
+    needs: [deploy-dev, verify-dev-seo-http]
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
     runs-on: ubuntu-latest
     permissions:
