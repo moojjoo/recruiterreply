@@ -28,7 +28,7 @@ async function report({github,context,core}) {
    const run=runs.find(r=>r.name==='Build and Deploy to Dev'&&r.head_sha===pr.merge_commit_sha&&r.conclusion==='success');
    // A successful workflow alone does not prove the smoke test. Require explicit trusted evidence.
    const deployment=run?{sha:run.head_sha,conclusion:run.conclusion,smokePassed:false,runUrl:run.html_url}:null;
-   const reasons=blockers({pr,issue:{...issue,number},checks:checkResponse.check_runs,deployment,projectMember:false,tokenConfigured:false});
+   const reasons=blockers({pr,issue:{...issue,number},checks:checkResponse.check_runs,deployment,projectMember:false,tokenConfigured:!!process.env.PROJECTS_WRITE_TOKEN});
    rows.push({issue:number,pr:pr.number,sha:pr.merge_commit_sha,reasons});
   }
  }
