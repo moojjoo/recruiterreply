@@ -49,6 +49,14 @@ jobs:
                 core.notice('PR #' + full.number + ': waiting for automation-ready label after implementation review');
                 continue;
               }
+              // Require explicit evidence that implementation and acceptance criteria are complete.
+              // The readiness label is a human-controlled authorization, not a substitute for CI.
+              const body = full.body || '';
+              if (!/## Implementation evidence[\\s\\S]*?(?:commit|test|verification|workflow)/i.test(body) ||
+                  !/## Acceptance criteria[\\s\\S]*?\\[[xX]\\]/.test(body)) {
+                core.notice('PR #' + full.number + ': missing implementation evidence or checked acceptance criteria');
+                continue;
+              }
               const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
               const names = ['verify','test','analyze (javascript-typescript)','analyze (csharp)'];
               const required = checks.check_runs.filter(c => names.includes(c.name));
