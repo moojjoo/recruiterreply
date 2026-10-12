@@ -68,17 +68,17 @@ export function CookieConsent() {
     const listener = () => { setOpen(true); setCustomize(true); setAnalytics(effectiveChoice?.analytics ?? false); };
     window.addEventListener("rr-open-cookie-settings", listener);
     return () => window.removeEventListener("rr-open-cookie-settings", listener);
-  }, [choice]);
+  }, [effectiveChoice?.analytics]);
   function save(value: boolean) {
     const next: Choice = { version: 1, analytics: value, timestamp: new Date().toISOString() };
-    recordConsent(!value && choice?.analytics ? "withdraw" : customize ? "customize" : value ? "accept" : "reject", value);
+    recordConsent(!value && effectiveChoice?.analytics ? "withdraw" : customize ? "customize" : value ? "accept" : "reject", value);
     try { localStorage.setItem(KEY, JSON.stringify(next)); window.dispatchEvent(new Event("rr-consent-changed")); } catch { /* storage unavailable */ }
     const production = location.protocol === "https:" && location.hostname === "recruiterreply.com";
     window.gtag?.("consent", "update", { analytics_storage: production && value ? "granted" : "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
     if (value) window.rrLoadAnalytics?.();
     else {
       removeAnalyticsCookies();
-      if (choice?.analytics) { location.reload(); return; }
+      if (effectiveChoice?.analytics) { location.reload(); return; }
     }
     setChoice(next); setOpen(false); setCustomize(false);
   }
