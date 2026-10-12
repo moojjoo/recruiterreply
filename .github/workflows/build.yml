@@ -31,6 +31,9 @@ jobs:
       - name: Test PR readiness policy
         run: node --test .github/scripts/tests/pr-readiness.test.cjs
 
+      - name: Verify static SEO assets
+        run: node .github/scripts/seo-static-check.cjs
+
       - name: Test issue reconciliation logic
         run: node --test .github/scripts/tests/reconcile-dev-issues.test.cjs
 
