@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { UIProvider } from "./contexts/UIContext";
@@ -29,10 +29,11 @@ import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { Terms } from "./pages/Terms";
 import { Pricing } from "./pages/Pricing";
 
-function App() {
+function App({ server = false }: { server?: boolean }) {
+  const Router = server ? MemoryRouter : BrowserRouter;
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <Router>
         <AuthProvider>
           <ToastProvider>
             <UIProvider>
@@ -133,7 +134,7 @@ function App() {
             </UIProvider>
           </ToastProvider>
         </AuthProvider>
-      </BrowserRouter>
+      </Router>
     </ErrorBoundary>
   );
 }
