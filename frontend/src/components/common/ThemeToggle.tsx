@@ -4,7 +4,7 @@ type Theme = "light" | "dark";
 const KEY = "recruiterreply-theme";
 
 function currentTheme(): Theme {
-  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  return typeof document === "undefined" ? "light" : document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
 export const ThemeToggle: React.FC = () => {
