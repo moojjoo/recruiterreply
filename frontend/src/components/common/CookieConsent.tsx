@@ -52,8 +52,11 @@ export function CookieConsent() {
   const [analytics, setAnalytics] = useState(false);
   const [gpc, setGpc] = useState(false);
   useEffect(() => {
+    // Browser-only state is read after hydration to avoid SSR mismatches.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setChoice(readChoice());
     setGpc((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
   useEffect(() => {
     const listener = () => { setOpen(true); setCustomize(true); setAnalytics(choice?.analytics ?? false); };
