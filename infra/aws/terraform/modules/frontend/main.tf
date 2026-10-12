@@ -112,7 +112,7 @@ resource "aws_cloudfront_function" "dev_spa_rewrite" {
       var request = event.request;
       var uri = request.uri;
       // Leave the homepage and file-like paths (including SEO pages) untouched.
-      if (uri === '/' || /\\.[^/]+$/.test(uri)) return request;
+      if (uri === '/' || uri.substring(uri.lastIndexOf('/') + 1).includes('.')) return request;
       // Rewrite client-side paths and unknown extensionless paths to the SPA shell.
       request.uri = '/index.html';
       return request;
