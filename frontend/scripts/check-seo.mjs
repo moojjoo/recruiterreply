@@ -5,9 +5,9 @@ const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8'
 const sitemap = readFileSync(new URL('../dist/sitemap.xml', import.meta.url), 'utf8');
 
 const robots = readFileSync(new URL('../dist/robots.txt', import.meta.url), 'utf8');
-assert.match(robots, /^User-agent:\\s*\\*/mi, 'robots has crawler policy');
-assert.match(robots, /^Sitemap:\\s*https:\/\/recruiterreply\\.com\/sitemap\\.xml\\s*$/mi, 'robots links canonical sitemap');
-assert.ok(!/<html\\b/i.test(sitemap), 'sitemap must be XML, not SPA fallback');
+assert.match(robots, /^User-agent:\s*\*/mi, 'robots has crawler policy');
+assert.match(robots, /^Sitemap:\s*https:\/\/recruiterreply\.com\/sitemap\.xml\s*$/mi, 'robots links canonical sitemap');
+assert.ok(!/<html\b/i.test(sitemap), 'sitemap must be XML, not SPA fallback');
 const urls = [...sitemap.matchAll(new RegExp('<loc>([^<]+)</loc>', 'g'))].map(m => m[1]);
 assert.ok(urls.length > 0, 'sitemap must contain canonical public pages');
 assert.equal(new Set(urls).size, urls.length, 'sitemap URLs must be unique');
