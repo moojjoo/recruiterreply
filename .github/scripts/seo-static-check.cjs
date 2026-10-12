@@ -13,7 +13,7 @@ assert.ok(blocks.length, 'structured data must exist');
 for (const block of blocks) {
  const json = JSON.parse(block[1]);
  assert.equal(json['@context'],'https://schema.org');
- assert.ok(json['@type']);
+ assert.ok(json['@type'] || (Array.isArray(json['@graph']) && json['@graph'].every(n => n['@type'])));
 }
 assert.match(sitemap, /<urlset\b/);
 const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m=>m[1]);
