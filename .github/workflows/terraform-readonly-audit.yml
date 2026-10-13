@@ -1,0 +1,73 @@
+name: Terraform read-only drift audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: terraform-readonly-audit
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [global, envs/dev, envs/test, envs/prod]
+    defaults:
+      run:
+        working-directory: infra/aws/terraform/${{ matrix.root }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.3'
+      - name: Validate formatting
+        run: terraform fmt -check -recursive
+      - name: Authenticate read-only AWS audit role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ vars.TERRAFORM_AUDIT_ROLE_ARN }}
+          role-session-name: terraform-audit-${{ github.run_id }}
+      - name: Initialize existing remote state (no migration)
+        run: terraform init -input=false -lockfile=readonly -migrate-state=false
+      - name: Validate configuration
+        run: terraform validate -no-color
+      - name: Refresh-only drift inspection
+        id: refresh
+        continue-on-error: true
+        run: |
+          set +e
+          terraform plan -refresh-only -input=false -lock=false -detailed-exitcode -no-color > /tmp/tf-refresh.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "Refresh-only result: $code (0=no drift, 2=drift, 1=error)"
+          exit 0
+      - name: Desired configuration comparison
+        id: desired
+        continue-on-error: true
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color > /tmp/tf-desired.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "Desired-state result: $code (0=no change, 2=proposed change, 1=error)"
+          exit 0
+      - name: Publish sanitized status summary only
+        if: always()
+        env:
+          ROOT: ${{ matrix.root }}
+          REFRESH: ${{ steps.refresh.outputs.exit_code }}
+          DESIRED: ${{ steps.desired.outputs.exit_code }}
+        run: |
+          {
+            echo "### Terraform read-only audit: $ROOT"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Refresh-only exit: \`${REFRESH:-not-run}\`"
+            echo "- Desired-state exit: \`${DESIRED:-not-run}\`"
+            echo "- Exit 0 = no change, 2 = drift/planned change, 1 = error"
+            echo "- Detailed plan/state logs are intentionally not uploaded."
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm -f /tmp/tf-refresh.log /tmp/tf-desired.log
