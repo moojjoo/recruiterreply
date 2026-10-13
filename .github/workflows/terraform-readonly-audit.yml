@@ -17,7 +17,7 @@ jobs:
       run:
         working-directory: infra/aws/terraform/${{ matrix.root }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: hashicorp/setup-terraform@v3
@@ -44,6 +44,9 @@ jobs:
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           echo "Refresh-only result: $code (0=no drift, 2=drift, 1=error)"
+          if [ "$code" -eq 1 ]; then
+            echo "::error::Terraform refresh-only plan failed in ${{ matrix.root }}. Run locally with a read-only role to inspect the error; raw logs are not exposed in Actions."
+          fi
           exit 0
       - name: Desired configuration comparison
         id: desired
@@ -54,6 +57,9 @@ jobs:
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           echo "Desired-state result: $code (0=no change, 2=proposed change, 1=error)"
+          if [ "$code" -eq 1 ]; then
+            echo "::error::Terraform desired-state plan failed in ${{ matrix.root }}. No drift conclusion is possible."
+          fi
           exit 0
       - name: Publish sanitized status summary only
         if: always()
@@ -71,3 +77,17 @@ jobs:
             echo "- Detailed plan/state logs are intentionally not uploaded."
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f /tmp/tf-refresh.log /tmp/tf-desired.log
+      - name: Enforce audit result
+        if: always()
+        env:
+          REFRESH: ${{ steps.refresh.outputs.exit_code }}
+          DESIRED: ${{ steps.desired.outputs.exit_code }}
+        run: |
+          if [ "$REFRESH" = "1" ] || [ "$DESIRED" = "1" ]; then
+            echo "::error::Terraform audit encountered plan errors; cannot declare success."
+            exit 1
+          fi
+          if [ -z "$REFRESH" ] || [ -z "$DESIRED" ]; then
+            echo "::error::Terraform audit incomplete."
+            exit 1
+          fi
