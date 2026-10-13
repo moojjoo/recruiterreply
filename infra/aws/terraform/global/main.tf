@@ -21,6 +21,13 @@ module "frontend" {
   create_buckets        = var.create_frontend_buckets
   frontend_bucket_names = var.frontend_bucket_names
   aws_account_id        = data.aws_caller_identity.current.account_id
+  # Existing CloudFront IDs verified against the reviewed #345 Terraform plan.
+  # These values must be reconciled if a distribution is ever replaced.
+  existing_cloudfront_distribution_ids = {
+    dev  = "E2JWU1TLDA6YRS"
+    test = "E2IGR9MYMWVQFI"
+    prod = "EHWW9BKSSF64L"
+  }
 }
 
 resource "aws_s3_bucket" "postgres_backups" {

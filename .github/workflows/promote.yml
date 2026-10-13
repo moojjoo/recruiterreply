@@ -734,6 +734,13 @@ jobs:
             fi
           done <<< "$EXPECTED_ASSETS"
 
+      - name: Verify live environment SEO indexing safeguards
+        env:
+          SEO_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/environment-seo-http-smoke.cjs
+
       - name: Record verified release manifest
         env:
           SHA: ${{ inputs.sha }}

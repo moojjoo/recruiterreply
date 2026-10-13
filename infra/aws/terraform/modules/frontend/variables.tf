@@ -37,3 +37,11 @@ variable "cloudfront_web_acl_ids" {
     dev = "arn:aws:wafv2:us-east-1:178522450316:global/webacl/CreatedByCloudFront-02104336/6a7170c0-d51c-439e-97d7-31523ad776de"
   }
 }
+
+# Existing distribution IDs are explicit so bucket policies remain independent
+# of unrelated CloudFront distribution configuration updates.
+variable "existing_cloudfront_distribution_ids" {
+  description = "IDs of existing distributions. Verify against Terraform state before modifying."
+  type        = map(string)
+  default     = {}
+}

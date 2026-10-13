@@ -139,6 +139,23 @@ resource "aws_cloudfront_function" "noindex" {
   JS
 }
 
+# Defense-in-depth for non-production distributions. Unlike viewer-response
+# functions, a response-headers policy is evaluated for CloudFront responses
+# even when the origin returns an error. Never associate with production.
+resource "aws_cloudfront_response_headers_policy" "noindex" {
+  for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if contains(["dev", "test"], key) }
+  name     = "recruiterreply-${each.key}-noindex"
+  comment  = "Prevent search indexing of ${each.key} frontend"
+
+  custom_headers_config {
+    items {
+      header   = "X-Robots-Tag"
+      value    = "noindex, nofollow"
+      override = true
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "this" {
   for_each = aws_s3_bucket.this
 
@@ -163,6 +180,7 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods        = local.cloudfront_config[each.key].allowed_methods
     cached_methods         = ["HEAD", "GET"]
     compress               = true
+    response_headers_policy_id = contains(["dev", "test"], each.key) ? aws_cloudfront_response_headers_policy.noindex[each.key].id : null
     dynamic "function_association" {
       for_each = each.key == "dev" ? [1] : []
       content {
@@ -234,7 +252,9 @@ data "aws_iam_policy_document" "cloudfront_read" {
     condition {
       test     = "ArnLike"
       variable = "AWS:SourceArn"
-      values   = ["arn:aws:cloudfront::${var.aws_account_id}:distribution/${aws_cloudfront_distribution.this[each.key].id}"]
+      # Use the existing ID to avoid a deferred policy read whenever the
+      # distribution is updated in place for unrelated cache/header changes.
+      values   = ["arn:aws:cloudfront::${var.aws_account_id}:distribution/${var.existing_cloudfront_distribution_ids[each.key]}"]
     }
   }
 }
