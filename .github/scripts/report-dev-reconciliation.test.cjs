@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict');
+const {ids,inspect,marker,references}=require('./report-dev-reconciliation.cjs');
+assert.deepEqual(ids('Refs #320\nDev-Completes: #321',references),[320]);
+assert.deepEqual(ids('Refs #320\nDev-Completes: #321',marker),[321]);
+const issue={number:320,body:'- [ ] Validate',labels:[]};
+const blockers=inspect({body:'Refs #320\n- [ ] Tests'},issue);
+assert(blockers.some(x=>x.includes('final Dev-Completes')));
+assert(blockers.some(x=>x.includes('human-approved')));
+assert(blockers.some(x=>x.includes('unfinished')));
+assert(blockers.some(x=>x.includes('not independently verified')));
+console.log('Reconciliation report conservative tests passed');
