@@ -1,0 +1,23 @@
+name: Cognito edge verification unit tests
+
+on:
+  pull_request:
+    paths:
+      - 'infra/aws/edge/private-auth/**'
+      - '.github/workflows/cognito-edge-tests.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-edge-tokens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test infra/aws/edge/private-auth/verify-id-token.test.cjs
