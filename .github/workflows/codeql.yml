@@ -11,7 +11,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Select CodeQL languages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      languages: ${{ steps.select.outputs.languages }}
+    steps:
+      - name: Determine required languages
+        id: select
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // Main always gets a full scan. Fail closed to both on uncertainty.
+            const both = ['javascript-typescript', 'csharp'];
+            let languages = both;
+            if (context.eventName === 'pull_request') {
+              try {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  per_page: 100
+                });
+                // The REST endpoint caps PR files at 3000; treat that case as uncertain.
+                if (files.length > 0 && files.length < 3000) {
+                  let frontend = false;
+                  let backend = false;
+                  let shared = false;
+                  for (const file of files) {
+                    for (const name of [file.filename, file.previous_filename].filter(Boolean)) {
+                      if (/^frontend\//.test(name)) frontend = true;
+                      else if (/^backend\//.test(name)) backend = true;
+                      else shared = true; // workflows, infra, docs, root manifests, etc.
+                    }
+                  }
+                  if (!shared && frontend && !backend) languages = ['javascript-typescript'];
+                  else if (!shared && backend && !frontend) languages = ['csharp'];
+                }
+              } catch (error) {
+                core.warning('File detection failed; scanning both languages: ' + error.message);
+              }
+            }
+            core.info('CodeQL languages: ' + languages.join(', '));
+            core.setOutput('languages', JSON.stringify(languages));
+
   analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -23,10 +72,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [javascript-typescript, csharp]
+        language: ${{ fromJSON(needs.changes.outputs.languages) }}
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Record analysis start
+        run: echo "CODEQL_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - uses: github/codeql-action/init@v4
         with:
@@ -36,3 +88,27 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
+
+      - name: Report CodeQL elapsed time
+        if: always()
+        run: |
+          if [ -n "${CODEQL_START_EPOCH:-}" ]; then
+            echo "### CodeQL ${{ matrix.language }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Elapsed: $(( $(date +%s) - CODEQL_START_EPOCH )) seconds" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  gate:
+    name: CodeQL required gate
+    if: always()
+    needs: [changes, analyze]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify language selection and analysis
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          ANALYZE_RESULT: ${{ needs.analyze.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          test "$ANALYZE_RESULT" = success
