@@ -26,7 +26,10 @@ test('future token rejected',()=>assert.throws(()=>validateIdToken(token({iat:no
 test('unsigned algorithm rejected',()=>assert.throws(()=>validateIdToken(token({}, {alg:'none'}),jwks,config,now)));
 test('wrong signing key rejected',()=>assert.throws(()=>validateIdToken(token(),{keys:[]},config,now)));
 test('modified signature rejected',()=>{
-  const t=token();const parts=t.split('.');parts[2]='A'+parts[2].slice(1);
+  const t=token();const parts=t.split('.');
+  const signature=Buffer.from(parts[2], 'base64url');
+  signature[0] ^= 0x01;
+  parts[2]=signature.toString('base64url');
   assert.throws(()=>validateIdToken(parts.join('.'),jwks,config,now));
 });
 test('malformed JWT rejected',()=>assert.throws(()=>validateIdToken('not-a-jwt',jwks,config,now)));
