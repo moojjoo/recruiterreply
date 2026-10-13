@@ -67,7 +67,7 @@ jobs:
               if (!result.eligible) {
                 const remediation = require('./.github/scripts/ci-remediation-comment.cjs');
                 if (context.eventName === 'workflow_run' && context.payload.workflow_run?.conclusion === 'failure') {
-                  await remediation.report({github, context: {...context, payload: {pull_request: full}}, core});
+                  await remediation.report({github, context: {...context, repo: {owner, repo}, payload: {pull_request: full}}, core});
                 }
                 core.notice('PR #' + full.number + ': blocked: ' + result.reasons.join('; '));
                 continue;
