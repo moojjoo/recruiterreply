@@ -8,15 +8,15 @@ function classifyRisk(files) {
     const f = typeof item === 'string' ? item : item && item.filename;
     const previous = typeof item === 'object' && item ? item.previous_filename : undefined;
     const status = typeof item === 'object' && item ? item.status : undefined;
-    if (typeof f !== 'string' || !f || f.includes('..') || f.startsWith('/') || f.includes('\\\\') ||
+    if (typeof f !== 'string' || !f || f.includes('..') || f.startsWith('/') || f.includes('\\') ||
         (status && !['added','modified','removed','renamed','copied','changed'].includes(status))) return 'high';
     if (status === 'renamed' && (!previous || classifyRisk([previous]) === 'high')) return 'high';
     if (status === 'removed') return 'high';
-    const sensitive = /(^|\\/)(\\.github|infra|infrastructure|terraform|migrations|secrets|iam|auth|security|payments?|billing|stripe|webhooks?|deploy|release|scripts)(\\/|$)|(^|\\/)(Dockerfile|docker-compose[^/]*|package(?:-lock)?\\.json|.*\\.tf(?:vars)?|.*\\.ya?ml|.*\\.csproj|.*\\.sln|.*\\.props|.*\\.targets|.*\\.env[^/]*)$/i;
+    const sensitive = /(^|\/)(\.github|infra|infrastructure|terraform|migrations|secrets|iam|auth|security|payments?|billing|stripe|webhooks?|deploy|release|scripts)(\/|$)|(^|\/)(Dockerfile|docker-compose[^/]*|package(?:-lock)?\.json|.*\.tf(?:vars)?|.*\.ya?ml|.*\.csproj|.*\.sln|.*\.props|.*\.targets|.*\.env[^/]*)$/i;
     if (sensitive.test(f)) return 'high';
-    if (/^(docs\\/[a-zA-Z0-9_./-]+\\.md|README\\.md|frontend\\/src\\/[a-zA-Z0-9_./-]+\\.(?:css|scss))$/.test(f)) continue;
-    if (/^(frontend\\/src\\/[a-zA-Z0-9_./-]+\\.(?:jsx?|tsx?)|frontend\\/tests?\\/[a-zA-Z0-9_./-]+\\.(?:jsx?|tsx?)|backend\\/[a-zA-Z0-9_./-]+\\.(?:cs|csx))$/.test(f) &&
-        !/(^|\\/)(auth|security|payments?|billing|stripe|webhooks?|config|middleware|startup|program|identity|secrets)(\\/|\\.|$)/i.test(f)) {
+    if (/^(docs\/[a-zA-Z0-9_./-]+\.md|README\.md|frontend\/src\/[a-zA-Z0-9_./-]+\.(?:css|scss))$/.test(f)) continue;
+    if (/^(frontend\/src\/[a-zA-Z0-9_./-]+\.(?:jsx?|tsx?)|frontend\/tests?\/[a-zA-Z0-9_./-]+\.(?:jsx?|tsx?)|backend\/[a-zA-Z0-9_./-]+\.(?:cs|csx))$/.test(f) &&
+        !/(^|\/)(auth|security|payments?|billing|stripe|webhooks?|config|middleware|startup|program|identity|secrets)(\/|\.|$)/i.test(f)) {
       tier = 'medium';
       continue;
     }
