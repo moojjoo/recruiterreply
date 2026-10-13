@@ -12,6 +12,8 @@ public sealed class SesRecoveryEmailSender(IConfiguration config) : IRecoveryEma
         var from = config["PasswordRecovery:FromEmail"];
         if (string.IsNullOrWhiteSpace(from))
             throw new InvalidOperationException("PasswordRecovery:FromEmail is not configured.");
+
+        var (text, html) = RecoveryEmailTemplate.Render(code, link);
         using var ses = new AmazonSimpleEmailServiceV2Client();
         await ses.SendEmailAsync(new SendEmailRequest
         {
@@ -20,8 +22,11 @@ public sealed class SesRecoveryEmailSender(IConfiguration config) : IRecoveryEma
             Content = new EmailContent { Simple = new Message
             {
                 Subject = new Content { Data = "RecruiterReply password recovery" },
-                Body = new Body { Text = new Content { Data =
-                    $"Your RecruiterReply verification code is:\n\n{code}\n\nIt expires in 10 minutes. You can also open this recovery link:\n{link}\n\nIf you did not request this, ignore this message." } }
+                Body = new Body
+                {
+                    Text = new Content { Data = text, Charset = "UTF-8" },
+                    Html = new Content { Data = html, Charset = "UTF-8" }
+                }
             } }
         }, ct);
     }
