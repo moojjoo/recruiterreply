@@ -54,7 +54,6 @@ resource "aws_cognito_user_pool" "testers" {
   auto_verified_attributes   = ["email"]
   mfa_configuration          = "ON"
   user_pool_tier             = "ESSENTIALS"
-  enabled_mfas               = ["EMAIL_OTP"]
 
   admin_create_user_config {
     allow_admin_create_user_only = true
