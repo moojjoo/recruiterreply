@@ -47,20 +47,20 @@ jobs:
           if [ "$code" -eq 1 ]; then
             # Classify errors without printing raw Terraform output, state, ARNs, or secrets.
             python3 - /tmp/tf-refresh.log <<'PY'
-import re, sys
-text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-patterns = [
-    ("AWS access denied", r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)"),
-    ("Required Terraform variable missing", r"(?i)(no value for required variable|input variable .* is not set)"),
-    ("Terraform provider configuration error", r"(?i)(provider configuration not present|invalid provider configuration|failed to configure provider)"),
-    ("Terraform state/backend error", r"(?i)(failed to load state|error loading state|error acquiring the state lock|failed to get existing workspaces)"),
-    ("AWS resource not found", r"(?i)(resourcenotfoundexception|nosuchbucket|no such resource)"),
-    ("Terraform expression/configuration error", r"(?i)(invalid reference|unsupported argument|invalid function argument)"),
-]
-matches = [name for name, pat in patterns if re.search(pat, text)]
-for name in matches or ["Unclassified Terraform plan error; inspect securely outside Actions"]:
-    print("::error::Sanitized audit diagnosis: " + name)
-PY
+          import re, sys
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          patterns = [
+              ("AWS access denied", r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)"),
+              ("Required Terraform variable missing", r"(?i)(no value for required variable|input variable .* is not set)"),
+              ("Terraform provider configuration error", r"(?i)(provider configuration not present|invalid provider configuration|failed to configure provider)"),
+              ("Terraform state/backend error", r"(?i)(failed to load state|error loading state|error acquiring the state lock|failed to get existing workspaces)"),
+              ("AWS resource not found", r"(?i)(resourcenotfoundexception|nosuchbucket|no such resource)"),
+              ("Terraform expression/configuration error", r"(?i)(invalid reference|unsupported argument|invalid function argument)"),
+          ]
+          matches = [name for name, pat in patterns if re.search(pat, text)]
+          for name in matches or ["Unclassified Terraform plan error; inspect securely outside Actions"]:
+              print("::error::Sanitized audit diagnosis: " + name)
+          PY
           fi
           if [ "$code" -eq 1 ]; then
             echo "::error::Terraform refresh-only plan failed in ${{ matrix.root }}. Run locally with a read-only role to inspect the error; raw logs are not exposed in Actions."
@@ -78,20 +78,20 @@ PY
           if [ "$code" -eq 1 ]; then
             # Classify errors without printing raw Terraform output, state, ARNs, or secrets.
             python3 - /tmp/tf-desired.log <<'PY'
-import re, sys
-text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-patterns = [
-    ("AWS access denied", r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)"),
-    ("Required Terraform variable missing", r"(?i)(no value for required variable|input variable .* is not set)"),
-    ("Terraform provider configuration error", r"(?i)(provider configuration not present|invalid provider configuration|failed to configure provider)"),
-    ("Terraform state/backend error", r"(?i)(failed to load state|error loading state|error acquiring the state lock|failed to get existing workspaces)"),
-    ("AWS resource not found", r"(?i)(resourcenotfoundexception|nosuchbucket|no such resource)"),
-    ("Terraform expression/configuration error", r"(?i)(invalid reference|unsupported argument|invalid function argument)"),
-]
-matches = [name for name, pat in patterns if re.search(pat, text)]
-for name in matches or ["Unclassified Terraform plan error; inspect securely outside Actions"]:
-    print("::error::Sanitized audit diagnosis: " + name)
-PY
+          import re, sys
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          patterns = [
+              ("AWS access denied", r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)"),
+              ("Required Terraform variable missing", r"(?i)(no value for required variable|input variable .* is not set)"),
+              ("Terraform provider configuration error", r"(?i)(provider configuration not present|invalid provider configuration|failed to configure provider)"),
+              ("Terraform state/backend error", r"(?i)(failed to load state|error loading state|error acquiring the state lock|failed to get existing workspaces)"),
+              ("AWS resource not found", r"(?i)(resourcenotfoundexception|nosuchbucket|no such resource)"),
+              ("Terraform expression/configuration error", r"(?i)(invalid reference|unsupported argument|invalid function argument)"),
+          ]
+          matches = [name for name, pat in patterns if re.search(pat, text)]
+          for name in matches or ["Unclassified Terraform plan error; inspect securely outside Actions"]:
+              print("::error::Sanitized audit diagnosis: " + name)
+          PY
           fi
           if [ "$code" -eq 1 ]; then
             echo "::error::Terraform desired-state plan failed in ${{ matrix.root }}. No drift conclusion is possible."
