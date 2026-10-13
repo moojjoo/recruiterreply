@@ -121,9 +121,9 @@ resource "aws_cloudfront_function" "dev_spa_rewrite" {
 }
 
 # Viewer-response function adds noindex to normal Dev/Test responses.
-# CloudFront viewer-response functions do not run for origin error responses.
-# CloudFront Functions cannot run on viewer-response for origin 4xx/5xx; error
-# responses require separate validation and potentially response-headers policy.
+# CloudFront viewer-response functions do not run on every error response.
+# Dev/Test use the CloudFront Free plan, which does not support custom response
+# headers policies. Keep robots.txt restrictive and verify live responses.
 resource "aws_cloudfront_function" "noindex" {
   for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if contains(["dev", "test"], key) }
   name    = "recruiterreply-${each.key}-noindex"
@@ -137,23 +137,6 @@ resource "aws_cloudfront_function" "noindex" {
       return response;
     }
   JS
-}
-
-# Defense-in-depth for non-production distributions. Unlike viewer-response
-# functions, a response-headers policy is evaluated for CloudFront responses
-# even when the origin returns an error. Never associate with production.
-resource "aws_cloudfront_response_headers_policy" "noindex" {
-  for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if contains(["dev", "test"], key) }
-  name     = "recruiterreply-${each.key}-noindex"
-  comment  = "Prevent search indexing of ${each.key} frontend"
-
-  custom_headers_config {
-    items {
-      header   = "X-Robots-Tag"
-      value    = "noindex, nofollow"
-      override = true
-    }
-  }
 }
 
 resource "aws_cloudfront_distribution" "this" {
@@ -180,7 +163,6 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods        = local.cloudfront_config[each.key].allowed_methods
     cached_methods         = ["HEAD", "GET"]
     compress               = true
-    response_headers_policy_id = contains(["dev", "test"], each.key) ? aws_cloudfront_response_headers_policy.noindex[each.key].id : null
     dynamic "function_association" {
       for_each = each.key == "dev" ? [1] : []
       content {
