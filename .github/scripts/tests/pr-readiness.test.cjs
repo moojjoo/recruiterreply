@@ -22,8 +22,10 @@ for (const [name,mutate] of [
 ]) test('blocks '+name,()=>{const x=valid();mutate(x);assert.equal(validateReadiness(x).eligible,false);});
 
 test('documentation-only files are low risk',()=>assert.equal(classifyRisk(['README.md','docs/guide.md']),'low'));
-for(const files of [['.github/workflows/build.yml'],['backend/Migrations/a.cs'],['terraform/main.tf'],['frontend/src/App.tsx'],[],['../docs/README.md']]) {
+for(const files of [['.github/workflows/build.yml'],['backend/Migrations/a.cs'],['terraform/main.tf'],['frontend/src/auth/Login.tsx'],[],['../docs/README.md']]) {
  test('unknown or sensitive paths require manual merge: '+files.join(','),()=>{
   const x=valid();x.changedFiles=files;assert.equal(validateReadiness(x).eligible,false);
  });
 }
+
+test('ordinary application source is medium risk',()=>assert.equal(classifyRisk(['frontend/src/App.tsx']),'medium'));
