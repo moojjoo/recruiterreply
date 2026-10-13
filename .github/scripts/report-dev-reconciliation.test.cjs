@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { ids, inspect, marker, references } = require('./report-dev-reconciliation.cjs');
+const { ids, inspect, marker, references, markdownCell } = require('./report-dev-reconciliation.cjs');
 
 assert.deepEqual(ids('Refs #320\nDev-Completes: #321', references), [320]);
 assert.deepEqual(ids('Refs #320\nDev-Completes: #321', marker), [321]);
@@ -30,4 +30,9 @@ assert(missingLabel.some(x => x.includes('human-approved')));
 const wrongIssue = check('Dev-Completes: #316', { labels: [{ name: 'dev-acceptance-verified' }] });
 assert(wrongIssue.some(x => x.includes('final Dev-Completes')));
 assert.deepEqual(check('Refs #320'), check('Refs #320'), 'Repeated inspections are deterministic');
+assert.equal(markdownCell('a|b'), 'a\\|b');
+assert.equal(markdownCell('a\\\\|b'), 'a\\\\\\\\\\|b');
+assert.equal(markdownCell('first\\nsecond\\r\\tcell'), 'first second  cell');
+assert.equal(markdownCell(null), '');
+assert.equal(markdownCell('error \\\\ outside | table'), 'error \\\\\\\\ outside \\| table');
 console.log('Reconciliation report conservative tests passed');
