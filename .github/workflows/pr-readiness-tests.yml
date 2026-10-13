@@ -1,0 +1,22 @@
+name: PR readiness policy tests
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/pr-readiness.cjs'
+      - '.github/scripts/pr-readiness.test.cjs'
+      - '.github/workflows/execute-pr-automation.yml'
+      - '.github/workflows/pr-readiness-tests.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  policy-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test .github/scripts/pr-readiness.test.cjs
