@@ -22,7 +22,20 @@ async function check(path) {
   const home = await check('/');
   assert.match(home.res.headers.get('content-type') || '', /text\/html/i);
   assert.match(home.body, /data-prerendered="react"/i, 'Homepage must be prerendered');
-  assert.match(home.body, /<h1\b/i, 'Homepage must contain a raw H1');
+  const root = home.body.slice(home.body.indexOf('<div id="root"'), home.body.indexOf('</body>'));
+  const headings = [...root.matchAll(/<h1\\b[^>]*>([\\s\\S]*?)<\\/h1>/gi)];
+  assert.equal(headings.length, 1, 'Homepage must contain exactly one prerendered H1');
+  assert.match(headings[0][1].replace(/<[^>]+>/g, ' '), /Master Your Job Search/i, 'H1 must describe the actual homepage');
+  assert.match(root, /Message Analyzer/i, 'Prerendered homepage must describe its real features');
+  assert.match(root, /Reply Generator/i, 'Prerendered homepage must describe reply generation');
+  assert.match(root, /Offer Comparison/i, 'Prerendered homepage must describe offer comparison');
+  assert.match(root, /<a\\s+[^>]*href=/i, 'Prerendered homepage must contain navigable links');
+  assert.match(home.body, /<title>[^<]*RecruiterReply[^<]*<\\/title>/i, 'Homepage needs a meaningful title');
+  assert.match(home.body, /<meta\\s+name="description"\\s+content="[^"]+"/i, 'Homepage needs a description');
+  assert.match(home.body, /<link\\s+rel="canonical"\\s+href="https:\\/\\/recruiterreply\\.com\\/"/i, 'Homepage needs production canonical');
+  const jsonLd = [...home.body.matchAll(/<script\\s+type="application\\/ld\\+json"\\s*>([\\s\\S]*?)<\\/script>/gi)];
+  assert.ok(jsonLd.length > 0, 'Homepage needs structured data');
+  for (const block of jsonLd) assert.doesNotThrow(() => JSON.parse(block[1]), 'Structured data must be valid JSON');
   for (const slug of ['seo-recruiter-replies','seo-job-offer-comparison','seo-salary-negotiation']) {
     const page = await check('/' + slug + '.html');
     assert.match(page.body, /<h1\b/i, slug + ' must contain a raw H1');
