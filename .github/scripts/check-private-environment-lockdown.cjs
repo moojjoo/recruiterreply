@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const frontend = fs.readFileSync(path.join(__dirname, '../../infra/aws/terraform/modules/frontend/main.tf'), 'utf8');
 assert.match(frontend, /enabled\s*=\s*each\.key\s*==\s*"prod"\s*\?\s*true\s*:\s*false/,
   'CloudFront Dev/Test must remain disabled while Cognito gate is incomplete');
+assert.doesNotMatch(frontend, /\\\\n\\s*#/, 'Terraform contains escaped newline text in a comment');
 assert.match(frontend, /for_each\s*=\s*aws_s3_bucket\.this/,
   'CloudFront distribution set changed: review this safeguard');
 console.log('Dev/Test CloudFront emergency shutdown guard passed.');
