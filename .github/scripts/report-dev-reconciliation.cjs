@@ -22,6 +22,15 @@ function request(path) {
 const marker = /(?:^|\n)Dev-Completes:\s*#(\d+)\b/gim;
 const references = /(?:^|\n)Refs\s+#(\d+)\b/gim;
 function ids(body, regex) { return [...new Set([...String(body||'').matchAll(regex)].map(m=>Number(m[1])))]; }
+// Escape untrusted GitHub API text before inserting into Markdown table cells.
+// Backslashes must be escaped first, before pipes, so an input such as \\| cannot
+// terminate a table cell. Strip line breaks and other control characters.
+function markdownCell(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/[\x00-\x1f\x7f]/g, ' ');
+}
 function inspect(pr, issue) {
   const blockers = [];
   if(!ids(pr.body,marker).includes(issue.number)) blockers.push('missing final Dev-Completes marker');
@@ -63,10 +72,10 @@ async function main(){
   fs.writeFileSync('reconciliation-report/report.json',output);
   const summary=['## Read-only Dev issue reconciliation','',report.note,'',
     '| Issue | Merged PR | Link type | Blockers |','| --- | --- | --- | --- |',
-    ...results.map(x=>`| #${x.issue} | #${x.pr} | ${x.kind||'lookup error'} | ${(x.blockers||[x.error]).join('; ').replace(/\|/g,'\\|')} |`)].join('\n')+'\n';
+    ...results.map(x=>`| #${markdownCell(x.issue)} | #${markdownCell(x.pr)} | ${markdownCell(x.kind||'lookup error')} | ${markdownCell((x.blockers||[x.error]).join('; '))} |`)].join('\n')+'\n';
   fs.writeFileSync('reconciliation-report/summary.md',summary);
   if(process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,summary);
   process.stdout.write(summary);
 }
 if(require.main===module) main().catch(e=>{console.error(e);process.exitCode=1;});
-module.exports={ids,inspect,marker,references};
+module.exports={ids,inspect,marker,references,markdownCell};
