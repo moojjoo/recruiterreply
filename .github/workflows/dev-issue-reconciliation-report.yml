@@ -1,0 +1,27 @@
+name: Read-only Dev issue reconciliation report
+on:
+  schedule:
+    - cron: '19 12 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate read-only reconciliation report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node .github/scripts/report-dev-reconciliation.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dev-issue-reconciliation-report
+          path: reconciliation-report/
+          retention-days: 30
