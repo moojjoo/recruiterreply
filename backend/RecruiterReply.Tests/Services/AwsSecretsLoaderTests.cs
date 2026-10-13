@@ -26,15 +26,16 @@ public class AwsSecretsLoaderTests
     }
 
     [Fact]
-    public async Task FetchFlattenedSecretsAsync_WithEmptySecretString_Throws()
+    public async Task FetchFlattenedSecretsAsync_WithMissingSecretString_Throws()
     {
         var client = new Mock<IAmazonSecretsManager>();
         client
             .Setup(c => c.GetSecretValueAsync(It.IsAny<GetSecretValueRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GetSecretValueResponse { SecretString = "" });
+            .ReturnsAsync(new GetSecretValueResponse());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             AwsSecretsLoader.FetchFlattenedSecretsAsync("my-secret", client.Object));
+        Assert.Contains("no SecretString value", ex.Message);
     }
 
     [Fact]
