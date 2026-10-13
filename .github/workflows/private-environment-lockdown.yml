@@ -5,6 +5,7 @@ on:
     paths:
       - 'infra/aws/terraform/**'
       - '.github/scripts/check-private-environment-lockdown.cjs'
+      - '.github/scripts/check-private-cognito-wiring.cjs'
       - '.github/workflows/private-environment-lockdown.yml'
   push:
     branches: [main]
@@ -19,4 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Assert Dev/Test remain disabled
-        run: node .github/scripts/check-private-environment-lockdown.cjs
+        run: |
+          node .github/scripts/check-private-environment-lockdown.cjs
+          node .github/scripts/check-private-cognito-wiring.cjs
