@@ -1,0 +1,22 @@
+name: Private environment lockdown guard
+
+on:
+  pull_request:
+    paths:
+      - 'infra/aws/terraform/**'
+      - '.github/scripts/check-private-environment-lockdown.cjs'
+      - '.github/workflows/private-environment-lockdown.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockdown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert Dev/Test remain disabled
+        run: node .github/scripts/check-private-environment-lockdown.cjs
