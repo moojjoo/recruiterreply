@@ -226,22 +226,14 @@ Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthDbHandler 
         return Results.Problem("Database connection failed", statusCode: 503);
     }
 
-    var usersCount = await db.Users.CountAsync(ct);
-    var messagesCount = await db.Messages.CountAsync(ct);
-
     return Results.Ok(new
     {
         status = "healthy",
-        database = "postgres",
-        probes = new
-        {
-            usersCount,
-            messagesCount
-        }
+        database = "connected"
     });
 };
-app.MapGet("/health/db", healthDbHandler);
-app.MapGet("/api/health/db", healthDbHandler);
+app.MapGet("/health/db", healthDbHandler).RequireAuthorization();
+app.MapGet("/api/health/db", healthDbHandler).RequireAuthorization();
 
 Func<IResult> healthApisHandler = () =>
 {
@@ -267,8 +259,8 @@ Func<IResult> healthApisHandler = () =>
         }
     });
 };
-app.MapGet("/health/apis", healthApisHandler);
-app.MapGet("/api/health/apis", healthApisHandler);
+app.MapGet("/health/apis", healthApisHandler).RequireAuthorization();
+app.MapGet("/api/health/apis", healthApisHandler).RequireAuthorization();
 
 Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthGmailHandler = async (db, ct) =>
 {
@@ -276,22 +268,17 @@ Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthGmailHandl
     var gmailClientSecret = builder.Configuration["Gmail:ClientSecret"];
     var isConfigured = !string.IsNullOrWhiteSpace(gmailClientId) && !string.IsNullOrWhiteSpace(gmailClientSecret);
 
-    var activeConnections = await db.GmailConnections.CountAsync(c => c.Status == "active", ct);
-    var errorConnections = await db.GmailConnections.CountAsync(c => c.Status == "error", ct);
-
     return Results.Ok(new
     {
         status = "healthy",
         gmail = new
         {
-            configured = isConfigured,
-            activeConnections,
-            errorConnections
+            configured = isConfigured
         }
     });
 };
-app.MapGet("/health/gmail", healthGmailHandler);
-app.MapGet("/api/health/gmail", healthGmailHandler);
+app.MapGet("/health/gmail", healthGmailHandler).RequireAuthorization();
+app.MapGet("/api/health/gmail", healthGmailHandler).RequireAuthorization();
 
 Func<RecruiterReplyDbContext, IDefaultUserService, CancellationToken, Task<IResult>> healthCrudHandler = async (db, defaultUserService, ct) =>
 {
@@ -325,8 +312,8 @@ Func<RecruiterReplyDbContext, IDefaultUserService, CancellationToken, Task<IResu
         crud = new { create = true, read = true, update = true, delete = true }
     });
 };
-app.MapGet("/health/crud", healthCrudHandler);
-app.MapGet("/api/health/crud", healthCrudHandler);
+app.MapGet("/health/crud", healthCrudHandler).RequireAuthorization();
+app.MapGet("/api/health/crud", healthCrudHandler).RequireAuthorization();
 
 app.MapControllers();
 
