@@ -23,7 +23,7 @@ denied_actions = set()
 for line in log.splitlines():
     if not re.search(r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)", line):
         continue
-    for action in re.findall(r"\b([a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9*]*)\b", line):
+    for action in re.findall(r"\b([a-z][a-z0-9-]*:[A-Z][A-Za-z0-9*]*)\b", line):
         service, operation = action.split(":", 1)
         if service in {
             "acm", "cloudfront", "ec2", "ecr", "iam", "kms", "route53",
