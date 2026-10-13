@@ -49,6 +49,7 @@ data "aws_iam_policy_document" "terraform_audit" {
       "iam:List*",
       "s3:GetBucket*",
       "s3:GetAccelerateConfiguration",
+      "s3:GetLifecycleConfiguration",
       "s3:ListAllMyBuckets",
       "s3:ListBucket",
       "secretsmanager:DescribeSecret",
