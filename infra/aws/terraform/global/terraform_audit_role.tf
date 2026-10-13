@@ -50,6 +50,7 @@ data "aws_iam_policy_document" "terraform_audit" {
       "s3:GetBucket*",
       "s3:GetAccelerateConfiguration",
       "s3:GetLifecycleConfiguration",
+      "s3:GetReplicationConfiguration",
       "s3:ListAllMyBuckets",
       "s3:ListBucket",
       "secretsmanager:DescribeSecret",
