@@ -41,6 +41,11 @@ jobs:
     environment: ${{ inputs.environment }}
 
     steps:
+      - name: Checkout repository for deployment verification scripts
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Resolve AWS auth inputs
         id: aws-auth
         env:
