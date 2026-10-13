@@ -225,6 +225,9 @@ jobs:
 
   deploy-dev:
     needs: build
+    # Dev is intentionally private/disabled until authenticated access is verified.
+    # Do not attempt public HTTPS probes or claim deployment acceptance.
+    if: ${{ vars.DEV_AUTHENTICATED_SMOKE_READY == 'true' }}
     uses: ./.github/workflows/promote.yml
     with:
       environment: dev
@@ -250,7 +253,7 @@ jobs:
 
   reconcile-dev-issues:
     needs: [deploy-dev, verify-dev-seo-http]
-    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
+    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success' && needs.verify-dev-seo-http.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -271,3 +274,31 @@ jobs:
           script: |
             const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
             await reconcile({github, context, core});
+
+  dev-lockdown-status:
+    needs: [verify, build, deploy-dev, verify-dev-seo-http]
+    if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report deployment verification status
+        env:
+          READY: ${{ vars.DEV_AUTHENTICATED_SMOKE_READY }}
+          VERIFY: ${{ needs.verify.result }}
+          BUILD: ${{ needs.build.result }}
+          DEPLOY: ${{ needs.deploy-dev.result }}
+          SMOKE: ${{ needs.verify-dev-seo-http.result }}
+        run: |
+          {
+            echo '### Dev deployment evidence'
+            echo "- Verify: $VERIFY"
+            echo "- Build: $BUILD"
+            echo "- Deployment: $DEPLOY"
+            echo "- External SEO smoke: $SMOKE"
+            if [[ "$READY" != 'true' ]]; then
+              echo '**BLOCKED BY SECURITY LOCKDOWN:** Dev deployment and public HTTP checks were intentionally not attempted. No Dev acceptance evidence exists. Do not promote or auto-close issues.'
+            elif [[ "$DEPLOY" != 'success' || "$SMOKE" != 'success' ]]; then
+              echo '**NOT VERIFIED:** Authenticated deployment checks did not complete successfully. Do not promote or auto-close issues.'
+            else
+              echo 'Dev deployment and configured smoke checks succeeded.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
