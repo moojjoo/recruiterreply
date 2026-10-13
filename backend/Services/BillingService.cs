@@ -100,6 +100,8 @@ public class BillingService : IBillingService
         }
 
         var stripeEvent = EventUtility.ConstructEvent(json, stripeSignatureHeader, webhookSecret);
+        StripeEnvironmentGuard.ValidateWebhookMode(stripeEvent.Livemode,
+            _configuration["ASPNETCORE_ENVIRONMENT"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development");
 
         switch (stripeEvent.Type)
         {
