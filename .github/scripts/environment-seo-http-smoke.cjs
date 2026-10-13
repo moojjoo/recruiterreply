@@ -31,7 +31,7 @@ async function check(path) {
   assert.match(root, /Offer Comparison/i, 'Prerendered homepage must describe offer comparison');
   assert.match(root, /<a\s+[^>]*href=/i, 'Prerendered homepage must contain navigable links');
   assert.match(home.body, /<title>[^<]*RecruiterReply[^<]*<\/title>/i, 'Homepage needs a meaningful title');
-  assert.match(home.body, /<meta\s+name="description"\s+content="[^"]+"/i, 'Homepage needs a description');
+  assert.match(home.body, /<meta\b(?=[^>]*name="description")(?=[^>]*content="[^"]+")[^>]*>/i, 'Homepage needs a description');
   assert.match(home.body, /<link\s+rel="canonical"\s+href="https:\/\/recruiterreply\.com\/"/i, 'Homepage needs production canonical');
   const jsonLd = [...home.body.matchAll(/<script\s+type="application\/ld\+json"\s*>([\s\S]*?)<\/script>/gi)];
   assert.ok(jsonLd.length > 0, 'Homepage needs structured data');
