@@ -143,7 +143,9 @@ resource "aws_cloudfront_distribution" "this" {
   for_each = aws_s3_bucket.this
 
   comment             = local.cloudfront_config[each.key].comment
-  # Emergency lockdown #356: nonproduction distributions stay disabled until the\n  # reviewed edge authentication gate is deployed and validated.\n  enabled             = each.key == "prod" ? true : false
+  # Emergency lockdown #356: nonproduction distributions stay disabled until the
+  # reviewed edge authentication gate is deployed and validated.
+  enabled             = each.key == "prod" ? true : false
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_All"
