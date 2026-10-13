@@ -43,6 +43,7 @@ data "aws_iam_policy_document" "terraform_audit" {
     sid = "ReadAwsInventory"
     actions = [
       "cloudfront:Get*",
+      "cloudfront:DescribeFunction",
       "cloudfront:List*",
       "ec2:Describe*",
       "iam:Get*",
