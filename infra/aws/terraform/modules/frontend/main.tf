@@ -252,7 +252,9 @@ data "aws_iam_policy_document" "cloudfront_read" {
     condition {
       test     = "ArnLike"
       variable = "AWS:SourceArn"
-      values   = ["arn:aws:cloudfront::${var.aws_account_id}:distribution/${aws_cloudfront_distribution.this[each.key].id}"]
+      # Use the existing ID to avoid a deferred policy read whenever the
+      # distribution is updated in place for unrelated cache/header changes.
+      values   = ["arn:aws:cloudfront::${var.aws_account_id}:distribution/${var.existing_cloudfront_distribution_ids[each.key]}"]
     }
   }
 }
