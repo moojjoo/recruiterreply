@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '23 12 * * *'
+  workflow_run:
+    workflows: ['Build and Deploy to Dev']
+    types: [completed]
 permissions:
   contents: read
   pull-requests: read
@@ -11,6 +14,7 @@ permissions:
   checks: read
 jobs:
   audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +25,13 @@ jobs:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
           script: |
             const {report} = require('./.github/scripts/issue-reconciliation-report.cjs');
             await report({github,context,core});
+      - name: Upload reconciliation report
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue-reconciliation-report
+          path: reconciliation-report/
+          retention-days: 30
