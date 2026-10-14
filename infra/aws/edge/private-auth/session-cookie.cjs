@@ -1,24 +1,10 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const {seal, open} = require('./sealed-cookie.cjs');
 
 const COOKIE_NAME = 'rr_session';
 const SESSION_TTL_SECONDS = 900;
-
-function sign(payload, secret) {
-  return crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('base64url');
-}
-
-function safeEqual(a, b) {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-
-  return left.length === right.length &&
-    crypto.timingSafeEqual(left, right);
-}
 
 function createSessionCookie({ subject, issuer, clientId }, secret, now = Date.now()) {
   if (
@@ -32,16 +18,15 @@ function createSessionCookie({ subject, issuer, clientId }, secret, now = Date.n
     throw new Error('Invalid session configuration');
   }
 
-  const payload = Buffer.from(JSON.stringify({
+  const payload = JSON.stringify({
     sub: subject,
     iss: issuer,
     aud: clientId,
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + SESSION_TTL_SECONDS,
     jti: crypto.randomBytes(16).toString('base64url')
-  })).toString('base64url');
-
-  const value = `${payload}.${sign(payload, secret)}`;
+  });
+  const value = seal(payload, secret, COOKIE_NAME);
 
   return {
     name: COOKIE_NAME,
@@ -63,18 +48,9 @@ function verifySessionCookie(value, secret, expected, now = Date.now()) {
     throw new Error('Invalid session');
   }
 
-  const parts = value.split('.');
-  if (parts.length !== 2) throw new Error('Invalid session');
-
-  const [payload, signature] = parts;
-
-  if (!safeEqual(signature, sign(payload, secret))) {
-    throw new Error('Invalid session signature');
-  }
-
   let claims;
   try {
-    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    claims = JSON.parse(open(value, secret, COOKIE_NAME));
   } catch {
     throw new Error('Invalid session payload');
   }

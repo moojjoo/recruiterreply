@@ -17,6 +17,7 @@ const SOURCE_FILES = Object.freeze([
   'oauth-replay-guard.cjs',
   'oauth-token-exchange.cjs',
   'oauth-transaction.cjs',
+  'sealed-cookie.cjs',
   'secrets-manager-key-provider.cjs',
   'session-cookie.cjs',
   'session-gateway.cjs',
