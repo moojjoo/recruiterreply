@@ -1,4 +1,3 @@
-import React from "react";
 import "./ErrorPage.css";
 
 const messages: Record<number, { title: string; detail: string }> = {
