@@ -6,7 +6,9 @@ permissions:
   id-token: write
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    # Temporary pin for the October-November 2026 ubuntu-latest migration.
+    # Remove only after the audit matrix is verified on ubuntu-26.04 (Issue #387).
+    runs-on: ubuntu-24.04
     environment: terraform-readonly-audit
     timeout-minutes: 30
     strategy:
@@ -20,13 +22,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: '1.14.3'
       - name: Validate formatting
         run: terraform fmt -check -recursive
       - name: Authenticate read-only AWS audit role
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: us-east-1
           role-to-assume: ${{ vars.TERRAFORM_AUDIT_ROLE_ARN }}

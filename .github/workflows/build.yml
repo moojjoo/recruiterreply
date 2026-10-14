@@ -49,6 +49,9 @@ jobs:
       - name: Test Docker image retention safety
         run: python3 -m unittest discover -s tests -p 'test_docker_image_prune.py'
 
+      - name: Test Terraform audit maintenance policy
+        run: node --test .github/scripts/tests/terraform-readonly-audit.test.cjs
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
