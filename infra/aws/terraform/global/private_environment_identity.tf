@@ -1,7 +1,7 @@
 # Creating these identity resources alone does NOT protect CloudFront.
 # This module stays off by default and must not enable Dev/Test distributions.
 module "private_environment_identity" {
-  for_each = var.enable_private_environment_identity ? toset(["dev", "test"]) : toset([])
+  for_each = var.enable_private_environment_identity ? var.private_environment_identity_environments : toset([])
 
   source         = "../modules/private_environment_identity"
   environment    = each.key
@@ -18,12 +18,15 @@ check "private_environment_identity_prerequisites" {
       length(trimspace(var.private_environment_ses_from_email)) > 0 &&
       length(trimspace(var.private_environment_ses_source_arn)) > 0 &&
       alltrue([
-        for env in ["dev", "test"] :
+        for env in var.private_environment_identity_environments :
         length(trimspace(lookup(var.private_environment_cognito_domain_prefixes, env, ""))) > 0
       ]) &&
-      lookup(var.private_environment_cognito_domain_prefixes, "dev", "") != lookup(var.private_environment_cognito_domain_prefixes, "test", "")
+      length(distinct([
+        for env in var.private_environment_identity_environments :
+        lookup(var.private_environment_cognito_domain_prefixes, env, "")
+      ])) == length(var.private_environment_identity_environments)
     )
-    error_message = "Cognito opt-in requires a verified SES sender, identity ARN and distinct Dev/Test domain prefixes."
+    error_message = "Cognito opt-in requires a verified SES sender, identity ARN and a distinct domain prefix for every selected environment."
   }
 }
 

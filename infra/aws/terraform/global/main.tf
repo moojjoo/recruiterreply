@@ -34,6 +34,7 @@ module "frontend" {
     var.enable_private_edge_runtime_state &&
     var.enable_private_environment_identity
   )
+  private_edge_association_environments = var.private_edge_environments
   private_edge_function_arns = {
     for env, function in module.private_edge_function : env => function.qualified_arn
   }

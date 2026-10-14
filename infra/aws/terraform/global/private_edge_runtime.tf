@@ -2,7 +2,7 @@
 # This does not create a Lambda function, associate CloudFront, enable a
 # distribution, or populate signing-key values.
 module "private_edge_runtime_state" {
-  for_each = var.enable_private_edge_runtime_state ? toset(["dev", "test"]) : toset([])
+  for_each = var.enable_private_edge_runtime_state ? var.private_edge_environments : toset([])
 
   source      = "../modules/private_edge_runtime_state"
   environment = each.key
@@ -16,7 +16,7 @@ module "private_edge_function" {
     var.enable_private_edge_functions &&
     var.enable_private_edge_runtime_state &&
     var.enable_private_environment_identity
-  ) ? toset(["dev", "test"]) : toset([])
+  ) ? var.private_edge_environments : toset([])
 
   source      = "../modules/private_edge_function"
   environment = each.key
@@ -41,9 +41,10 @@ check "private_edge_function_prerequisites" {
     condition = !var.enable_private_edge_functions || (
       var.enable_private_edge_runtime_state &&
       var.enable_private_environment_identity &&
+      length(setsubtract(var.private_edge_environments, var.private_environment_identity_environments)) == 0 &&
       var.aws_region == "us-east-1" &&
       alltrue([
-        for env in ["dev", "test"] :
+        for env in var.private_edge_environments :
         fileexists(try(var.private_edge_package_files[env], ""))
       ])
     )
@@ -56,7 +57,8 @@ check "private_edge_association_prerequisites" {
     condition = !var.enable_private_edge_associations || (
       var.enable_private_edge_functions &&
       var.enable_private_edge_runtime_state &&
-      var.enable_private_environment_identity
+      var.enable_private_environment_identity &&
+      length(setsubtract(var.private_edge_environments, var.private_environment_identity_environments)) == 0
     )
     error_message = "Private edge associations require the reviewed identity, runtime state, and versioned function phases."
   }

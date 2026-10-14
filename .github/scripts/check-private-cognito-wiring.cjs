@@ -13,7 +13,14 @@ const edgeRuntimeState = fs.readFileSync(
   'utf8'
 );
 assert.match(variables, /variable "enable_private_environment_identity"\s*\{[^}]*default\s*=\s*false/s);
-assert.match(wiring, /for_each\s*=\s*var\.enable_private_environment_identity\s*\?\s*toset\(\["dev", "test"\]\)\s*:\s*toset\(\[\]\)/);
+assert.match(
+  variables,
+  /variable "private_environment_identity_environments"\s*\{[\s\S]*?default\s*=\s*\["dev", "test"\][\s\S]*?contains\(\["dev", "test"\], env\)/
+);
+assert.match(
+  wiring,
+  /for_each\s*=\s*var\.enable_private_environment_identity\s*\?\s*var\.private_environment_identity_environments\s*:\s*toset\(\[\]\)/
+);
 assert.match(wiring, /source\s*=\s*"\.\.\/modules\/private_environment_identity"/);
 assert.match(frontend, /enabled\s*=\s*each\.key\s*==\s*"prod"\s*\?\s*true\s*:\s*false/);
 for (const variable of [
@@ -28,8 +35,14 @@ for (const variable of [
   );
 }
 assert.match(edgeWiring, /private_edge_association_prerequisites/);
+assert.match(
+  edgeVariables,
+  /variable "private_edge_environments"\s*\{[\s\S]*?default\s*=\s*\["dev", "test"\][\s\S]*?contains\(\["dev", "test"\], env\)/
+);
+assert.match(edgeWiring, /for_each\s*=\s*var\.enable_private_edge_runtime_state\s*\?\s*var\.private_edge_environments/);
 assert.match(frontend, /viewer-request\s*=\s*var\.private_edge_function_arns\[each\.key\]/);
 assert.match(frontend, /origin-response\s*=\s*var\.private_edge_function_arns\[each\.key\]/);
+assert.match(frontend, /contains\(var\.private_edge_association_environments, each\.key\)/);
 assert.doesNotMatch(
   edgeRuntimeState,
   /resource\s+"aws_secretsmanager_secret_version"/,

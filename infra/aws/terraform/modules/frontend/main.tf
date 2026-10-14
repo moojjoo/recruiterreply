@@ -166,14 +166,14 @@ resource "aws_cloudfront_distribution" "this" {
     cached_methods         = ["HEAD", "GET"]
     compress               = true
     dynamic "function_association" {
-      for_each = each.key == "dev" && !var.enable_private_edge_associations ? [1] : []
+      for_each = each.key == "dev" && !(var.enable_private_edge_associations && contains(var.private_edge_association_environments, each.key)) ? [1] : []
       content {
         event_type   = "viewer-request"
         function_arn = aws_cloudfront_function.dev_spa_rewrite[each.key].arn
       }
     }
     dynamic "function_association" {
-      for_each = contains(["dev", "test"], each.key) && !var.enable_private_edge_associations ? [1] : []
+      for_each = contains(["dev", "test"], each.key) && !(var.enable_private_edge_associations && contains(var.private_edge_association_environments, each.key)) ? [1] : []
       content {
         event_type   = "viewer-response"
         function_arn = aws_cloudfront_function.noindex[each.key].arn
@@ -181,7 +181,7 @@ resource "aws_cloudfront_distribution" "this" {
     }
 
     dynamic "lambda_function_association" {
-      for_each = contains(["dev", "test"], each.key) && var.enable_private_edge_associations ? {
+      for_each = contains(var.private_edge_association_environments, each.key) && var.enable_private_edge_associations ? {
         viewer-request  = var.private_edge_function_arns[each.key]
         origin-response = var.private_edge_function_arns[each.key]
       } : {}
@@ -205,7 +205,7 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "custom_error_response" {
-    for_each = each.key == "prod" || !var.enable_private_edge_associations ? toset([403, 404]) : toset([])
+    for_each = each.key == "prod" || !(var.enable_private_edge_associations && contains(var.private_edge_association_environments, each.key)) ? toset([403, 404]) : toset([])
     content {
       error_code            = custom_error_response.value
       response_code         = 200
