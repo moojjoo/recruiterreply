@@ -259,6 +259,8 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+      actions: read
+      checks: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -269,6 +271,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
+          DEV_DEPLOYMENT_VERIFIED: 'true'
         with:
           github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
           script: |

@@ -1,6 +1,7 @@
 // Post-deployment reconciliation: fail closed on missing evidence or permissions.
 const MARKER = /(?:^|\n)Dev-Completes:\s*#(\d+)\b/gim;
 const eligibleLabel = 'dev-acceptance-verified';
+const requiredChecks = ['verify', 'test', 'CodeQL required gate'];
 
 function linkedIssues(body = '') {
   return [...new Set([...body.matchAll(MARKER)].map(m => Number(m[1])))];
@@ -9,6 +10,14 @@ function findProject(projects) {
   const matches = projects.filter(p => ["recruiterreply project", "@moojjoo's recruiterreply project"].includes(p.title.toLowerCase()));
   if (matches.length !== 1) throw new Error('Expected exactly one RecruiterReply GitHub Project; found ' + matches.length);
   return matches[0];
+}
+function acceptanceChecklistComplete(body = '') {
+  const section = body.match(/^## Acceptance criteria[^\n]*\n([\s\S]*)$/im);
+  const criteria = section?.[1].split(/^## /m, 1)[0] || '';
+  return /^\s*[-*]\s*\[[xX]\]/m.test(criteria) && !/^\s*[-*]\s*\[ \]/m.test(criteria);
+}
+function checksPass(checks, headSha, names = requiredChecks) {
+  return names.every(name => checks.some(check => check.name === name && check.head_sha === headSha && check.conclusion === 'success'));
 }
 module.exports = async ({github, context, core}) => {
   const {owner, repo} = context.repo;
@@ -20,6 +29,10 @@ module.exports = async ({github, context, core}) => {
   }
   if (!process.env.PROJECTS_WRITE_TOKEN) {
     core.warning('Missing PROJECTS_WRITE_TOKEN (Projects write + Issues write); no issues changed.');
+    return;
+  }
+  if (process.env.DEV_DEPLOYMENT_VERIFIED !== 'true') {
+    core.warning('Trusted Dev deployment verification is absent; no issues changed.');
     return;
   }
   const prs = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit,
@@ -43,6 +56,16 @@ module.exports = async ({github, context, core}) => {
   const done = field?.options.find(o => o.name === 'Done');
   if (!field || !done) throw new Error('Project Status/Done field missing');
   for (const pr of merged) {
+    if (!acceptanceChecklistComplete(pr.body || '')) {
+      core.warning(`#${pr.number}: acceptance checklist is missing or incomplete; skipped`);
+      continue;
+    }
+    const checks = await github.paginate(github.rest.checks.listForRef,
+      {owner, repo, ref: pr.head.sha, per_page: 100});
+    if (!checksPass(checks, pr.head.sha)) {
+      core.warning(`#${pr.number}: required current-head checks are incomplete; skipped`);
+      continue;
+    }
     for (const issue_number of linkedIssues(pr.body || '')) {
       const {data: issue} = await github.rest.issues.get({owner, repo, issue_number});
       if (issue.pull_request) continue;
@@ -90,3 +113,6 @@ module.exports = async ({github, context, core}) => {
 };
 module.exports.linkedIssues = linkedIssues;
 module.exports.findProject = findProject;
+module.exports.acceptanceChecklistComplete = acceptanceChecklistComplete;
+module.exports.checksPass = checksPass;
+module.exports.requiredChecks = requiredChecks;
