@@ -4,6 +4,13 @@ This guide helps AI coding agents quickly understand and contribute to the Recru
 
 ## 🚀 Quick Start Commands
 
+## Execution environment
+
+- Run all repository commands inside Ubuntu WSL.
+- Use Bash and Linux paths only.
+- Never invoke PowerShell, cmd.exe, or Windows-native development tools.
+- Repository root: /home/moojjoo/repos/recruiterreply
+
 ### Backend (ASP.NET CORE 10)
 ```bash
 cd backend
