@@ -46,6 +46,9 @@ jobs:
       - name: Test issue reconciliation logic
         run: node --test .github/scripts/tests/reconcile-dev-issues.test.cjs
 
+      - name: Test Docker image retention safety
+        run: python3 -m unittest discover -s tests -p 'test_docker_image_prune.py'
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:

@@ -58,6 +58,8 @@ cat >"$tmp_json" <<EOF
 {
   "commands": [
     "set -eu",
+    "exec 9>/tmp/recruiterreply-docker-deploy.lock",
+    "flock -w 600 9 || { echo Timed out waiting for deploy lock; exit 1; }",
     "sudo install -d -m 755 ${DEPLOY_PATH}",
     "touch ${DEPLOY_PATH}/.env",
     "echo '${ENV_B64}' | base64 -d | sudo tee /tmp/recruiterreply-env-update >/dev/null",

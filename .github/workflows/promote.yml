@@ -576,7 +576,7 @@ jobs:
           {
               commands: [
                 "set -eu",
-                "exec 9>/tmp/recruiterreply-deploy.lock",
+                "exec 9>/tmp/recruiterreply-docker-deploy.lock",
                 "flock -w 600 9 || { echo Timed out waiting for deploy lock; exit 1; }",
                 "cd \($deploy_path)",
                 "if [ ! -f .env ]; then echo Missing env file: \($deploy_path)/.env; exit 1; fi",
@@ -595,8 +595,12 @@ jobs:
                 "sudo grep \"^\($image_var)=\" .env",
                 "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
                 "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ps; exit 1; }",
+                "HEALTH_PORT=$(case \($environment) in dev) echo 5001;; test) echo 5002;; prod) echo 5003;; *) exit 1;; esac)",
+                "for attempt in $(seq 1 30); do curl -fsS http://127.0.0.1:$HEALTH_PORT/health >/dev/null && break; [ $attempt -eq 30 ] && { echo Backend health check failed; exit 1; }; sleep 2; done",
+                "sudo install -m 0755 \"$DEPLOY_SOURCE_PATH/scripts/recruiterreply-image-prune.py\" /usr/local/sbin/recruiterreply-image-prune",
                 "sudo bash \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" \($environment) \($region)",
-                "sudo docker image prune -f"
+                "flock -u 9",
+                "sudo /usr/local/sbin/recruiterreply-image-prune --repo \($ecr_registry)/recruiterreply-backend --keep 10"
               ]
             }
           JQ
