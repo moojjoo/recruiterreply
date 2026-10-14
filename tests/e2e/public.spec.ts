@@ -35,5 +35,5 @@ test('navbar and footer links navigate', async ({ mockedPage: page }) => {
 test('unknown route redirects to 404', async ({ mockedPage: page }) => {
   await page.goto('/does-not-exist');
   await expect(page).toHaveURL('/404');
-  await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Page not found', level: 1 })).toBeVisible();
 });
