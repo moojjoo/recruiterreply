@@ -1,0 +1,19 @@
+.rr-error-shell { --rr-error-bg:#f2f6fc; --rr-error-panel:#fff; --rr-error-text:#17243a; --rr-error-muted:#4b5d74; --rr-error-border:#d9e3f0; min-height:100vh; padding:3rem 1rem; display:grid; place-items:center; background:var(--rr-error-bg); color:var(--rr-error-text); }
+.rr-error-card { width:min(100%,36rem); padding:clamp(1.5rem,5vw,3rem); border:1px solid var(--rr-error-border); border-radius:1.5rem; background:var(--rr-error-panel); text-align:center; box-shadow:0 12px 40px #152d5015; }
+.rr-error-brand { color:#1656a8; font-size:1.4rem; font-weight:800; text-decoration:none; }
+.rr-error-brand span { color:#237a75; }
+.rr-error-code { color:#2761a6; font-size:clamp(4rem,14vw,7rem); font-weight:850; line-height:1.25; margin:1rem 0; }
+.rr-error-card h1 { color:var(--rr-error-text); font-size:clamp(1.4rem,4vw,2rem); font-weight:750; margin:0 0 1rem; }
+.rr-error-card p { color:var(--rr-error-muted); margin:0 auto 1.5rem; max-width:30rem; }
+.rr-error-actions { display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap; }
+.rr-error-primary,.rr-error-secondary { display:inline-flex; align-items:center; justify-content:center; min-height:44px; border-radius:.65rem; padding:.7rem 1.2rem; font-weight:650; text-decoration:none; cursor:pointer; }
+.rr-error-primary { background:#175ba9; color:white; border:1px solid #175ba9; }
+.rr-error-secondary { color:var(--rr-error-text); background:var(--rr-error-panel); border:1px solid var(--rr-error-border); }
+.rr-error-shell :focus-visible { outline:3px solid #eea83b; outline-offset:3px; }
+.rr-error-reference { margin-top:1.5rem; font-size:.85rem; color:var(--rr-error-muted); overflow-wrap:anywhere; }
+.rr-error-reference button { margin-left:.5rem; color:#2761a6; text-decoration:underline; }
+.rr-error-card .rr-error-footnote { font-size:.8rem; margin:2rem 0 0; }
+@media (prefers-color-scheme:dark) { .rr-error-shell { --rr-error-bg:#0c1422; --rr-error-panel:#17243a; --rr-error-text:#f3f7ff; --rr-error-muted:#c0d0e3; --rr-error-border:#40536d; } .rr-error-brand { color:#91c3ff; } .rr-error-brand span { color:#79dfd0; } .rr-error-code,.rr-error-reference button { color:#91c3ff; } }
+html.dark .rr-error-shell,html[data-theme="dark"] .rr-error-shell { --rr-error-bg:#0c1422; --rr-error-panel:#17243a; --rr-error-text:#f3f7ff; --rr-error-muted:#c0d0e3; --rr-error-border:#40536d; }
+html.light .rr-error-shell,html[data-theme="light"] .rr-error-shell { --rr-error-bg:#f2f6fc; --rr-error-panel:#fff; --rr-error-text:#17243a; --rr-error-muted:#4b5d74; --rr-error-border:#d9e3f0; }
+@media (prefers-reduced-motion:reduce) { .rr-error-shell * { transition:none!important; animation:none!important; } }
