@@ -52,6 +52,17 @@ variable "enable_private_edge_associations" {
   default     = false
 }
 
+variable "private_edge_association_environments" {
+  description = "Dev/Test distributions that receive reviewed Lambda@Edge associations."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for env in var.private_edge_association_environments : contains(["dev", "test"], env)])
+    error_message = "Private edge associations may target only dev and/or test."
+  }
+}
+
 variable "private_edge_function_arns" {
   description = "Numbered Lambda@Edge version ARNs keyed by dev and test."
   type        = map(string)

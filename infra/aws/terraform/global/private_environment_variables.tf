@@ -7,6 +7,20 @@ variable "enable_private_environment_identity" {
   default     = false
 }
 
+variable "private_environment_identity_environments" {
+  description = "Non-production environments whose Cognito identity resources may be provisioned when enabled. Use [\"dev\"] for a Dev-only rollout."
+  type        = set(string)
+  default     = ["dev", "test"]
+
+  validation {
+    condition = (
+      length(var.private_environment_identity_environments) > 0 &&
+      alltrue([for env in var.private_environment_identity_environments : contains(["dev", "test"], env)])
+    )
+    error_message = "Private environment identity may target only dev and/or test."
+  }
+}
+
 variable "private_environment_ses_from_email" {
   description = "Verified SES From address for Cognito MFA. Required when enabled."
   type        = string

@@ -127,6 +127,11 @@ compiled into reviewed immutable packages:
    from those packages and associate viewer-request plus origin-response events.
    Dev/Test remain disabled until live negative and MFA tests are approved.
 
+Set `private_environment_identity_environments` and `private_edge_environments`
+to `["dev"]` for a Dev-only rollout. This prevents a Dev authorization from
+implicitly provisioning or associating Test resources. The defaults remain
+`["dev", "test"]` for an explicitly approved combined rollout.
+
 `enable_private_edge_associations` is a separate third gate. It replaces the
 incompatible Dev SPA viewer-request and Dev/Test noindex viewer-response
 CloudFront Function associations with the versioned Lambda on viewer-request
