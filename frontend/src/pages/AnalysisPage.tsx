@@ -11,7 +11,7 @@ export const AnalysisPage: React.FC = () => {
 
   const handleResult = useCallback((res: AnalyzeMessageResponse) => {
     setResult(res);
-    trackProductEvent("analysis_completed");
+    trackProductEvent("analysis_completed", { feature: "analyze" });
   }, []);
 
   return (

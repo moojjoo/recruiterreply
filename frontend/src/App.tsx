@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { Toast } from "./components/common/Toast";
 import { CookieConsent } from "./components/common/CookieConsent";
+import { AnalyticsRouteTracker } from "./components/analytics/AnalyticsRouteTracker";
 import { CookiePolicy } from "./pages/CookiePolicy";
 import "./index.css";
 
@@ -37,6 +38,7 @@ function App({ server = false }: { server?: boolean }) {
         <AuthProvider>
           <ToastProvider>
             <UIProvider>
+              <AnalyticsRouteTracker />
               <Routes>
                 {/* Public Routes */}
                 <Route path="/" element={<HomePage />} />

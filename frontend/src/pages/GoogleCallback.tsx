@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { useToast } from "../hooks/useToast";
+import { trackProductEvent } from "../utils/productAnalytics";
 
 export const GoogleCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -20,6 +21,7 @@ export const GoogleCallback: React.FC = () => {
     const token = searchParams.get("token");
     if (token) {
       localStorage.setItem("authToken", token);
+      trackProductEvent("login", { method: "google" });
       showToast("Google login successful.", "success");
       navigate("/dashboard", { replace: true });
       return;

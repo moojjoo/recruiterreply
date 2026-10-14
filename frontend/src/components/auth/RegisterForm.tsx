@@ -29,7 +29,7 @@ export const RegisterForm: React.FC = () => {
     setLoading(true);
     try {
       await register(email, password, name);
-      trackProductEvent("sign_up");
+      trackProductEvent("sign_up", { method: "password" });
       showToast("Account created successfully!", "success");
       window.location.href = "/dashboard";
     } catch (error) {

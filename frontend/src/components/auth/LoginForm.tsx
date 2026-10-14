@@ -5,6 +5,7 @@ import { Input } from "../common/Input";
 import { Button } from "../common/Button";
 import { Card } from "../common/Card";
 import { authService } from "../../services/api/authService";
+import { trackProductEvent } from "../../utils/productAnalytics";
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -19,6 +20,7 @@ export const LoginForm: React.FC = () => {
     setLoading(true);
     try {
       await login(email, password);
+      trackProductEvent("login", { method: "password" });
       showToast("Logged in successfully!", "success");
       window.location.href = "/dashboard";
     } catch {
