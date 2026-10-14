@@ -1,0 +1,18 @@
+{
+  "name": "recruiterreply-private-auth-edge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime dependencies for the Dev/Test Lambda@Edge authentication gateway.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test *.test.cjs",
+    "stage": "node package-stage.cjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1151.0",
+    "@aws-sdk/client-secrets-manager": "3.1151.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

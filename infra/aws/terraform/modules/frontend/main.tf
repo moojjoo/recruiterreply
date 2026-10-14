@@ -103,11 +103,11 @@ resource "aws_cloudfront_origin_access_control" "this" {
 # Preserve real files, SEO prerendered pages, robots.txt, and sitemap.xml.
 resource "aws_cloudfront_function" "dev_spa_rewrite" {
   for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if key == "dev" }
-  name    = "recruiterreply-dev-spa-rewrite"
-  runtime = "cloudfront-js-2.0"
-  comment = "Rewrite Dev SPA routes to index.html before S3 lookup"
-  publish = true
-  code    = <<-JS
+  name     = "recruiterreply-dev-spa-rewrite"
+  runtime  = "cloudfront-js-2.0"
+  comment  = "Rewrite Dev SPA routes to index.html before S3 lookup"
+  publish  = true
+  code     = <<-JS
     function handler(event) {
       var request = event.request;
       var uri = request.uri;
@@ -126,11 +126,11 @@ resource "aws_cloudfront_function" "dev_spa_rewrite" {
 # headers policies. Keep robots.txt restrictive and verify live responses.
 resource "aws_cloudfront_function" "noindex" {
   for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if contains(["dev", "test"], key) }
-  name    = "recruiterreply-${each.key}-noindex"
-  runtime = "cloudfront-js-2.0"
-  comment = "Prevent indexing of ${each.key} environment"
-  publish = true
-  code    = <<-JS
+  name     = "recruiterreply-${each.key}-noindex"
+  runtime  = "cloudfront-js-2.0"
+  comment  = "Prevent indexing of ${each.key} environment"
+  publish  = true
+  code     = <<-JS
     function handler(event) {
       var response = event.response;
       response.headers['x-robots-tag'] = {value: 'noindex, nofollow'};
@@ -142,7 +142,7 @@ resource "aws_cloudfront_function" "noindex" {
 resource "aws_cloudfront_distribution" "this" {
   for_each = aws_s3_bucket.this
 
-  comment             = local.cloudfront_config[each.key].comment
+  comment = local.cloudfront_config[each.key].comment
   # Emergency lockdown #356: nonproduction distributions stay disabled until the
   # reviewed edge authentication gate is deployed and validated.
   enabled             = each.key == "prod" ? true : false
@@ -166,20 +166,32 @@ resource "aws_cloudfront_distribution" "this" {
     cached_methods         = ["HEAD", "GET"]
     compress               = true
     dynamic "function_association" {
-      for_each = each.key == "dev" ? [1] : []
+      for_each = each.key == "dev" && !var.enable_private_edge_associations ? [1] : []
       content {
         event_type   = "viewer-request"
         function_arn = aws_cloudfront_function.dev_spa_rewrite[each.key].arn
       }
     }
     dynamic "function_association" {
-      for_each = contains(["dev", "test"], each.key) ? [1] : []
+      for_each = contains(["dev", "test"], each.key) && !var.enable_private_edge_associations ? [1] : []
       content {
         event_type   = "viewer-response"
         function_arn = aws_cloudfront_function.noindex[each.key].arn
       }
     }
-    cache_policy_id        = local.cloudfront_config[each.key].use_forwarded_values ? null : "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    dynamic "lambda_function_association" {
+      for_each = contains(["dev", "test"], each.key) && var.enable_private_edge_associations ? {
+        viewer-request  = var.private_edge_function_arns[each.key]
+        origin-response = var.private_edge_function_arns[each.key]
+      } : {}
+      content {
+        event_type   = lambda_function_association.key
+        lambda_arn   = lambda_function_association.value
+        include_body = false
+      }
+    }
+    cache_policy_id = local.cloudfront_config[each.key].use_forwarded_values ? null : "658327ea-f89d-4fab-a63d-7e88639e58f6"
 
     dynamic "forwarded_values" {
       for_each = local.cloudfront_config[each.key].use_forwarded_values ? [1] : []
@@ -192,18 +204,14 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 10
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 10
+  dynamic "custom_error_response" {
+    for_each = each.key == "prod" || !var.enable_private_edge_associations ? toset([403, 404]) : toset([])
+    content {
+      error_code            = custom_error_response.value
+      response_code         = 200
+      response_page_path    = "/index.html"
+      error_caching_min_ttl = 10
+    }
   }
 
   restrictions {
@@ -238,7 +246,7 @@ data "aws_iam_policy_document" "cloudfront_read" {
       variable = "AWS:SourceArn"
       # Use the existing ID to avoid a deferred policy read whenever the
       # distribution is updated in place for unrelated cache/header changes.
-      values   = ["arn:aws:cloudfront::${var.aws_account_id}:distribution/${var.existing_cloudfront_distribution_ids[each.key]}"]
+      values = ["arn:aws:cloudfront::${var.aws_account_id}:distribution/${var.existing_cloudfront_distribution_ids[each.key]}"]
     }
   }
 }

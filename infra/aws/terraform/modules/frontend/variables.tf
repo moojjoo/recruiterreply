@@ -45,3 +45,15 @@ variable "existing_cloudfront_distribution_ids" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_private_edge_associations" {
+  description = "Associate reviewed versioned Lambda@Edge gates with disabled Dev/Test distributions. Never enables a distribution."
+  type        = bool
+  default     = false
+}
+
+variable "private_edge_function_arns" {
+  description = "Numbered Lambda@Edge version ARNs keyed by dev and test."
+  type        = map(string)
+  default     = {}
+}

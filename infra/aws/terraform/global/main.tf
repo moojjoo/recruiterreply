@@ -28,6 +28,15 @@ module "frontend" {
     test = "E2IGR9MYMWVQFI"
     prod = "EHWW9BKSSF64L"
   }
+  enable_private_edge_associations = (
+    var.enable_private_edge_associations &&
+    var.enable_private_edge_functions &&
+    var.enable_private_edge_runtime_state &&
+    var.enable_private_environment_identity
+  )
+  private_edge_function_arns = {
+    for env, function in module.private_edge_function : env => function.qualified_arn
+  }
 }
 
 resource "aws_s3_bucket" "postgres_backups" {
