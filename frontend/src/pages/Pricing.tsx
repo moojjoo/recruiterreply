@@ -7,6 +7,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { billingService } from "../services/api/billingService";
 import { SubscriptionTier } from "../types/index";
+import { trackProductEvent } from "../utils/productAnalytics";
 
 function redirectTo(url: string) {
   window.location.href = url;
@@ -74,6 +75,9 @@ export const Pricing: React.FC = () => {
     setLoadingTier(tier);
     try {
       const response = await billingService.createCheckoutSession(tier);
+      trackProductEvent("begin_checkout", {
+        plan_tier: tier === "recruiter_pro" ? "recruiter_pro" : "professional",
+      });
       redirectTo(response.data.url);
     } catch {
       showToast("Failed to start checkout. Please try again.", "error");

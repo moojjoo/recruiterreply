@@ -6,9 +6,16 @@ const adapter = readFileSync(resolve(__dirname, '../../frontend/src/utils/produc
 
 test('analytics adapter enforces production hostname and affirmative consent', async () => {
   expect(adapter).toContain('window.location.protocol !== "https:"');
-  expect(adapter).toContain('window.location.hostname !== "recruiterreply.com"');
-  expect(adapter).toContain('consent?.analytics !== true');
-  expect(adapter).toContain('gtag("event", event)');
+  expect(adapter).toContain('window.location.hostname !== PRODUCTION_HOST');
+  expect(adapter).toContain('consent?.analytics === true');
+  expect(adapter).toContain('window.gtag?.("event", event, args[0] ?? {})');
+  expect(adapter).not.toMatch(/email|stripe_customer|recruiter_text|generated_reply/);
+});
+
+test('analytics event contract is bounded and SPA page views omit query strings', async () => {
+  expect(adapter).toContain('begin_checkout: { plan_tier: "professional" | "recruiter_pro" }');
+  expect(adapter).toContain('pathname.split(/[?#]/, 1)[0]');
+  expect(adapter).toContain('previousPagePath === safePath');
 });
 
 test('GA4 requests remain blocked on Dev despite explicit consent', async ({ mockedPage: page }) => {
@@ -20,4 +27,18 @@ test('GA4 requests remain blocked on Dev despite explicit consent', async ({ moc
   await page.getByRole('button', { name: 'Accept All' }).click();
   await page.reload();
   expect(traffic).toEqual([]);
+});
+
+test('Dev emits no product events or page views into the GA queue', async ({ mockedPage: page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('rr-cookie-consent-v1', JSON.stringify({
+      version: 1, analytics: true, timestamp: new Date().toISOString(),
+    }));
+  });
+  await page.goto('/pricing');
+  await page.goto('/');
+  const productCalls = await page.evaluate(() =>
+    (window as unknown as { dataLayer: IArguments[] }).dataLayer
+      .filter(args => args[0] === 'event'));
+  expect(productCalls).toEqual([]);
 });

@@ -28,7 +28,7 @@ export const ComparisonPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Form */}
             <div className="lg:col-span-2">
-              <ComparisonTool onResult={(res) => { setResult(res); trackProductEvent("offer_compared"); }} />
+              <ComparisonTool onResult={(res) => { setResult(res); trackProductEvent("offer_compared", { feature: "compare" }); }} />
             </div>
 
             {/* Info Sidebar */}

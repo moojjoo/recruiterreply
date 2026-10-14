@@ -26,7 +26,8 @@
           script.src = 'https://www.googletagmanager.com/gtag/js?id=G-LRR12SSGH7';
           document.head.appendChild(script);
           window.gtag('js', new Date());
-          window.gtag('config', 'G-LRR12SSGH7');
+          // React emits one sanitized page_view for each route; disable GA's automatic view.
+          window.gtag('config', 'G-LRR12SSGH7', { send_page_view: false });
         };
         if (allowed) {
           window.gtag('consent', 'update', { analytics_storage: 'granted' });
