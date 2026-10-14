@@ -36,7 +36,14 @@ function open(value, secret, purpose) {
   const iv = Buffer.from(ivText, 'base64url');
   const ciphertext = Buffer.from(ciphertextText, 'base64url');
   const tag = Buffer.from(tagText, 'base64url');
-  if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES || ciphertext.length === 0) throw new Error('Invalid sealed cookie');
+  if (
+    iv.length !== IV_BYTES ||
+    tag.length !== TAG_BYTES ||
+    ciphertext.length === 0 ||
+    iv.toString('base64url') !== ivText ||
+    ciphertext.toString('base64url') !== ciphertextText ||
+    tag.toString('base64url') !== tagText
+  ) throw new Error('Invalid sealed cookie');
   const decipher = crypto.createDecipheriv(ALGORITHM, deriveKey(secret, purpose), iv, {authTagLength: TAG_BYTES});
   decipher.setAAD(Buffer.from(purpose, 'utf8'));
   decipher.setAuthTag(tag);
