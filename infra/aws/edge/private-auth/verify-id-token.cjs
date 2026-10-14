@@ -30,6 +30,9 @@ function validateIdToken(token, jwks, config, now = Math.floor(Date.now() / 1000
   const matches = jwks.keys.filter(key => key.kid === header.kid && key.kty === 'RSA' && key.use === 'sig' && key.alg === 'RS256');
   if (matches.length !== 1) throw new Error('Unknown or ambiguous signing key');
   const key = crypto.createPublicKey({key: matches[0], format: 'jwk'});
+  if (!/^[A-Za-z0-9_-]+$/.test(parts[2])) {
+    throw new Error('Malformed JWT signature');
+  }
   const signature = Buffer.from(parts[2], 'base64url');
   if (!crypto.verify('RSA-SHA256', Buffer.from(parts[0] + '.' + parts[1]), key, signature)) throw new Error('Invalid token signature');
   return claims;
