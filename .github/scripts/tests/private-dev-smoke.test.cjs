@@ -4,8 +4,8 @@ const assert = require('node:assert/strict');
 const {mkdtempSync, mkdirSync, writeFileSync, rmSync} = require('node:fs');
 const {tmpdir} = require('node:os');
 const {join} = require('node:path');
-const {identity, authorize, boundary, verifyArtifacts} = require('../private-dev-smoke.cjs');
-const approved = {domain: 'approved-dev.auth.us-east-1.amazoncognito.com', clientId: 'devClient123'};
+const {identity, authorize, boundary, authenticatedCredentials, authenticated, verifyArtifacts} = require('../private-dev-smoke.cjs');
+const approved = {domain: 'approved-dev.auth.us-east-1.amazoncognito.com', clientId: 'devClient123', distributionDomain: 'd123example.cloudfront.net'};
 function response(location = '/_auth/login', status = 302) {
   return new Response(null, {status, headers: {location, 'cache-control': 'no-store', 'x-robots-tag': 'noindex, nofollow'}});
 }
@@ -16,7 +16,7 @@ function authorization() {
 }
 test('identity must be explicitly configured', () => {
   assert.throws(() => identity({}));
-  assert.deepEqual(identity({DEV_COGNITO_DOMAIN: approved.domain, DEV_COGNITO_CLIENT_ID: approved.clientId}), approved);
+  assert.deepEqual(identity({DEV_COGNITO_DOMAIN: approved.domain, DEV_COGNITO_CLIENT_ID: approved.clientId, DEV_CLOUDFRONT_DOMAIN: approved.distributionDomain}), approved);
 });
 test('approved Cognito authorization redirect passes', () => authorize(response(authorization()), approved));
 test('wrong identity, callback, protocol, OAuth flow, duplicate parameters and missing PKCE fail', () => {
@@ -29,7 +29,9 @@ test('boundary covers homepage, deep links, config and actual assets without fol
   const seen = [];
   await boundary(approved, ['/assets/app.js'], async (url, options) => {
     assert.equal(options.redirect, 'manual'); seen.push(new URL(url).pathname);
-    return response(url.endsWith('/_auth/login') ? authorization() : '/_auth/login');
+    return url.includes(approved.distributionDomain)
+      ? response('/ignored', 403)
+      : response(url.endsWith('/_auth/login') ? authorization() : '/_auth/login');
   });
   for (const path of ['/', '/dashboard', '/config.js', '/assets/app.js', '/_auth/login']) assert.ok(seen.includes(path));
 });
@@ -43,6 +45,34 @@ test('cacheable or indexable redirects fail', () => {
     const res = response(authorization()); res.headers.delete(name);
     assert.throws(() => authorize(res, approved));
   }
+});
+test('authenticated smoke credentials must be present and shaped safely', () => {
+  assert.throws(() => authenticatedCredentials({}), /session cookie/);
+  assert.throws(() => authenticatedCredentials({DEV_SMOKE_SESSION_COOKIE: 'short', DEV_SMOKE_API_TOKEN: 'a'.repeat(30)}), /session cookie/);
+  assert.deepEqual(authenticatedCredentials({DEV_SMOKE_SESSION_COOKIE: 'c'.repeat(30), DEV_SMOKE_API_TOKEN: 't'.repeat(30)}), {cookie: 'c'.repeat(30), token: 't'.repeat(30)});
+});
+test('authenticated smoke verifies homepage, assets, deep link and API without logging bodies', async () => {
+  const env = {DEV_SMOKE_SESSION_COOKIE: 'c'.repeat(30), DEV_SMOKE_API_TOKEN: 't'.repeat(30), DEV_SMOKE_API_URL: 'https://api-dev.example/api/health'};
+  const seen = [];
+  const fetchRequest = async (url, options) => {
+    seen.push({url, options});
+    if (url === env.DEV_SMOKE_API_URL) return new Response('{"status":"ok"}', {status: 200});
+    if (url.endsWith('/')) return new Response('<div id="root" data-prerendered="react"><h1>Home</h1><script src="/assets/app.js"></script></div>', {status: 200, headers: {'content-type': 'text/html'}});
+    return new Response('asset', {status: 200, headers: {'content-type': 'text/javascript'}});
+  };
+  const result = await authenticated(approved, env, fetchRequest);
+  assert.equal(result.assetCount, 1);
+  assert.deepEqual(seen.map(item => new URL(item.url).pathname), ['/', '/assets/app.js', '/dashboard', '/api/health']);
+  assert.equal(seen[0].options.headers.cookie, `rr_session=${env.DEV_SMOKE_SESSION_COOKIE}`);
+  assert.equal(seen.at(-1).options.headers.authorization, `Bearer ${env.DEV_SMOKE_API_TOKEN}`);
+});
+test('authenticated smoke fails closed on redirect or API denial', async () => {
+  const env = {DEV_SMOKE_SESSION_COOKIE: 'c'.repeat(30), DEV_SMOKE_API_TOKEN: 't'.repeat(30)};
+  await assert.rejects(authenticated(approved, env, async () => new Response(null, {status: 302, headers: {location: '/_auth/login'}})));
+  await assert.rejects(authenticated(approved, env, async url => {
+    if (url.includes('api-dev')) return new Response(null, {status: 401});
+    return new Response('<div id="root" data-prerendered="react"><h1>Home</h1><script src="/assets/app.js"></script></div>', {status: 200, headers: {'content-type': 'text/html'}});
+  }));
 });
 test('authenticated origin verification rejects missing or corrupted deployment files', () => {
   const root = mkdtempSync(join(tmpdir(), 'dev-smoke-test-'));

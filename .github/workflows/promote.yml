@@ -24,6 +24,11 @@ on:
       robots_txt:
         required: true
         type: string
+    secrets:
+      DEV_SMOKE_SESSION_COOKIE:
+        required: false
+      DEV_SMOKE_API_TOKEN:
+        required: false
 
 permissions:
   actions: read
@@ -506,7 +511,11 @@ jobs:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
           DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
           DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
-        run: node .github/scripts/private-dev-smoke.cjs
+          DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
+          DEV_SMOKE_SESSION_COOKIE: ${{ secrets.DEV_SMOKE_SESSION_COOKIE }}
+          DEV_SMOKE_API_TOKEN: ${{ secrets.DEV_SMOKE_API_TOKEN }}
+          DEV_SMOKE_API_URL: ${{ vars.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health' }}
+        run: node .github/scripts/private-dev-smoke.cjs --authenticated
 
       - name: Verify private Test frontend deployment
         if: inputs.environment == 'test'
