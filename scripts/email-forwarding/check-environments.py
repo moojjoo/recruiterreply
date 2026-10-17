@@ -23,9 +23,9 @@ def validate(environment, policies, require_review):
 
 
 def required_environments(selected, operation):
-    if selected not in ("dev", "test", "prod") or operation not in ("email-plan", "email-apply", "provider-check"):
+    if selected not in ("dev", "test", "prod") or operation not in ("email-plan", "email-apply", "provider-check", "email-acceptance"):
         raise ValueError("unknown environment or operation")
-    if operation == "provider-check":
+    if operation in ("provider-check", "email-acceptance"):
         if selected != "prod":
             raise ValueError("provider credential is scoped to the protected Production environment")
         return [("terraform-email-prod-apply", True)]

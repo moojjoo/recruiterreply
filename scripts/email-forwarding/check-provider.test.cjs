@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateProvider, checkProvider, formatFailure, ProviderCheckError } = require('./check-provider.cjs');
+const { validateProvider, checkProvider, waitForReady, formatFailure, ProviderCheckError } = require('./check-provider.cjs');
 const fixture = () => [
   { account: { plan: { price: 0 } } },
   { domain: { domain: 'recruiterreply.com', banned: false, routing_engine: 'alias',
@@ -10,6 +10,34 @@ const fixture = () => [
     alias, forward: 'robert.dannelly@dannellysolutions.com'
   })) }
 ];
+test('readiness retry waits only for propagation and stops on success', async () => {
+  let checks = 0;
+  const delays = [];
+  assert.equal(await waitForReady({ check: async () => {
+    if (++checks < 3) throw new ProviderCheckError('FORWARDING_NOT_READY');
+    return true;
+  }, pause: async (ms) => delays.push(ms) }), true);
+  assert.equal(checks, 3);
+  assert.deepEqual(delays, [30000, 30000]);
+});
+test('readiness retry is bounded and rejects other failures immediately', async () => {
+  for (const code of ['FORWARDING_NOT_READY', 'ACCOUNT_NOT_FREE', 'HTTP_FAILURE', 'ALIAS_CONFIGURATION_INVALID']) {
+    let checks = 0;
+    let delays = 0;
+    await assert.rejects(waitForReady({ check: async () => {
+      checks += 1;
+      throw new ProviderCheckError(code);
+    }, pause: async () => { delays += 1; } }), (error) => error.code === code);
+    assert.equal(checks, code === 'FORWARDING_NOT_READY' ? 6 : 1);
+    assert.equal(delays, code === 'FORWARDING_NOT_READY' ? 5 : 0);
+  }
+});
+test('invalid aliases cannot be hidden by pending readiness', () => {
+  const value = fixture();
+  value[1].domain.forwarding_ready = false;
+  value[2].aliases[0].forward = 'elsewhere@example.com';
+  assert.throws(() => validateProvider(...value, true), (error) => error.code === 'ALIAS_CONFIGURATION_INVALID');
+});
 test('validates actual free-plan provider response', () => assert.equal(validateProvider(...fixture(), true), true));
 test('rejects paid plan, missing catch-all, alternate routing, fallback and partial inventory', () => {
   const mutations = [
