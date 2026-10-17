@@ -47,12 +47,14 @@ test('cacheable or indexable redirects fail', () => {
   }
 });
 test('authenticated smoke credentials must be present and shaped safely', () => {
-  assert.throws(() => authenticatedCredentials({}), /session cookie/);
-  assert.throws(() => authenticatedCredentials({DEV_SMOKE_SESSION_COOKIE: 'short', DEV_SMOKE_API_TOKEN: 'a'.repeat(30)}), /session cookie/);
-  assert.deepEqual(authenticatedCredentials({DEV_SMOKE_SESSION_COOKIE: 'c'.repeat(30), DEV_SMOKE_API_TOKEN: 't'.repeat(30)}), {cookie: 'c'.repeat(30), token: 't'.repeat(30)});
+  assert.throws(() => authenticatedCredentials({}), /OIDC token/);
+  assert.throws(() => authenticatedCredentials({DEV_SMOKE_OIDC_TOKEN: 'short'}), /OIDC token/);
+  const token = `${'h'.repeat(30)}.${'p'.repeat(30)}.${'s'.repeat(30)}`;
+  assert.deepEqual(authenticatedCredentials({DEV_SMOKE_OIDC_TOKEN: token}), {token});
 });
 test('authenticated smoke verifies homepage, assets, deep link and API without logging bodies', async () => {
-  const env = {DEV_SMOKE_SESSION_COOKIE: 'c'.repeat(30), DEV_SMOKE_API_TOKEN: 't'.repeat(30), DEV_SMOKE_API_URL: 'https://api-dev.example/api/health'};
+  const token = `${'h'.repeat(30)}.${'p'.repeat(30)}.${'s'.repeat(30)}`;
+  const env = {DEV_SMOKE_OIDC_TOKEN: token, DEV_SMOKE_API_URL: 'https://api-dev.example/api/health/ci'};
   const seen = [];
   const fetchRequest = async (url, options) => {
     seen.push({url, options});
@@ -62,12 +64,12 @@ test('authenticated smoke verifies homepage, assets, deep link and API without l
   };
   const result = await authenticated(approved, env, fetchRequest);
   assert.equal(result.assetCount, 1);
-  assert.deepEqual(seen.map(item => new URL(item.url).pathname), ['/', '/assets/app.js', '/dashboard', '/api/health']);
-  assert.equal(seen[0].options.headers.cookie, `rr_session=${env.DEV_SMOKE_SESSION_COOKIE}`);
-  assert.equal(seen.at(-1).options.headers.authorization, `Bearer ${env.DEV_SMOKE_API_TOKEN}`);
+  assert.deepEqual(seen.map(item => new URL(item.url).pathname), ['/', '/assets/app.js', '/dashboard', '/api/health/ci']);
+  assert.equal(seen[0].options.headers['x-rr-ci-oidc-token'], token);
+  assert.equal(seen.at(-1).options.headers.authorization, `Bearer ${token}`);
 });
 test('authenticated smoke fails closed on redirect or API denial', async () => {
-  const env = {DEV_SMOKE_SESSION_COOKIE: 'c'.repeat(30), DEV_SMOKE_API_TOKEN: 't'.repeat(30)};
+  const env = {DEV_SMOKE_OIDC_TOKEN: `${'h'.repeat(30)}.${'p'.repeat(30)}.${'s'.repeat(30)}`};
   await assert.rejects(authenticated(approved, env, async () => new Response(null, {status: 302, headers: {location: '/_auth/login'}})));
   await assert.rejects(authenticated(approved, env, async url => {
     if (url.includes('api-dev')) return new Response(null, {status: 401});
