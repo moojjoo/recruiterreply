@@ -12,7 +12,7 @@ read-only audit already used the same pin. Explicit labels prevent the automatic
 October 19–November 19, 2026 image migration from changing the runner OS and
 remove the associated floating-label migration annotation on new runs.
 
-Only runner labels change in the workflows. Job steps, action versions, triggers,
+The runner-pinning PR changed only runner labels. Job steps, action versions, triggers,
 permissions, environment protections, immutable release selection, OIDC role
 assumption, and deployment gates retain their existing configuration.
 
@@ -110,7 +110,8 @@ possible. An IAM-only apply does not resolve that configuration mismatch.
 
 Repository changes do not update live IAM. Apply the reviewed IAM-only plan only
 after explicit owner authorization, then rerun the protected audit. Keep #387
-open if any root has errors or unresolved plan differences. Roll back only this
+open if any root has errors or unclassified plan differences. Known differences
+may be tracked separately with owner approval; exit 2 is not a clean-drift result. Roll back only this
 inline policy to its captured prior document if needed; keep the Ubuntu runner
 pins and previously upgraded action versions.
 
@@ -124,3 +125,37 @@ reviewed PR. The previously upgraded action majors remain unchanged. Restoring
 `ubuntu-latest` also restores exposure to GitHub’s automatic OS migration.
 Do not weaken OIDC trust, environment approvals, read-only IAM, or Terraform
 plan safeguards as a workaround.
+
+## Reviewed global audit inputs
+
+The global audit explicitly loads `.github/config/terraform-audit-global.json`
+through `terraform-audit-inputs.py`. Its non-secret variables preserve the
+reviewed Dev/Test rollout scope instead of using opt-out creation defaults.
+These inputs are generated into a private runner-temporary `.tfvars.json` file,
+referenced by `TF_CLI_ARGS_plan` only in the global matrix job. The same file is
+used by both refresh-only and desired-state plans. It is not an auto-loaded
+Terraform file, and ordinary Terraform defaults remain unchanged.
+
+The helper reads the two named edge functions through the audit role, checks
+their reported hashes against the committed allowlist, downloads their ZIPs,
+and checks the actual bytes again. Private temporary ZIPs are linked through
+the reviewed historical `/tmp` filenames to avoid false filename-only Lambda
+updates. Existing files or links are never overwritten. It does not unpack or
+execute the ZIPs,
+invoke Lambda, read signing secrets or modify AWS. Only HTTPS AWS-hosted URLs
+and redirects are accepted. A changed or tampered package fails closed until a
+new checksum is reviewed. Signed URLs and raw AWS exceptions are not logged;
+private ZIPs, variable files and plan logs are removed at job completion.
+
+The allowlisted hashes identify deployed packages reviewed during #387. The Dev
+package hash differs from a historical source hash in state; this is an explicit
+comparison baseline, not proof that source, state and AWS are fully reconciled.
+The owner approved tracking that and the three Cognito differences in
+[#429](https://github.com/moojjoo/recruiterreply/issues/429). Neither this workflow
+nor issue closure authorizes applying those changes. A successful audit with
+exit 2 reports known drift/planned changes; only exit 0 reports no changes.
+
+The existing protected environment, read-only role, no state migration, unlocked
+plans, no apply, and sanitized summaries remain in force. To roll back this
+input change, revert its PR; keep resource destruction protection intact. The
+old default-input desired-state audit may again fail on protected resources.
