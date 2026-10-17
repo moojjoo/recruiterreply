@@ -25,7 +25,7 @@ assert.match(variables, /variable "enable_private_test_api_routing"\s*\{[^}]*def
 assert.match(moduleVariables, /variable "enable_private_test_api_routing"\s*\{[^}]*default\s*=\s*false/s);
 assert.match(frontend, /private_test_api_prerequisites/);
 assert.match(frontend, /path_pattern\s*=\s*"\/api\/\*"/);
-assert.match(frontend, /cache_policy_id\s*=\s*"4135EA2D-6DF8-44A3-9DF3-4B5A84BE39AD"/);
+assert.match(frontend, /cache_policy_id\s*=\s*"4135ea2d-6df8-44a3-9df3-4b5a84be39ad"/);
 assert.match(frontend, /event_type\s*=\s*"origin-request"/);
 const backendAuth = fs.readFileSync(path.join(__dirname, '../../backend/Middleware/PrivateApiOriginAuthMiddleware.cs'), 'utf8');
 assert.match(backendAuth, /X-RR-Origin-Auth/);
