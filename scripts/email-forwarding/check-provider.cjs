@@ -40,7 +40,6 @@ function validateProvider(account, domain, aliases, requireReady = false) {
   // Empty optional rules metadata or the same approved inbox adds no recipient.
   const fallback = settings.rules_fallback_email;
   if (![undefined, null, '', EXPECTED_DESTINATION].includes(fallback)) fail('FALLBACK_DESTINATION_MISMATCH');
-  if (requireReady && settings.forwarding_ready !== true) fail('FORWARDING_NOT_READY');
   if (!Number.isInteger(aliases?.total) || aliases.total < 1 || aliases.total > 3 ||
       aliases.page !== 1 || aliases.aliases?.length !== aliases.total) {
     fail('ALIAS_INVENTORY_INVALID');
@@ -53,6 +52,7 @@ function validateProvider(account, domain, aliases, requireReady = false) {
       }))
     });
   } catch { fail('ALIAS_CONFIGURATION_INVALID'); }
+  if (requireReady && settings.forwarding_ready !== true) fail('FORWARDING_NOT_READY');
   return true;
 }
 
@@ -79,8 +79,22 @@ async function checkProvider(requireReady = false, {
   return validateProvider(account, domain, aliases, requireReady);
 }
 
+async function waitForReady({ check = () => checkProvider(true),
+  pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try { return await check(); }
+    catch (error) {
+      if (error?.code !== 'FORWARDING_NOT_READY' || attempt === 5) throw error;
+      process.stdout.write('PENDING: provider DNS readiness; bounded read-only retry.\n');
+      await pause(30000);
+    }
+  }
+}
+
 if (require.main === module) {
-  checkProvider(process.argv.includes('--ready')).then(() => {
+  const result = process.argv.includes('--wait-ready')
+    ? waitForReady() : checkProvider(process.argv.includes('--ready'));
+  result.then(() => {
     process.stdout.write('PASS: free provider plan and approved catch-all routing. Inbox receipt remains pending.\n');
   }).catch((error) => {
     process.stderr.write(formatFailure(error));
@@ -88,4 +102,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { validateProvider, checkProvider, formatFailure, ProviderCheckError };
+module.exports = { validateProvider, checkProvider, waitForReady, formatFailure, ProviderCheckError };

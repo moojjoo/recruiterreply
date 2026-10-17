@@ -10,14 +10,18 @@ on:
     inputs:
       operation:
         type: choice
-        description: Email DNS plan, approved Production apply, or read-only provider check
-        options: [email-plan, email-apply, provider-check]
+        description: Email DNS plan, approved apply, provider check, or post-apply acceptance
+        options: [email-plan, email-apply, provider-check, email-acceptance]
         default: email-plan
       email_environment:
         type: choice
         description: Dev/Test can inspect shared apex DNS; only Production can apply
         options: [dev, test, prod]
         default: dev
+      source_run:
+        type: string
+        description: For acceptance only, the run ID of the completed DNS apply
+        required: false
 permissions:
   contents: read
 jobs:
@@ -74,7 +78,7 @@ jobs:
         run: node scripts/email-forwarding/check-provider.cjs
   email-plan:
     needs: email-checks
-    if: github.event_name == 'workflow_dispatch' && startsWith(inputs.operation, 'email-') && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'email-plan' || inputs.operation == 'email-apply') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: terraform-email-${{ inputs.email_environment }}-plan
     permissions:
@@ -188,7 +192,7 @@ jobs:
       - name: Verify provider forwarding is ready
         env:
           IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
-        run: node "$GITHUB_WORKSPACE/scripts/email-forwarding/check-provider.cjs" --ready
+        run: node "$GITHUB_WORKSPACE/scripts/email-forwarding/check-provider.cjs" --wait-ready
       - name: Send three bounded acceptance messages
         run: |
           set -euo pipefail
@@ -199,3 +203,66 @@ jobs:
       - name: Remove local plan logs
         if: always()
         run: rm -f init.log fresh.log fresh.json apply.log fresh.tfplan
+  email-acceptance:
+    needs: email-checks
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'email-acceptance' && inputs.email_environment == 'prod' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: terraform-email-prod-apply
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    concurrency:
+      group: issue-400-acceptance
+      cancel-in-progress: false
+    env:
+      SOURCE_RUN: ${{ inputs.source_run }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Verify source run completed the reviewed DNS apply
+        id: source
+        run: python3 scripts/email-forwarding/acceptance-context.py
+      - uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          name: ${{ steps.source.outputs.artifact }}
+          path: acceptance-source
+      - name: Verify original artifact binding and public baseline
+        run: python3 scripts/email-forwarding/acceptance-context.py acceptance-source
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: us-east-1
+          allowed-account-ids: '178522450316'
+          role-to-assume: ${{ vars.TERRAFORM_EMAIL_ROLE_ARN }}
+          role-session-name: email-acceptance-${{ github.run_id }}
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["route53:GetHostedZone","route53:ListResourceRecordSets","ses:GetEmailIdentity","ses:SendEmail"],"Resource":"*"}]}
+      - name: Wait for free provider forwarding readiness
+        env:
+          IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
+        run: node scripts/email-forwarding/check-provider.cjs --wait-ready
+      - name: Verify authoritative DNS and preserved SES before sending
+        run: python3 scripts/email-forwarding/live-check.py acceptance-source/baseline.json --compare
+      - name: Send three bounded acceptance messages once
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1 || { echo '::error::Do not rerun sends; dispatch a separately approved acceptance run.'; exit 1; }
+          python3 scripts/email-forwarding/live-check.py acceptance-source/baseline.json --compare --send-tests | tee receipt-pending.txt
+          cat receipt-pending.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '::error::PENDING MANUAL VERIFICATION: confirm all three correlation IDs in the destination inbox before declaring #400 accepted.'
+          exit 1
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: issue-400-receipts-${{ github.run_id }}
+          path: receipt-pending.txt
+          retention-days: 1
+          if-no-files-found: ignore

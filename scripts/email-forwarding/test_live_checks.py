@@ -20,10 +20,13 @@ class EnvironmentTests(unittest.TestCase):
     def test_provider_check_requires_only_the_secret_environment_and_cannot_apply(self):
         self.assertEqual(environments.required_environments("prod", "provider-check"),
                          [("terraform-email-prod-apply", True)])
+        self.assertEqual(environments.required_environments("prod", "email-acceptance"),
+                         [("terraform-email-prod-apply", True)])
         self.assertEqual(environments.required_environments("prod", "email-apply"),
                          [("terraform-email-prod-plan", True), ("terraform-email-prod-apply", True)])
         for selected, operation in (("dev", "provider-check"), ("test", "provider-check"),
-                                    ("dev", "email-apply"), ("prod", "unknown")):
+                                    ("dev", "email-apply"), ("prod", "unknown"),
+                                    ("dev", "email-acceptance"), ("test", "email-acceptance")):
             with self.assertRaises(ValueError):
                 environments.required_environments(selected, operation)
 
