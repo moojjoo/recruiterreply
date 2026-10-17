@@ -519,3 +519,21 @@
   [data-theme="dark"] .alert-info { background-color: #172554; color: #dbeafe; border-left-color: #93c5fd; }
   .alert button { color: inherit; }
 }
+
+
+/* Issue #440: Results must remain legible in both themes. */
+.tool-results-heading { scroll-margin-top: 6.5rem; }
+.tool-results { scroll-margin-top: 6.5rem; }
+[data-theme="dark"] .tool-results :is(.bg-gradient-to-r, .bg-gradient-to-br, .bg-gradient-to-b, .bg-gradient-to-l) {
+  color: #f8fafc;
+}
+[data-theme="dark"] .tool-results :is(.bg-white, .bg-gray-50, .bg-gray-100, .bg-primary-50, .bg-success-50) {
+  background-color: #172235;
+  color: #f8fafc;
+}
+[data-theme="dark"] .tool-results :is(.text-white, .text-gray-900, .text-gray-800, .text-gray-700, .text-gray-600) {
+  color: #ffffff;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
