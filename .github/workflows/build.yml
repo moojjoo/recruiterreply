@@ -248,6 +248,9 @@ jobs:
       robots_txt: |
         User-agent: *
         Disallow: /
+    secrets:
+      DEV_SMOKE_SESSION_COOKIE: ${{ secrets.DEV_SMOKE_SESSION_COOKIE }}
+      DEV_SMOKE_API_TOKEN: ${{ secrets.DEV_SMOKE_API_TOKEN }}
 
   verify-dev-seo-http:
     needs: deploy-dev
@@ -259,6 +262,7 @@ jobs:
         env:
           DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
           DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
+          DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
         run: node .github/scripts/private-dev-smoke.cjs --boundary-only
 
   reconcile-dev-issues:

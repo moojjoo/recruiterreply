@@ -11,7 +11,8 @@ const BASE = 'https://dev.recruiterreply.com';
 function identity(env) {
   assert.match(env.DEV_COGNITO_DOMAIN || '', /^[a-z0-9-]+\.auth\.us-east-1\.amazoncognito\.com$/, 'Approved Dev Cognito domain is required');
   assert.match(env.DEV_COGNITO_CLIENT_ID || '', /^[A-Za-z0-9]+$/, 'Approved Dev Cognito client ID is required');
-  return {domain: env.DEV_COGNITO_DOMAIN, clientId: env.DEV_COGNITO_CLIENT_ID};
+  assert.match(env.DEV_CLOUDFRONT_DOMAIN || '', /^[a-z0-9-]+\.cloudfront\.net$/, 'Approved Dev distribution hostname is required');
+  return {domain: env.DEV_COGNITO_DOMAIN, clientId: env.DEV_COGNITO_CLIENT_ID, distributionDomain: env.DEV_CLOUDFRONT_DOMAIN};
 }
 function redirect(response) {
   assert.equal(response.status, 302, 'Anonymous Dev request must redirect to authentication');
@@ -44,6 +45,52 @@ async function boundary(approved, paths = [], fetchRequest = fetch) {
   }
   const response = await fetchRequest(BASE + '/_auth/login', {redirect: 'manual', signal: AbortSignal.timeout(15000)});
   try { authorize(response, approved); } finally { await response.body?.cancel(); }
+  for (const path of ['/', '/index.html', '/config.js', '/dashboard']) {
+    const response = await fetchRequest(`https://${approved.distributionDomain}${path}`, {redirect: 'manual', signal: AbortSignal.timeout(15000)});
+    try {
+      assert.equal(response.status, 403, 'Direct Dev distribution hostname must deny access');
+      assert.match(response.headers.get('cache-control') || '', /\bno-store\b/i, 'Direct Dev denial must not be cached');
+      assert.match(response.headers.get('x-robots-tag') || '', /\bnoindex\b/i, 'Direct Dev denial must be noindex');
+    } finally { await response.body?.cancel(); }
+  }
+}
+function authenticatedCredentials(env) {
+  assert.match(env.DEV_SMOKE_SESSION_COOKIE || '', /^[A-Za-z0-9._~-]{20,4096}$/, 'Short-lived Dev smoke session cookie is required');
+  assert.match(env.DEV_SMOKE_API_TOKEN || '', /^[A-Za-z0-9._~-]{20,4096}$/, 'Short-lived Dev smoke API token is required');
+  return {cookie: env.DEV_SMOKE_SESSION_COOKIE, token: env.DEV_SMOKE_API_TOKEN};
+}
+async function authenticated(approved, env = process.env, fetchRequest = fetch) {
+  const credentials = authenticatedCredentials(env);
+  const request = async (path, headers = {}) => {
+    const response = await fetchRequest(BASE + path, {
+      redirect: 'manual',
+      headers: {...headers, cookie: `rr_session=${credentials.cookie}`},
+      signal: AbortSignal.timeout(15000)
+    });
+    assert.equal(response.status, 200, `Authenticated Dev request failed for ${path}`);
+    assert.ok(!response.headers.has('location'), `Authenticated Dev request redirected for ${path}`);
+    return {response, body: await response.text()};
+  };
+  const homepage = await request('/');
+  assert.match(homepage.response.headers.get('content-type') || '', /text\/html/i, 'Authenticated homepage must be HTML');
+  assert.match(homepage.body, /<div id="root"[^>]*data-prerendered="react"[^>]*>/, 'Authenticated homepage must contain the prerendered React root');
+  assert.match(homepage.body, /<h1\b/i, 'Authenticated homepage must contain a rendered H1');
+  const assets = [...homepage.body.matchAll(/(?:src|href)=["'](\/assets\/[^"'?#]+)["']/g)].map(match => match[1]);
+  assert.ok(assets.length > 0, 'Authenticated homepage must reference assets');
+  for (const asset of new Set(assets)) await request(asset);
+  await request('/dashboard');
+
+  const apiUrl = env.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health';
+  const apiResponse = await fetchRequest(apiUrl, {
+    redirect: 'manual',
+    headers: {authorization: `Bearer ${credentials.token}`},
+    signal: AbortSignal.timeout(15000)
+  });
+  try {
+    assert.equal(apiResponse.status, 200, 'Authenticated Dev API health request failed');
+    assert.ok(!apiResponse.headers.has('location'), 'Authenticated Dev API health request redirected');
+  } finally { await apiResponse.body?.cancel(); }
+  return {assetCount: new Set(assets).size, apiUrl: new URL(apiUrl).origin + new URL(apiUrl).pathname};
 }
 function files(directory, prefix = '') {
   return readdirSync(join(directory, prefix), {withFileTypes: true}).flatMap(entry => {
@@ -88,9 +135,15 @@ async function main() {
   await boundary(approved, assets);
   console.log('Private Dev smoke passed: anonymous boundary and approved Cognito redirect verified' + (assets.length ? '; uploaded frontend bytes verified through authenticated S3 reads' : ''));
 }
-if (require.main === module) main().catch(() => {
+if (require.main === module) main().then(async () => {
+  if (process.argv.includes('--authenticated')) {
+    const approved = identity(process.env);
+    const result = await authenticated(approved);
+    console.log(`Authenticated Dev smoke passed: assets=${result.assetCount}; API health verified`);
+  }
+}).catch(() => {
   // Fetch/AWS errors can contain response details. Do not log raw exceptions.
   console.error('Private Dev smoke failed: check approved identity configuration, private redirects, and deployed artifact integrity.');
   process.exitCode = 1;
 });
-module.exports = {identity, authorize, boundary, verifyArtifacts};
+module.exports = {identity, authorize, boundary, authenticatedCredentials, authenticated, verifyArtifacts};
