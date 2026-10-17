@@ -131,3 +131,8 @@ node_modules/
 
 # VSCode
 /.vscode/*
+
+# Issue #400 local validation outputs
+scripts/email-forwarding/__pycache__/
+infra/aws/terraform/email-forwarding/*.json
+infra/aws/terraform/email-forwarding/*.log

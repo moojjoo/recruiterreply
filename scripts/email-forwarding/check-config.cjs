@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const EXPECTED_ALIASES = Object.freeze([
+  '*@recruiterreply.com',
   'legal@recruiterreply.com',
   'privacy@recruiterreply.com'
 ]);
@@ -11,16 +12,18 @@ const EXPECTED_DESTINATION = 'robert.dannelly@dannellysolutions.com';
 
 function validateForwardingConfig(config) {
   assert.ok(config && typeof config === 'object' && !Array.isArray(config), 'config must be an object');
-  assert.equal(config.catchAll, false, 'catch-all forwarding must be disabled');
+  assert.equal(config.catchAll, true, 'catch-all forwarding must be enabled');
   assert.ok(Array.isArray(config.aliases), 'aliases must be an array');
-  assert.equal(config.aliases.length, 2, 'exactly two aliases are allowed');
+  assert.ok(config.aliases.length >= 1 && config.aliases.length <= 3, 'only catch-all and optional published aliases are allowed');
   const sources = config.aliases.map((alias) => {
     assert.ok(alias && typeof alias === 'object', 'alias must be an object');
     assert.equal(alias.destination, EXPECTED_DESTINATION, 'unexpected forwarding destination');
     assert.equal(typeof alias.source, 'string', 'source must be a string');
     return alias.source;
   });
-  assert.deepEqual(sources.sort(), [...EXPECTED_ALIASES], 'unexpected alias set');
+  assert.ok(sources.includes('*@recruiterreply.com'), 'catch-all alias is required');
+  assert.equal(new Set(sources).size, sources.length, 'duplicate aliases are not allowed');
+  assert.ok(sources.every((source) => EXPECTED_ALIASES.includes(source)), 'unexpected alias set');
   return true;
 }
 
