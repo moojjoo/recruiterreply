@@ -1,44 +1,68 @@
-# Issue #400 — Inbound forwarding implementation and acceptance plan
+# Issue #400 — Inbound catch-all forwarding
 
-## Approved configuration
+## Owner-approved behavior
 
-| Source | Destination |
-| --- | --- |
-| privacy@recruiterreply.com | robert.dannelly@dannellysolutions.com |
-| legal@recruiterreply.com | robert.dannelly@dannellysolutions.com |
+All inbound recipients at `@recruiterreply.com` forward to `robert.dannelly@dannellysolutions.com` through ImprovMX's free plan. The owner expanded the original two-alias scope on 2026-10-17. Keep the `*` alias; optional explicit `privacy` and `legal` aliases must use the same destination. No other explicit aliases or mailboxes are required. This does not change outbound application senders.
 
-No other aliases and no catch-all. Keep Route 53 authoritative and preserve existing SES outbound identity and DKIM/SPF/DMARC.
+The [free plan](https://improvmx.com/pricing/) currently includes one domain, 25 aliases, 500 forwards/day, and API access. Forwarding pauses at its quota; paid branded sending is not included. Forwarding alone does not provide branded replies. Account signup and destination ownership/verification belong to the owner. Do not send credentials through chat.
 
-## Safety gates before DNS changes
+## Live inventory and reviewed DNS plan (2026-10-17)
 
-1. Inventory live Route 53 MX/TXT/CNAME records and SES domain identity status. Do not overwrite or duplicate SPF records.
-2. Choose a provider with a verified free plan and external DNS support. Record exact provider MX/TXT instructions and destination verification steps.
-3. Obtain destination verification from the mailbox owner. Do not commit mailbox tokens or passwords.
-4. Produce a Terraform plan scoped to approved DNS changes and verify there are no unrelated changes. Require explicit approval for any Test or Production apply.
-5. After approved apply, inspect authoritative DNS and verify existing SES sending is unaffected.
+- Route 53 authoritative zone: `Z03382853SGMP0RST8DJG` (`recruiterreply.com`).
+- No apex MX or SPF record was present. Existing apex TXT contains Google site verification.
+- SES reports verified sending and successful DKIM using three existing CNAMEs; no custom MAIL FROM domain is configured. No DMARC record was present; this feature does not introduce or change DMARC policy.
+- Four existing remote Terraform state files were inspected for Route 53 ownership: none owns apex MX/TXT.
+- A read-only live DNS plan passed the resource contract: import/update the existing apex TXT, preserving Google verification and adding one `v=spf1 include:amazonses.com include:spf.improvmx.com ~all`; create MX `10 mx1.improvmx.com` and `20 mx2.improvmx.com`, TTL 300.
+- No DNS, IAM, provider mutation, or test email has been applied/sent by this implementation.
 
-## Automated acceptance
+The separate root `infra/aws/terraform/email-forwarding/` owns only these two record sets, with S3 state key `recruiterreply/email-forwarding/terraform.tfstate`. Import is declarative, not overwrite-on-create. `prevent_destroy` blocks accidental removal. Existing website/API records, SES DKIM and MAIL FROM configuration are excluded from this root. Before any apply, the plan gate rejects other resources, destructive actions, alternate routing, unknown values, or an unreviewed apex baseline. If another operator adds a TXT verification value, stop and review preservation instead of overwriting it.
 
-Run `node --test scripts/email-forwarding/check-config.test.cjs` for the configuration validator. When a forwarding provider is selected, export its *actual* alias configuration into the JSON format below and run `node scripts/email-forwarding/check-config.cjs provider-export.json`:
+## Bootstrap and protected environments
 
-```json
-{
-  "catchAll": false,
-  "aliases": [
-    {"source": "privacy@recruiterreply.com", "destination": "robert.dannelly@dannellysolutions.com"},
-    {"source": "legal@recruiterreply.com", "destination": "robert.dannelly@dannellysolutions.com"}
-  ]
-}
+IAM is a separate, owner-approved bootstrap root at `infra/aws/terraform/email-forwarding-iam/`, with state key `recruiterreply/email-forwarding-iam/terraform.tfstate`. It reuses the existing GitHub OIDC provider and defines `RecruiterReply-Terraform-Dev`, `RecruiterReply-Terraform-Test`, and `RecruiterReply-Terraform-Prod`, plus a separate read-only `RecruiterReply-Terraform-ProdPlan` role. No static AWS credentials are used. Do not apply IAM until its exact plan is reviewed and explicitly approved. Normal global Terraform inputs do not create or remove these roles.
+
+Each trust policy requires the exact repository/environment OIDC subject and `aud=sts.amazonaws.com`. Dev/Test roles read only the isolated DNS state and public DNS/SES metadata. Only Prod can write that state/lock and create/upsert apex MX/TXT. It cannot delete DNS records or mutate other record names/types. Its SES send permission is restricted to the two published aliases and generated `rr400-catchall-*` acceptance recipients, from `no-reply@recruiterreply.com`.
+
+Before workflow execution, create these GitHub environments deliberately (the workflow refuses missing/unverifiable protection):
+
+| Environment | Role variable `TERRAFORM_EMAIL_ROLE_ARN` | Protection |
+| --- | --- | --- |
+| `terraform-email-dev-plan` | Dev role ARN | Exact `main` branch only |
+| `terraform-email-test-plan` | Test role ARN | Exact `main`, required reviewer, admin bypass disabled |
+| `terraform-email-prod-plan` | ProdPlan role ARN | Exact `main`, required reviewer, admin bypass disabled |
+| `terraform-email-prod-apply` | Prod role ARN | Exact `main`, required reviewer, admin bypass disabled |
+
+A solo owner may approve their own run; the explicit approval is still required. Restrict protected-environment workflow access through repository rules and reviewed `main` changes. OIDC environment subjects do not independently encode branch or workflow identity. Plan jobs use a restrictive read-only session policy in addition to read-only IAM roles. The write-capable Prod role trusts only the apply environment, so a plan job cannot obtain writes by omitting its session policy. The apply job receives writes only after the separate protected apply approval.
+
+Store the ImprovMX API credential as environment secret `IMPROVMX_API_KEY` in `terraform-email-prod-apply`. Obtain it from the [provider API page](https://app.improvmx.com/api). Use read-only permissions if offered. This implementation performs three bounded authenticated GETs (account, domain, complete aliases), never upgrades a plan and never requests message logs. It checks price zero, catch-all destination, alias inventory, and alias-based routing without rule fallback. Provider responses and credentials are withheld from logs. An arbitrary manually written JSON is not deployment evidence.
+
+## Workflow and exact-plan approval
+
+The existing `.github/workflows/terraform-readonly-audit.yml` and its four-root read-only audit remain intact. `.github/workflows/email-forwarding.yml` extends the same GitHub Actions/Terraform/OIDC setup with the scoped Issue #400 plan/apply jobs. PRs run unprivileged validation only. On `main`, dispatch `operation=email-plan` with `email_environment=dev|test|prod` to inspect DNS. Dev/Test have no ability to apply shared Production apex DNS.
+
+For an explicitly approved Production DNS change, dispatch `operation=email-apply`, `email_environment=prod`. The plan job snapshots public DNS/SES metadata, creates a saved binary plan and seals its SHA-256, commit, environment, creation time, and semantic plan signature. The one-day artifact contains only this isolated public-DNS plan and public baseline, never the global application state or provider credentials. Review the sanitized plan summary before approving `terraform-email-prod-apply`.
+
+Apply downloads only the same run/attempt artifact, checks provider configuration, regenerates a fresh plan, enforces the same resource contract, compares refreshed prior state/drift/changes, rejects approvals older than one hour or hash/SHA/environment mismatches, and applies only the original reviewed binary. Re-run the plan after expiry. Terraform S3 locking and saved-plan state serial checks also apply. Workflow concurrency serializes applies. External DNS changes after the final fresh check remain an operational race; avoid concurrent manual DNS changes. A failed apply requires read-only inspection, not an automatic rollback.
+
+## Acceptance and receipt verification
+
+After apply, check all authoritative nameservers for MX, single merged SPF, preserved TXT, the three SES DKIM CNAMEs, and unchanged DMARC presence/value. Compare all other Route 53 records and SES DKIM/MAIL FROM metadata to the pre-plan snapshot. Provider forwarding readiness must pass. A newly propagated DNS value may require a later read-only retry; do not repeat apply just to wait for DNS.
+
+Send at most three uniquely tagged messages per authorized acceptance run: `privacy`, `legal`, and a generated `rr400-catchall-<id>` recipient. Publish only correlation IDs/timestamps. SES acceptance and provider readiness do not prove final inbox receipt. The workflow deliberately fails the final acceptance gate with **PENDING MANUAL VERIFICATION** until the owner confirms all three IDs in the destination inbox. Do not close #400 or declare the forwarding accepted based only on apply/SMTP success. No inbox API is connected or authorized.
+
+The four protected GitHub environments have been created and their main-branch/reviewer protections verified. IAM bootstrap, actual provider verification, DNS apply, and final inbox receipt remain pending. Test/Production application promotion is not part of this change.
+
+## Rollback
+
+No automatic Production DNS rollback. The public pre-plan snapshot is the recovery reference. With separate explicit owner approval, produce a new reviewed plan restoring the exact original TXT set and removing/replacing only the new MX record. That deliberate removal requires a separately reviewed lifecycle/IAM change because the normal configuration prevents destroy and the execution role disallows DNS DELETE. Preserve Google verification, SES records, website/API records and unrelated later changes. Do not destroy the hosted zone or global infrastructure. Disable provider forwarding only after the approved DNS rollback has propagated.
+
+## Local verification
+
+```bash
+node --test scripts/email-forwarding/*.test.cjs
+python3 -m unittest discover -s scripts/email-forwarding -p 'test_*.py'
+terraform -chdir=infra/aws/terraform/email-forwarding fmt -check
+terraform -chdir=infra/aws/terraform/email-forwarding-iam fmt -check
 ```
 
-This check validates an input configuration; it does **not** prove the provider is configured unless the JSON is generated from a trusted provider API or authoritative configuration. Never treat a manually written JSON file as proof of deployment.
-
-End-to-end acceptance must send uniquely tagged low-volume messages to both addresses and verify their actual receipt in the destination mailbox using a user-authorized, least-privilege inbox integration. Until that integration or manual verification is available, report **PENDING MANUAL VERIFICATION**, not PASS. SMTP acceptance alone is insufficient.
-
-## Terraform/OIDC
-
-The repository already has a GitHub OIDC module at `infra/aws/terraform/modules/github_oidc/`. Reuse and review existing roles and workflows rather than creating duplicate providers. Before adding plan/apply permissions, inventory the Terraform root modules and state boundaries, scope trust policies to the exact repository/environment, and enforce explicit Test and Production approvals. Keep plan artifacts bound to commit SHA and environment. Do not automate Production rollback.
-
-## Status
-
-This change establishes a tested, fail-closed alias configuration validator and implementation checklist. Provider selection, actual forwarding, IAM role changes, Terraform applies, and live email delivery verification are **not yet implemented**.
+Initialize each root with `-backend=false -lockfile=readonly` before standalone `terraform validate`. Unit tests cover catch-all and destination restrictions, free-plan/provider inventory, unauthorized resources/record values, destructive actions, stale or tampered plans, changed SHA/environment, changed refreshed state, main-branch/reviewer protections, unrelated DNS/SES changes, and bounded test recipients.
