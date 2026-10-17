@@ -57,6 +57,15 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddHttpClient();
 
+var githubOidcOptions = new GitHubActionsOidcPolicyOptions(
+    builder.Configuration.GetValue<bool>("GitHubActionsOidc:Enabled"),
+    builder.Configuration["GitHubActionsOidc:Issuer"] ?? "https://token.actions.githubusercontent.com",
+    builder.Configuration["GitHubActionsOidc:Audience"] ?? "recruiterreply-dev-smoke",
+    builder.Configuration["GitHubActionsOidc:Repository"] ?? "moojjoo/recruiterreply",
+    builder.Configuration["GitHubActionsOidc:WorkflowRef"] ?? "moojjoo/recruiterreply/.github/workflows/promote.yml@refs/heads/main",
+    builder.Configuration["GitHubActionsOidc:Ref"] ?? "refs/heads/main",
+    builder.Configuration["GitHubActionsOidc:Environment"] ?? "dev");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -74,9 +83,44 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
         };
+    })
+    .AddJwtBearer("GitHubActionsSmoke", options =>
+    {
+        options.Authority = githubOidcOptions.Issuer;
+        options.Audience = githubOidcOptions.Audience;
+        options.RequireHttpsMetadata = true;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = githubOidcOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = githubOidcOptions.Audience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (!GitHubActionsOidcPolicy.IsApproved(context.Principal, githubOidcOptions))
+                {
+                    context.Fail("GitHub Actions identity is not approved for Dev smoke tests.");
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("GitHubActionsSmoke", policy =>
+    {
+        policy.AddAuthenticationSchemes("GitHubActionsSmoke");
+        policy.RequireAuthenticatedUser();
+    });
+});
 
 // Add Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -218,6 +262,10 @@ app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", statu
 Func<IResult> healthHandler = () => Results.Ok(new { status = "healthy" });
 app.MapGet("/health", healthHandler);
 app.MapGet("/api/health", healthHandler);
+app.MapGet("/health/ci", () => Results.Ok(new { status = "healthy", smoke = "github-actions-oidc" }))
+    .RequireAuthorization("GitHubActionsSmoke");
+app.MapGet("/api/health/ci", () => Results.Ok(new { status = "healthy", smoke = "github-actions-oidc" }))
+    .RequireAuthorization("GitHubActionsSmoke");
 
 Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthDbHandler = async (db, ct) =>
 {

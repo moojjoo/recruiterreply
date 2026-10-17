@@ -248,9 +248,6 @@ jobs:
       robots_txt: |
         User-agent: *
         Disallow: /
-    secrets:
-      DEV_SMOKE_SESSION_COOKIE: ${{ secrets.DEV_SMOKE_SESSION_COOKIE }}
-      DEV_SMOKE_API_TOKEN: ${{ secrets.DEV_SMOKE_API_TOKEN }}
 
   verify-dev-seo-http:
     needs: deploy-dev

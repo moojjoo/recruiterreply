@@ -55,16 +55,17 @@ async function boundary(approved, paths = [], fetchRequest = fetch) {
   }
 }
 function authenticatedCredentials(env) {
-  assert.match(env.DEV_SMOKE_SESSION_COOKIE || '', /^[A-Za-z0-9._~-]{20,4096}$/, 'Short-lived Dev smoke session cookie is required');
-  assert.match(env.DEV_SMOKE_API_TOKEN || '', /^[A-Za-z0-9._~-]{20,4096}$/, 'Short-lived Dev smoke API token is required');
-  return {cookie: env.DEV_SMOKE_SESSION_COOKIE, token: env.DEV_SMOKE_API_TOKEN};
+  const token = env.DEV_SMOKE_OIDC_TOKEN || '';
+  assert.ok(token.length <= 8192, 'Short-lived Dev smoke OIDC token is too large');
+  assert.match(token, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{20,8192}$/, 'Short-lived Dev smoke OIDC token is required');
+  return {token};
 }
 async function authenticated(approved, env = process.env, fetchRequest = fetch) {
   const credentials = authenticatedCredentials(env);
   const request = async (path, headers = {}) => {
     const response = await fetchRequest(BASE + path, {
       redirect: 'manual',
-      headers: {...headers, cookie: `rr_session=${credentials.cookie}`},
+      headers: {...headers, 'x-rr-ci-oidc-token': credentials.token},
       signal: AbortSignal.timeout(15000)
     });
     assert.equal(response.status, 200, `Authenticated Dev request failed for ${path}`);
@@ -80,7 +81,7 @@ async function authenticated(approved, env = process.env, fetchRequest = fetch) 
   for (const asset of new Set(assets)) await request(asset);
   await request('/dashboard');
 
-  const apiUrl = env.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health';
+  const apiUrl = env.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health/ci';
   const apiResponse = await fetchRequest(apiUrl, {
     redirect: 'manual',
     headers: {authorization: `Bearer ${credentials.token}`},

@@ -38,6 +38,13 @@ services:
       Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://dev.recruiterreply.com
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
+      GitHubActionsOidc__Enabled: "true"
+      GitHubActionsOidc__Issuer: https://token.actions.githubusercontent.com
+      GitHubActionsOidc__Audience: recruiterreply-dev-smoke
+      GitHubActionsOidc__Repository: moojjoo/recruiterreply
+      GitHubActionsOidc__WorkflowRef: moojjoo/recruiterreply/.github/workflows/promote.yml@refs/heads/main
+      GitHubActionsOidc__Ref: refs/heads/main
+      GitHubActionsOidc__Environment: dev
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     volumes:

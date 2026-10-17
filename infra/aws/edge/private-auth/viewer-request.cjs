@@ -6,6 +6,8 @@ const { createAuthorizationRequest } = require('./oauth-authorize.cjs');
 const { createTransactionCookie } = require('./oauth-transaction.cjs');
 const { completeOAuthLogin } = require('./complete-oauth-login.cjs');
 const { clearSessionCookie } = require('./session-cookie.cjs');
+const { fetchGitHubJwks } = require('./fetch-github-jwks.cjs');
+const { getCiToken, validateGitHubActionsToken } = require('./github-oidc.cjs');
 
 // Issue #356: Initial fail-closed Lambda@Edge viewer-request handler.
 // Development scaffold only. Not ready for deployment.
@@ -68,7 +70,10 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
       return logout(environment, expectedHost);
     }
 
-    if (!(await validateSession(request, distributionId))) {
+    const ciToken = getCiToken(request);
+    if (ciToken) {
+      if (!(await validateCiToken(ciToken, environment))) return forbidden();
+    } else if (!(await validateSession(request, distributionId))) {
       return isCompleteEnvironment(environment)
         ? redirect('/_auth/login')
         : forbidden();
@@ -76,10 +81,22 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
 
     // Never forward browser authentication cookies to the S3 origin.
     delete request.headers.cookie;
+    delete request.headers['x-rr-ci-oidc-token'];
     if (!request.uri.startsWith('/api/')) rewriteSpaRequest(request);
 
     return request;
   };
+}
+
+async function validateCiToken(token, environment) {
+  if (!environment?.ciAuth) return false;
+  try {
+    const jwks = await fetchGitHubJwks();
+    validateGitHubActionsToken(token, jwks, environment.ciAuth);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function signApiOriginRequest(request, distributionId, trustedEnvironments, now = Date.now) {

@@ -10,6 +10,8 @@ const SOURCE_FILES = Object.freeze([
   'deployment-handler.cjs',
   'dynamodb-replay-store.cjs',
   'fetch-jwks.cjs',
+  'fetch-github-jwks.cjs',
+  'github-oidc.cjs',
   'oauth-authorize.cjs',
   'oauth-callback.cjs',
   'oauth-nonce.cjs',
@@ -55,10 +57,12 @@ function validatePackageConfig(config) {
   }
 
   const keys = Object.keys(environment).sort();
-  if (
-    keys.length !== CONFIG_KEYS.length ||
-    keys.some((key, index) => key !== CONFIG_KEYS[index])
-  ) {
+  const legacyKeys = CONFIG_KEYS;
+  const ciKeys = ['ciAuth', ...CONFIG_KEYS];
+  const matches = [legacyKeys, ciKeys].some(expected =>
+    keys.length === expected.length && keys.every((key, index) => key === expected[index])
+  );
+  if (!matches) {
     throw new Error('Private environment configuration has unknown or missing fields');
   }
 

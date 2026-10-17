@@ -116,6 +116,30 @@ misleading. The message remains understandable when a client strips its styling.
 The Cognito authentication session and the email text both use a 10-minute
 validity window.
 
+## CI smoke identity
+
+The Dev package may include an optional `ciAuth` object for the GitHub Actions
+machine identity. It contains only non-secret policy values:
+
+```json
+{
+  "ciAuth": {
+    "issuer": "https://token.actions.githubusercontent.com",
+    "audience": "recruiterreply-dev-smoke",
+    "repository": "moojjoo/recruiterreply",
+    "workflowRef": "moojjoo/recruiterreply/.github/workflows/promote.yml@refs/heads/main",
+    "ref": "refs/heads/main",
+    "environment": "dev"
+  }
+}
+```
+
+The workflow obtains a short-lived token with `id-token: write`; it is never
+stored as a GitHub secret. The edge validates the signature and all listed
+claims, and removes the CI header before any origin request. A missing or
+invalid token never grants access. Cognito authorization-code + MFA remains
+the human login path.
+
 ## Package staging
 
 `package-stage.cjs` creates a new staging directory containing only runtime
