@@ -20,7 +20,7 @@
     <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.15" />
     <PackageReference Include="DotNetEnv" Version="3.2.0" />
     <PackageReference Include="Google.Apis.Gmail.v1" Version="1.75.0.4225" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Stripe.net" Version="48.5.0" />
