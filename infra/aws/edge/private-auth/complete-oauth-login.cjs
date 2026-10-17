@@ -84,7 +84,11 @@ async function completeOAuthLogin({
   const session = createSessionCookie({
     subject: claims.sub,
     issuer: sessionConfig.issuer,
-    clientId: sessionConfig.clientId
+    clientId: sessionConfig.clientId,
+    email: claims.email,
+    emailVerified: claims.email_verified === true || claims.email_verified === 'true',
+    firstName: claims.given_name,
+    lastName: claims.family_name
   }, sessionSecret, now);
 
   return {

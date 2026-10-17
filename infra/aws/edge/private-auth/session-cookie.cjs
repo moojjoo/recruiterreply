@@ -6,7 +6,7 @@ const {seal, open} = require('./sealed-cookie.cjs');
 const COOKIE_NAME = 'rr_session';
 const SESSION_TTL_SECONDS = 900;
 
-function createSessionCookie({ subject, issuer, clientId }, secret, now = Date.now()) {
+function createSessionCookie({ subject, issuer, clientId, email, emailVerified, firstName, lastName }, secret, now = Date.now()) {
   if (
     typeof secret !== 'string' ||
     Buffer.byteLength(secret) < 32 ||
@@ -24,7 +24,11 @@ function createSessionCookie({ subject, issuer, clientId }, secret, now = Date.n
     aud: clientId,
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + SESSION_TTL_SECONDS,
-    jti: crypto.randomBytes(16).toString('base64url')
+    jti: crypto.randomBytes(16).toString('base64url'),
+    email: typeof email === 'string' ? email : undefined,
+    emailVerified: emailVerified === true,
+    firstName: typeof firstName === 'string' ? firstName : undefined,
+    lastName: typeof lastName === 'string' ? lastName : undefined
   });
   const value = seal(payload, secret, COOKIE_NAME);
 

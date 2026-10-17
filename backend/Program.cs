@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
+using RecruiterReply.Authentication;
+using Microsoft.AspNetCore.Authentication;
 
 var envCandidates = new[]
 {
@@ -66,7 +68,18 @@ var githubOidcOptions = new GitHubActionsOidcPolicyOptions(
     builder.Configuration["GitHubActionsOidc:Ref"] ?? "refs/heads/main",
     builder.Configuration["GitHubActionsOidc:Environment"] ?? "dev");
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = "Application";
+        options.DefaultChallengeScheme = "Application";
+    })
+    .AddPolicyScheme("Application", null, options =>
+    {
+        options.ForwardDefaultSelector = context =>
+            context.Request.Cookies.ContainsKey("rr_session")
+                ? "EdgeSession"
+                : JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options =>
     {
         var issuer = builder.Configuration["Jwt:Issuer"] ?? "RecruiterReply";
@@ -84,6 +97,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
         };
     })
+    .AddScheme<AuthenticationSchemeOptions, EdgeSessionAuthenticationHandler>("EdgeSession", _ => { })
     .AddJwtBearer("GitHubActionsSmoke", options =>
     {
         options.Authority = githubOidcOptions.Issuer;
