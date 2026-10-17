@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Test private Dev deployment verification
+        run: node --test .github/scripts/tests/private-dev-smoke.test.cjs
+
       - name: Test CI remediation comments
         run: node --test .github/scripts/tests/ci-remediation-comment.test.cjs
 
@@ -252,10 +255,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Verify live Dev SEO responses
+      - name: Verify live Dev private access boundary
         env:
-          SEO_BASE_URL: https://dev.recruiterreply.com
-        run: node .github/scripts/dev-seo-http-smoke.cjs
+          DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
+          DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
+        run: node .github/scripts/private-dev-smoke.cjs --boundary-only
 
   reconcile-dev-issues:
     needs: [deploy-dev, verify-dev-seo-http]
