@@ -22,6 +22,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Test audit input safeguards
+        run: python3 -m unittest discover -s "${{ github.workspace }}/.github/scripts/tests" -p 'test_terraform_audit_inputs.py'
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: '1.14.3'
@@ -33,6 +35,13 @@ jobs:
           aws-region: us-east-1
           role-to-assume: ${{ vars.TERRAFORM_AUDIT_ROLE_ARN }}
           role-session-name: terraform-audit-${{ github.run_id }}
+      - name: Prepare reviewed global audit inputs
+        if: matrix.root == 'global'
+        run: |
+          python3 "${{ github.workspace }}/.github/scripts/terraform-audit-inputs.py" \
+            --manifest "${{ github.workspace }}/.github/config/terraform-audit-global.json" \
+            --output "$RUNNER_TEMP/terraform-audit-global"
+          echo "TF_CLI_ARGS_plan=-var-file=$RUNNER_TEMP/terraform-audit-global/global.tfvars.json" >> "$GITHUB_ENV"
       - name: Initialize existing remote state (no migration)
         run: terraform init -input=false -lockfile=readonly -migrate-state=false
       - name: Validate configuration
@@ -85,6 +94,13 @@ jobs:
             echo "- Detailed plan/state logs are intentionally not uploaded."
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f /tmp/tf-refresh.log /tmp/tf-desired.log
+          rm -rf "$RUNNER_TEMP/terraform-audit-global"
+      - name: Remove helper-owned package links
+        if: always() && matrix.root == 'global'
+        run: |
+          python3 "${{ github.workspace }}/.github/scripts/terraform-audit-inputs.py" \
+            --manifest "${{ github.workspace }}/.github/config/terraform-audit-global.json" \
+            --output "$RUNNER_TEMP/terraform-audit-global" --cleanup
       - name: Enforce audit result
         if: always()
         env:
