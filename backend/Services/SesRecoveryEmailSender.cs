@@ -13,7 +13,7 @@ public sealed class SesRecoveryEmailSender(IConfiguration config) : IRecoveryEma
         if (string.IsNullOrWhiteSpace(from))
             throw new InvalidOperationException("PasswordRecovery:FromEmail is not configured.");
 
-        var (text, html) = RecoveryEmailTemplate.Render(code, link);
+        var template = VerificationEmailTemplate.Render(VerificationEmailTemplate.Purpose.PasswordReset, code, 10);
         using var ses = new AmazonSimpleEmailServiceV2Client();
         await ses.SendEmailAsync(new SendEmailRequest
         {
@@ -21,11 +21,11 @@ public sealed class SesRecoveryEmailSender(IConfiguration config) : IRecoveryEma
             Destination = new Destination { ToAddresses = [email] },
             Content = new EmailContent { Simple = new Message
             {
-                Subject = new Content { Data = "RecruiterReply password reset verification" },
+                Subject = new Content { Data = template.Subject },
                 Body = new Body
                 {
-                    Text = new Content { Data = text, Charset = "UTF-8" },
-                    Html = new Content { Data = html, Charset = "UTF-8" }
+                    Text = new Content { Data = template.PlainText, Charset = "UTF-8" },
+                    Html = new Content { Data = template.Html, Charset = "UTF-8" }
                 }
             } }
         }, ct);
