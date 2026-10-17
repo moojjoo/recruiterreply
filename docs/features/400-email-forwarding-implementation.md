@@ -38,7 +38,7 @@ Store the ImprovMX API credential as environment secret `IMPROVMX_API_KEY` in `t
 
 ## Workflow and exact-plan approval
 
-The existing `.github/workflows/terraform-readonly-audit.yml` keeps its default four-root read-only audit and adds Issue #400 jobs. PRs run unprivileged validation only. On `main`, dispatch `operation=email-plan` with `email_environment=dev|test|prod` to inspect DNS. Dev/Test have no ability to apply shared Production apex DNS.
+The existing `.github/workflows/terraform-readonly-audit.yml` and its four-root read-only audit remain intact. `.github/workflows/email-forwarding.yml` extends the same GitHub Actions/Terraform/OIDC setup with the scoped Issue #400 plan/apply jobs. PRs run unprivileged validation only. On `main`, dispatch `operation=email-plan` with `email_environment=dev|test|prod` to inspect DNS. Dev/Test have no ability to apply shared Production apex DNS.
 
 For an explicitly approved Production DNS change, dispatch `operation=email-apply`, `email_environment=prod`. The plan job snapshots public DNS/SES metadata, creates a saved binary plan and seals its SHA-256, commit, environment, creation time, and semantic plan signature. The one-day artifact contains only this isolated public-DNS plan and public baseline, never the global application state or provider credentials. Review the sanitized plan summary before approving `terraform-email-prod-apply`.
 
