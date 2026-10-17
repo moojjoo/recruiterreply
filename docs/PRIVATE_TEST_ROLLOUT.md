@@ -41,7 +41,10 @@ node .github/scripts/private-test-smoke.cjs --boundary-only
 3. Configure the matching `apiOriginSigningKey` in the existing Test backend
    Secrets Manager JSON without changing other settings or logging key values.
 4. Enable Test with the authenticated, uncached `/api/*` behavior and wait for
-   CloudFront propagation. Use AWS's exact lowercase managed CachingDisabled ID.
+   CloudFront propagation. Use AWS's exact lowercase managed CachingDisabled ID
+   and AllViewerExceptHostHeader origin policy. The API origin needs its own
+   hostname for TLS and nginx virtual-host routing, while Authorization and the
+   edge-generated origin signature must still reach the backend.
 5. Promote the latest successful Dev release through `promote-test.yml`. The
    workflow selects that immutable SHA; do not pass an unsupported SHA input.
    Keep the existing nginx Test origin lockdown until the new backend is healthy
