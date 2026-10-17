@@ -427,10 +427,55 @@ test('duplicate callback parameters fail closed before token exchange', async ()
   const event = makeEvent('/_auth/callback', cookieHeader('rr_oauth_tx=signed-transaction'));
   event.Records[0].cf.request.querystring = 'code=one&code=two&state=state';
 
-  const response = await gateway(event);
+  const originalConsoleError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+
+  let response;
+  try {
+    response = await gateway(event);
+  } finally {
+    console.error = originalConsoleError;
+  }
 
   assert.equal(response.status, '403');
   assert.equal(called, false);
+  assert.deepEqual(logged, [[
+    'PRIVATE_AUTH_CALLBACK_FAILURE',
+    { reason: 'Duplicate callback parameter', errorType: 'Error' }
+  ]]);
+  assert.doesNotMatch(JSON.stringify(logged), /one|two|signed-transaction/);
+});
+
+test('unexpected callback failures are classified without logging sensitive details', async () => {
+  const gateway = createViewerRequestHandler({
+    [DEV_ID]: completeDevEnvironment()
+  }, {
+    async completeOAuthLogin() {
+      const error = new Error('secret-code-and-token');
+      error.name = 'OAuth<Token>Error';
+      throw error;
+    }
+  });
+  const event = makeEvent('/_auth/callback', cookieHeader('rr_oauth_tx=signed-transaction'));
+  event.Records[0].cf.request.querystring = 'code=secret-code&state=secret-state';
+  const originalConsoleError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+
+  let response;
+  try {
+    response = await gateway(event);
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(response.status, '403');
+  assert.deepEqual(logged, [[
+    'PRIVATE_AUTH_CALLBACK_FAILURE',
+    { reason: 'Unclassified callback failure', errorType: 'OAuthTokenError' }
+  ]]);
+  assert.doesNotMatch(JSON.stringify(logged), /secret|signed-transaction/);
 });
 
 test('logout clears local cookies and redirects to the approved Cognito logout URL', async () => {

@@ -1,9 +1,10 @@
 # Issue #356 — CloudFront Cognito Authentication Gateway
 
-## Status: Development only — NOT DEPLOYABLE
+## Status: Dev active behind the private gate; Test remains disabled
 
-This directory contains an in-progress authentication gateway for
-Dev and Test CloudFront distributions.
+This directory contains the authentication gateway for the Dev and Test
+CloudFront distributions. Dev is active behind the reviewed gate. Test remains
+disabled pending a separately authorized rollout and validation.
 
 Production must remain unaffected.
 
@@ -36,16 +37,18 @@ Production must remain unaffected.
   viewer-request router
 - Origin-response noindex enforcement compatible with the viewer-request gate
 - Automated positive and negative security tests
+- Branded, mobile-friendly Cognito MFA email with a prominent selectable code
+  and no misleading in-email clipboard control
 
 ## Not yet implemented
 
-- Reviewed, immutable Dev/Test Cognito identity configuration
+- Reviewed, immutable Test Cognito identity configuration
 - Token refresh and revocation handling
-- Complete MFA end-to-end testing
-- Reviewed package ZIP generation and hash approval
-- Terraform plan review, apply approval and CloudFront rollout
-- Live Dev/Test SPA routing compatibility verification
-- Live negative-path and integration testing
+- Complete Test MFA end-to-end testing
+- Reviewed Test package ZIP generation and hash approval
+- Test Terraform plan review, apply approval and CloudFront rollout
+- Live Test SPA routing compatibility verification
+- Live Test negative-path and integration testing
 
 ## Architecture decisions pending Terraform integration
 
@@ -80,7 +83,8 @@ Production must remain unaffected.
 ## Security restrictions
 
 - Default Lambda@Edge handler remains fail-closed.
-- Dev/Test CloudFront distributions remain disabled.
+- Test remains disabled. Dev may be enabled only when its explicit release gate
+  and the private edge association gate are both true.
 - No AWS deployment or Terraform apply is authorized.
 - No Production configuration changes are authorized.
 - Never package test private keys into Lambda@Edge.
@@ -91,6 +95,16 @@ Production must remain unaffected.
 - API isolation is separately tracked under issue #357.
 
 Passing tests do not imply that the gateway is ready for deployment.
+
+## Verification email behavior
+
+Cognito's native email MFA template uses HTML with inline styles and the required
+`{####}` placeholder. The six-digit code is large and selectable on desktop and
+mobile. The email intentionally contains no Copy button: Gmail, Outlook, and most
+other clients block the JavaScript clipboard API, so such a button would be
+misleading. The message remains understandable when a client strips its styling.
+The Cognito authentication session and the email text both use a 10-minute
+validity window.
 
 ## Package staging
 
@@ -123,9 +137,11 @@ compiled into reviewed immutable packages:
 2. Populate each secret's `AWSCURRENT` value out of band, stage one package per
    environment using the exact secret ARN, replay-table name, and Cognito identity,
    then review the package contents and hashes.
-3. A later reviewed root integration may create versioned Lambda@Edge functions
-   from those packages and associate viewer-request plus origin-response events.
-   Dev/Test remain disabled until live negative and MFA tests are approved.
+3. A reviewed root integration creates versioned Lambda@Edge functions from
+   those packages and associates viewer-request plus origin-response events.
+   Each environment remains disabled until its live negative and MFA tests are
+   approved. Dev has an additional explicit release gate; Test has no enablement
+   path in this change.
 
 Set `private_environment_identity_environments` and `private_edge_environments`
 to `["dev"]` for a Dev-only rollout. This prevents a Dev authorization from
@@ -136,8 +152,8 @@ implicitly provisioning or associating Test resources. The defaults remain
 incompatible Dev SPA viewer-request and Dev/Test noindex viewer-response
 CloudFront Function associations with the versioned Lambda on viewer-request
 and origin-response. It also removes Dev/Test 403/404-to-200 mappings while
-leaving Production unchanged. The distributions remain disabled even when this
-gate is enabled; enabling them requires a separate reviewed release change.
+leaving Production unchanged. Dev additionally requires
+`enable_private_dev_distribution = true`; Test remains disabled regardless.
 
 ## Search-indexing release gate
 
