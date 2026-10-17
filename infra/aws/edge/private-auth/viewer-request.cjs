@@ -185,7 +185,29 @@ async function finishAuthorization(request, environment, completeLogin) {
       result.sessionCookie,
       result.clearTransactionCookie
     ]);
-  } catch {
+  } catch (error) {
+    const allowedErrors = new Set([
+      'Missing authentication cookie',
+      'Invalid callback query',
+      'Duplicate callback parameter',
+      'Invalid OAuth callback parameters',
+      'OAuth state mismatch',
+      'OAuth redirect URI mismatch',
+      'OAuth token exchange failed',
+      'Missing ID token'
+    ]);
+
+    const reason = allowedErrors.has(error?.message)
+      ? error.message
+      : 'Unclassified callback failure';
+
+    console.error('PRIVATE_AUTH_CALLBACK_FAILURE', {
+      reason,
+      errorType: typeof error?.name === 'string'
+        ? error.name.replace(/[^A-Za-z]/g, '').slice(0, 40)
+        : 'Unknown'
+    });
+
     return forbidden();
   }
 }

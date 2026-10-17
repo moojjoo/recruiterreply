@@ -33,3 +33,9 @@ variable "frontend_bucket_names" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_private_dev_distribution" {
+  description = "Explicitly enable Dev only after its private authentication gateway is attached."
+  type        = bool
+  default     = false
+}
