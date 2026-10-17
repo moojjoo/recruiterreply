@@ -22,7 +22,9 @@ const variables = fs.readFileSync(path.join(__dirname, '../../infra/aws/terrafor
 const moduleVariables = fs.readFileSync(path.join(__dirname, '../../infra/aws/terraform/modules/frontend/variables.tf'), 'utf8');
 assert.match(variables, /variable "enable_private_test_distribution"\s*\{[^}]*default\s*=\s*false/s);
 assert.match(variables, /variable "enable_private_test_api_routing"\s*\{[^}]*default\s*=\s*false/s);
+assert.match(variables, /variable "enable_private_dev_api_routing"\s*\{[^}]*default\s*=\s*false/s);
 assert.match(moduleVariables, /variable "enable_private_test_api_routing"\s*\{[^}]*default\s*=\s*false/s);
+assert.match(moduleVariables, /variable "enable_private_dev_api_routing"\s*\{[^}]*default\s*=\s*false/s);
 assert.match(frontend, /private_test_api_prerequisites/);
 assert.match(frontend, /path_pattern\s*=\s*"\/api\/\*"/);
 assert.match(frontend, /cache_policy_id\s*=\s*"4135ea2d-6df8-44a3-9df3-4b5a84be39ad"/);

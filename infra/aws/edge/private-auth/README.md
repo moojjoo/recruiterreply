@@ -36,8 +36,8 @@ Production must remain unaffected.
 - Login, callback, logout, session validation and SPA rewriting in one
   viewer-request router
 - Origin-response noindex enforcement compatible with the viewer-request gate
-- Test-only same-origin `/api/*` CloudFront routing with caching disabled
-- Short-lived HMAC origin signatures from Test Lambda@Edge and fail-closed Test backend verification
+- Dev/Test same-origin `/api/*` CloudFront routing with caching disabled
+- Short-lived HMAC origin signatures from Dev/Test Lambda@Edge and fail-closed backend verification
 - Automated positive and negative security tests
 - Branded, mobile-friendly Cognito MFA email with a prominent selectable code
   and no misleading in-email clipboard control
@@ -64,10 +64,10 @@ Production must remain unaffected.
 - Signing keys are retrieved from separate `us-east-1` Secrets Manager secrets.
   Only non-secret resource identifiers may be compiled into an immutable edge
   function version. Lambda@Edge environment variables and layers are not used.
-- The Test signing-key secret also contains a top-level `apiOriginSigningKey`
-  value of at least 32 bytes. The Test Lambda@Edge signer uses it for short-lived
-  HMAC signatures over API method, path, query and timestamp; the Test backend
-  reads the same value and rejects unsigned requests. Never put this value in
+- Each Dev/Test signing-key secret also contains a top-level `apiOriginSigningKey`
+  value of at least 32 bytes. The matching Lambda@Edge signer uses it for
+  short-lived HMAC signatures over API method, path, query and timestamp; the
+  matching backend reads the same value and rejects unsigned requests. Never put this value in
   Terraform variables/state, frontend configuration, logs or a package artifact.
 - AWS SDK v3 DynamoDB and Secrets Manager clients must be packaged in the Lambda
   deployment ZIP. No code path may assume that the runtime bundles those clients.
@@ -188,8 +188,9 @@ CloudFront Function associations with the versioned Lambda on viewer-request
 and origin-response. It also removes Dev/Test 403/404-to-200 mappings while
 leaving Production unchanged. Dev additionally requires
 `enable_private_dev_distribution = true`; Test has a separate explicit
-`enable_private_test_distribution` gate, and its API behavior also requires
-`enable_private_test_api_routing`. Both remain false unless separately approved.
+`enable_private_test_distribution` gate. Dev and Test API behaviors require
+their corresponding `enable_private_*_api_routing` flag. All remain false
+unless separately approved.
 
 ## Search-indexing release gate
 

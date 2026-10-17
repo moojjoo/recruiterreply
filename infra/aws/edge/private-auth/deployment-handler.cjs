@@ -48,8 +48,8 @@ function validateEnvironment(distributionId, config) {
   if (typeof config.signApiOriginRequests !== 'boolean') {
     throw new Error('API origin signing flag is required');
   }
-  if (config.signApiOriginRequests && distributionId !== 'E2IGR9MYMWVQFI') {
-    throw new Error('API origin signing is approved for the Test distribution only');
+  if (config.signApiOriginRequests && !['E2JWU1TLDA6YRS', 'E2IGR9MYMWVQFI'].includes(distributionId)) {
+    throw new Error('API origin signing is approved for Dev and Test distributions only');
   }
 
   if (host !== expectedHost) throw new Error('Environment host is not approved');

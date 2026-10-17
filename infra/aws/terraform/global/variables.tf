@@ -51,3 +51,9 @@ variable "enable_private_test_api_routing" {
   type        = bool
   default     = false
 }
+
+variable "enable_private_dev_api_routing" {
+  description = "Route Dev /api/* through its authenticated CloudFront distribution."
+  type        = bool
+  default     = false
+}

@@ -87,8 +87,20 @@ variable "enable_private_test_api_routing" {
   default     = false
 }
 
+variable "enable_private_dev_api_routing" {
+  description = "Route Dev /api/* through its authenticated CloudFront distribution."
+  type        = bool
+  default     = false
+}
+
 variable "test_api_origin_domain_name" {
   description = "TLS origin for the Test API behavior."
   type        = string
   default     = "api-test.recruiterreply.com"
+}
+
+variable "dev_api_origin_domain_name" {
+  description = "TLS origin for the Dev API behavior."
+  type        = string
+  default     = "api-dev.recruiterreply.com"
 }

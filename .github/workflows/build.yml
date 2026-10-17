@@ -242,7 +242,7 @@ jobs:
       environment: dev
       sha: ${{ github.sha }}
       build_run_id: ${{ github.run_id }}
-      api_base_url: https://api-dev.recruiterreply.com/api
+      api_base_url: /api
       frontend_url: https://dev.recruiterreply.com
       api_url: https://api-dev.recruiterreply.com
       robots_txt: |

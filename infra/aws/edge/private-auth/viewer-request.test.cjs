@@ -133,6 +133,23 @@ test('Test API origin requests receive a short-lived request signature', async (
   }));
 });
 
+test('Dev API origin requests receive a short-lived request signature', async () => {
+  const secret = 'dev-only-origin-signing-key-with-32-bytes';
+  const handlerWithOriginSigning = createViewerRequestHandler({
+    [DEV_ID]: { signApiOriginRequests: true, getSigningKeys: async () => ({ apiOriginSigningKey: secret }) }
+  });
+  const event = makeEvent('/api/messages', {}, DEV_ID);
+  event.Records[0].cf.config.eventType = 'origin-request';
+  const response = await handlerWithOriginSigning(event);
+  assert.match(response.headers['x-rr-origin-auth'][0].value, /^\d+\.[A-Za-z0-9_-]+$/);
+});
+
+test('API viewer requests retain the sealed session cookie for the backend', async () => {
+  const event = makeEvent('/api/health', cookieHeader(`rr_session=${devSession()}`), DEV_ID);
+  const response = await authenticatedHandler(event);
+  assert.ok(response.headers.cookie);
+});
+
 test('Test API origin signer fails closed without its key', async () => {
   const handlerWithoutKey = createViewerRequestHandler({
     [TEST_ID]: { signApiOriginRequests: true, getSigningKeys: async () => ({}) }

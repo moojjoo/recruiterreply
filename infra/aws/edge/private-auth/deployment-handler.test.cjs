@@ -45,10 +45,10 @@ test('rejects a host that does not match the approved distribution', () => {
   );
 });
 
-test('rejects API origin signing on Dev', () => {
-  assert.throws(
-    () => validateEnvironment('E2JWU1TLDA6YRS', devConfig({ signApiOriginRequests: true })),
-    /Test distribution only/
+test('allows API origin signing on Dev', () => {
+  assert.equal(
+    validateEnvironment('E2JWU1TLDA6YRS', devConfig({ signApiOriginRequests: true })).signApiOriginRequests,
+    true
   );
 });
 

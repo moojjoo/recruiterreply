@@ -45,6 +45,7 @@ services:
       GitHubActionsOidc__WorkflowRef: moojjoo/recruiterreply/.github/workflows/promote.yml@refs/heads/main
       GitHubActionsOidc__Ref: refs/heads/main
       GitHubActionsOidc__Environment: dev
+      PrivateApiOriginAuth__Enabled: "true"
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     volumes:
