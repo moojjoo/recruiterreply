@@ -1,11 +1,11 @@
 'use strict';
 
-const { validateForwardingConfig } = require('./check-config.cjs');
+const { validateForwardingConfig, EXPECTED_DESTINATION } = require('./check-config.cjs');
 
 const FAILURE_CODES = new Set([
   'CREDENTIAL_MISSING', 'ACCOUNT_NOT_FREE', 'ACCOUNT_UNAVAILABLE',
   'DOMAIN_MISMATCH', 'DOMAIN_BANNED_OR_UNKNOWN', 'ALIAS_ROUTING_NOT_ACTIVE',
-  'FALLBACK_ENABLED_OR_UNKNOWN', 'FORWARDING_NOT_READY', 'ALIAS_INVENTORY_INVALID',
+  'FALLBACK_DESTINATION_MISMATCH', 'FORWARDING_NOT_READY', 'ALIAS_INVENTORY_INVALID',
   'ALIAS_CONFIGURATION_INVALID', 'HTTP_FAILURE', 'NETWORK_FAILURE', 'INVALID_JSON'
 ]);
 
@@ -36,7 +36,10 @@ function validateProvider(account, domain, aliases, requireReady = false) {
   if (settings?.domain !== 'recruiterreply.com') fail('DOMAIN_MISMATCH');
   if (settings.banned !== false) fail('DOMAIN_BANNED_OR_UNKNOWN');
   if (settings.routing_engine !== 'alias') fail('ALIAS_ROUTING_NOT_ACTIVE');
-  if (settings.rules_fallback_email !== null) fail('FALLBACK_ENABLED_OR_UNKNOWN');
+  // Alias routing and the complete catch-all inventory are authoritative.
+  // Empty optional rules metadata or the same approved inbox adds no recipient.
+  const fallback = settings.rules_fallback_email;
+  if (![undefined, null, '', EXPECTED_DESTINATION].includes(fallback)) fail('FALLBACK_DESTINATION_MISMATCH');
   if (requireReady && settings.forwarding_ready !== true) fail('FORWARDING_NOT_READY');
   if (!Number.isInteger(aliases?.total) || aliases.total < 1 || aliases.total > 3 ||
       aliases.page !== 1 || aliases.aliases?.length !== aliases.total) {
