@@ -16,6 +16,7 @@ function devConfig(overrides = {}) {
     domain: 'recruiterreply-dev.auth.us-east-1.amazoncognito.com',
     signingKeySecretId: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:dev',
     replayTableName: 'recruiterreply-dev-oauth-replay',
+    signApiOriginRequests: false,
     ...overrides
   };
 }
@@ -41,6 +42,13 @@ test('rejects a host that does not match the approved distribution', () => {
   assert.throws(
     () => validateEnvironment('E2JWU1TLDA6YRS', devConfig({ host: 'test.recruiterreply.com' })),
     /host is not approved/
+  );
+});
+
+test('rejects API origin signing on Dev', () => {
+  assert.throws(
+    () => validateEnvironment('E2JWU1TLDA6YRS', devConfig({ signApiOriginRequests: true })),
+    /Test distribution only/
   );
 });
 

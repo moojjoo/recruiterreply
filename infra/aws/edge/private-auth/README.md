@@ -36,6 +36,8 @@ Production must remain unaffected.
 - Login, callback, logout, session validation and SPA rewriting in one
   viewer-request router
 - Origin-response noindex enforcement compatible with the viewer-request gate
+- Test-only same-origin `/api/*` CloudFront routing with caching disabled
+- Short-lived HMAC origin signatures from Test Lambda@Edge and fail-closed Test backend verification
 - Automated positive and negative security tests
 - Branded, mobile-friendly Cognito MFA email with a prominent selectable code
   and no misleading in-email clipboard control
@@ -45,6 +47,7 @@ Production must remain unaffected.
 - Reviewed, immutable Test Cognito identity configuration
 - Token refresh and revocation handling
 - Complete Test MFA end-to-end testing
+- Live Test authenticated API and origin-bypass testing
 - Reviewed Test package ZIP generation and hash approval
 - Test Terraform plan review, apply approval and CloudFront rollout
 - Live Test SPA routing compatibility verification
@@ -61,12 +64,19 @@ Production must remain unaffected.
 - Signing keys are retrieved from separate `us-east-1` Secrets Manager secrets.
   Only non-secret resource identifiers may be compiled into an immutable edge
   function version. Lambda@Edge environment variables and layers are not used.
+- The Test signing-key secret also contains a top-level `apiOriginSigningKey`
+  value of at least 32 bytes. The Test Lambda@Edge signer uses it for short-lived
+  HMAC signatures over API method, path, query and timestamp; the Test backend
+  reads the same value and rejects unsigned requests. Never put this value in
+  Terraform variables/state, frontend configuration, logs or a package artifact.
 - AWS SDK v3 DynamoDB and Secrets Manager clients must be packaged in the Lambda
   deployment ZIP. No code path may assume that the runtime bundles those clients.
 - The execution role must grant only `secretsmanager:GetSecretValue` for the exact
   environment secret and `dynamodb:PutItem` for the exact environment replay table.
 - SPA rewriting occurs after successful session validation in the Lambda@Edge
-  viewer-request handler. The separate Dev viewer-request CloudFront Function must
+  viewer-request handler, while Test `/api/*` paths are preserved for the API
+  behavior. Its origin-request event signs requests with the Test-only API origin
+  key, which the Test backend verifies. The separate Dev viewer-request CloudFront Function must
   not remain associated when the edge gateway is associated. The Dev/Test
   viewer-response noindex functions must also be removed because CloudFront does
   not allow CloudFront Functions on viewer events alongside a Lambda@Edge
@@ -92,7 +102,7 @@ Production must remain unaffected.
 - Never forward authentication cookies to S3.
 - Never place signing keys in Terraform source, state inputs, Lambda code, or
   Lambda environment variables.
-- API isolation is separately tracked under issue #357.
+- Test API isolation and same-origin routing are tracked under issue #422.
 
 Passing tests do not imply that the gateway is ready for deployment.
 
@@ -153,7 +163,9 @@ incompatible Dev SPA viewer-request and Dev/Test noindex viewer-response
 CloudFront Function associations with the versioned Lambda on viewer-request
 and origin-response. It also removes Dev/Test 403/404-to-200 mappings while
 leaving Production unchanged. Dev additionally requires
-`enable_private_dev_distribution = true`; Test remains disabled regardless.
+`enable_private_dev_distribution = true`; Test has a separate explicit
+`enable_private_test_distribution` gate, and its API behavior also requires
+`enable_private_test_api_routing`. Both remain false unless separately approved.
 
 ## Search-indexing release gate
 

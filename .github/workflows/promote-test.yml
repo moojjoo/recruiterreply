@@ -82,9 +82,9 @@ jobs:
     with:
       environment: test
       sha: ${{ needs.resolve-source.outputs.sha }}
-      api_base_url: https://api-test.recruiterreply.com/api
+      api_base_url: /api
       frontend_url: https://test.recruiterreply.com
-      api_url: https://api-test.recruiterreply.com
+      api_url: https://test.recruiterreply.com
       robots_txt: |
         User-agent: *
         Disallow: /

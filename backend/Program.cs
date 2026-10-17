@@ -200,6 +200,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<PrivateApiOriginAuthMiddleware>();
 
 // Redirecting the CORS preflight to HTTPS breaks the browser's http://localhost:5002 calls in dev.
 if (!app.Environment.IsDevelopment())

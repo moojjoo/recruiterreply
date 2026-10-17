@@ -134,7 +134,8 @@ test('deployment environment completes login through the real token-exchange hel
   const deployedEnvironment = validateEnvironment('E2JWU1TLDA6YRS', {
     host: 'dev.recruiterreply.com', issuer, clientId, domain,
     signingKeySecretId: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-keys',
-    replayTableName: 'test-oauth-replay'
+    replayTableName: 'test-oauth-replay',
+    signApiOriginRequests: false
   });
   const originalRequest = https.request;
   let exchanged = false;

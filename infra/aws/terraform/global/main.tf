@@ -28,7 +28,9 @@ module "frontend" {
     test = "E2IGR9MYMWVQFI"
     prod = "EHWW9BKSSF64L"
   }
-  enable_private_dev_distribution = var.enable_private_dev_distribution
+  enable_private_dev_distribution  = var.enable_private_dev_distribution
+  enable_private_test_distribution = var.enable_private_test_distribution
+  enable_private_test_api_routing  = var.enable_private_test_api_routing
   enable_private_edge_associations = (
     var.enable_private_edge_associations &&
     var.enable_private_edge_functions &&

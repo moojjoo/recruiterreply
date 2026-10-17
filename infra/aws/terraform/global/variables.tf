@@ -39,3 +39,15 @@ variable "enable_private_dev_distribution" {
   type        = bool
   default     = false
 }
+
+variable "enable_private_test_distribution" {
+  description = "Explicitly enable Test only after its private authentication gateway is attached."
+  type        = bool
+  default     = false
+}
+
+variable "enable_private_test_api_routing" {
+  description = "Route Test API requests through its authenticated CloudFront distribution."
+  type        = bool
+  default     = false
+}

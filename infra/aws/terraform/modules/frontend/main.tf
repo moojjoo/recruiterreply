@@ -152,6 +152,12 @@ resource "aws_cloudfront_distribution" "this" {
       var.enable_private_dev_distribution &&
       var.enable_private_edge_associations &&
       contains(var.private_edge_association_environments, each.key)
+    ) ||
+    (
+      each.key == "test" &&
+      var.enable_private_test_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, each.key)
     )
   )
   is_ipv6_enabled     = true
@@ -165,6 +171,55 @@ resource "aws_cloudfront_distribution" "this" {
     domain_name              = local.origin_bucket_domains[each.key]
     origin_id                = "${local.origin_bucket_names[each.key]}-origin"
     origin_access_control_id = aws_cloudfront_origin_access_control.this[each.key].id
+  }
+
+  dynamic "origin" {
+    for_each = each.key == "test" && var.enable_private_test_api_routing ? [1] : []
+    content {
+      domain_name = var.test_api_origin_domain_name
+      origin_id   = "test-api-origin"
+
+      custom_origin_config {
+        http_port                = 80
+        https_port               = 443
+        origin_protocol_policy   = "https-only"
+        origin_ssl_protocols     = ["TLSv1.2"]
+        origin_read_timeout      = 60
+        origin_keepalive_timeout = 5
+      }
+    }
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = each.key == "test" && var.enable_private_test_api_routing ? [1] : []
+    content {
+      path_pattern             = "/api/*"
+      target_origin_id         = "test-api-origin"
+      viewer_protocol_policy   = "redirect-to-https"
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+      compress                 = true
+      cache_policy_id          = "4135EA2D-6DF8-44A3-9DF3-4B5A84BE39AD"
+      origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+
+      lambda_function_association {
+        event_type   = "viewer-request"
+        lambda_arn   = lookup(var.private_edge_function_arns, "test", "")
+        include_body = false
+      }
+
+      lambda_function_association {
+        event_type   = "origin-request"
+        lambda_arn   = lookup(var.private_edge_function_arns, "test", "")
+        include_body = false
+      }
+
+      lambda_function_association {
+        event_type   = "origin-response"
+        lambda_arn   = lookup(var.private_edge_function_arns, "test", "")
+        include_body = false
+      }
+    }
   }
 
   default_cache_behavior {
@@ -264,4 +319,16 @@ resource "aws_s3_bucket_policy" "this" {
 
   bucket = local.origin_bucket_names[each.key]
   policy = data.aws_iam_policy_document.cloudfront_read[each.key].json
+}
+
+check "private_test_api_prerequisites" {
+  assert {
+    condition = !var.enable_private_test_api_routing || (
+      var.enable_private_test_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, "test") &&
+      can(regex("^arn:aws:lambda:us-east-1:[0-9]{12}:function:", lookup(var.private_edge_function_arns, "test", "")))
+    )
+    error_message = "Test API routing requires the explicitly enabled Test distribution and its reviewed private edge function association."
+  }
 }

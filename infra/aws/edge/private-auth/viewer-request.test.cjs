@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { handler, createViewerRequestHandler } = require('./viewer-request.cjs');
 const { createSessionCookie } = require('./session-cookie.cjs');
+const { createOriginSignature } = require('./origin-signature.cjs');
 
 const DEV_ID = 'E2JWU1TLDA6YRS';
 const TEST_ID = 'E2IGR9MYMWVQFI';
@@ -103,6 +104,43 @@ function cookieHeader(value) {
 
 test('unauthenticated homepage cannot reach the origin', async () => {
   assert.equal(String((await handler(makeEvent('/'))).status), '403');
+});
+
+test('Test API viewer requests preserve their path after the session gate', async () => {
+  const event = makeEvent('/api/health', cookieHeader(`rr_session=${testSession()}`), TEST_ID);
+  const response = await authenticatedHandler(event);
+  assert.equal(response.uri, '/api/health');
+});
+
+test('Test API origin requests receive a short-lived request signature', async () => {
+  const secret = 'test-only-origin-signing-key-with-32-bytes';
+  const handlerWithOriginSigning = createViewerRequestHandler({
+    [TEST_ID]: {
+      signApiOriginRequests: true,
+      getSigningKeys: async () => ({ apiOriginSigningKey: secret })
+    }
+  });
+  const event = makeEvent('/api/messages', {}, TEST_ID);
+  event.Records[0].cf.config.eventType = 'origin-request';
+  event.Records[0].cf.request.method = 'POST';
+  event.Records[0].cf.request.querystring = 'mode=reply';
+  const response = await handlerWithOriginSigning(event);
+  const header = response.headers['x-rr-origin-auth'][0].value;
+  const [timestamp, signature] = header.split('.');
+
+  assert.equal(signature, createOriginSignature({
+    method: 'POST', uri: '/api/messages', querystring: 'mode=reply', timestamp, secret
+  }));
+});
+
+test('Test API origin signer fails closed without its key', async () => {
+  const handlerWithoutKey = createViewerRequestHandler({
+    [TEST_ID]: { signApiOriginRequests: true, getSigningKeys: async () => ({}) }
+  });
+  const event = makeEvent('/api/health', {}, TEST_ID);
+  event.Records[0].cf.config.eventType = 'origin-request';
+
+  assert.equal(String((await handlerWithoutKey(event)).status), '403');
 });
 
 test('unauthenticated JavaScript asset cannot reach the origin', async () => {
