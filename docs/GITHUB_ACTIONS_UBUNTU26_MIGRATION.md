@@ -60,6 +60,63 @@ https://github.com/actions/runner-images/issues/14748
 7. Confirm Test promotion retains its environment and immutable-SHA safeguards.
    Do not promote to Test or Production as part of this issue.
 
+## Read-only audit IAM follow-up
+
+The approved audit run [39050302424](https://github.com/moojjoo/recruiterreply/actions/runs/39050302424)
+passed its Dev/Test/Prod jobs but failed global refresh and desired-state plans
+with `cognito-idp:DescribeUserPool` denied. The deployed audit policy also lacks
+Lambda and DynamoDB metadata reads for the private edge resources now in global
+state. AWS IAM simulation confirms those denied reads; this is separate from
+the resolved runner annotation.
+
+The correction adds explicit metadata operations only:
+
+- Cognito pool/client descriptions, MFA settings and tags for the two deployed
+  Dev/Test pool IDs listed in `terraform_audit_role.tf`. These are deliberate,
+  non-secret resource identifiers, independent of the opt-in creation flags.
+- Cognito domain descriptions in the configured region. AWS does not support
+  resource-level permissions for `DescribeUserPoolDomain`, so that operation
+  alone requires `Resource = "*"` plus `aws:RequestedRegion`.
+- Function descriptions, tags, published version inventory and code-signing metadata
+  for the named Dev/Test edge functions.
+- Table descriptions, backup settings, TTL and tags for the named Dev/Test OAuth
+  replay tables. No item reads or writes are granted.
+
+`DescribeUserPoolClient` can return client secrets, so the pool allowlist must
+remain limited to the reviewed public browser-client pools. Both current
+clients use `generate_secret = false`. Introducing confidential clients in
+these pools requires a separate review. `GetFunction` can expose function
+configuration and a code download URL; edge signing values remain in Secrets
+Manager and are not granted through this policy. No user-record, secret-value,
+Lambda invocation, infrastructure mutation, state-write or apply permission is
+added. Existing state access, OIDC trust and environment approval stay intact.
+
+Validate the provider-generated policy with IAM simulation: the intended reads
+must be allowed, while unrelated pools/functions/tables, wrong-region domain
+reads, user records, secret values, replay items, invocation and writes remain
+denied. Capture a targeted plan for `aws_iam_role_policy.terraform_audit` and
+confirm it contains exactly one in-place policy update with existing statements
+preserved. Targeting is an exceptional IAM repair, not evidence that the full
+root is reconciled. Keep snapshots, plans and state private and uncommitted.
+
+A local read-only check with the administrative identity also found independent
+root reconciliation issues: refresh-only detects drift in the Dev CloudFront
+distribution and Test pool, and the default desired-state inputs disable the
+private modules. That desired plan proposes removals and fails on existing
+`prevent_destroy` guards. Do not apply it or remove those guards. The audit needs
+reviewed non-secret rollout inputs and reviewed edge package artifacts matching
+the intended Dev/Test configuration before a full desired-state conclusion is
+possible. An IAM-only apply does not resolve that configuration mismatch.
+
+Repository changes do not update live IAM. Apply the reviewed IAM-only plan only
+after explicit owner authorization, then rerun the protected audit. Keep #387
+open if any root has errors or unresolved plan differences. Roll back only this
+inline policy to its captured prior document if needed; keep the Ubuntu runner
+pins and previously upgraded action versions.
+
+References: [AWS Cognito IAM actions](https://docs.aws.amazon.com/service-authorization/latest/reference/list_cognito-idp.html)
+and the pinned [Terraform AWS provider v6.60.0](https://github.com/hashicorp/terraform-provider-aws/tree/v6.60.0/internal/service).
+
 ## Rollback
 
 If the runner-pin change causes a regression, revert its commit through a
