@@ -5,20 +5,30 @@ Issue #387 records the October-November 2026 migration of the
 
 ## Current decision
 
-The Terraform read-only audit is pinned temporarily to `ubuntu-24.04`. It is
-the highest-risk compatibility path because it combines Terraform 1.14.3,
-provider plugins, AWS CLI/OIDC authentication, remote state, and four
-environment-protected roots. The pin prevents an unreviewed runner-image change
-from altering audit behavior during the migration window.
+All Linux jobs are explicitly pinned to `ubuntu-24.04`, including Test
+promotion's `resolve-source`, image preflight, and the reusable promotion job.
+This replaces the remaining 22 `ubuntu-latest` job declarations. The Terraform
+read-only audit already used the same pin. Explicit labels prevent the automatic
+October 19–November 19, 2026 image migration from changing the runner OS and
+remove the associated floating-label migration annotation on new runs.
 
-The repository currently has 23 `ubuntu-latest` job declarations. This change
-does not rewrite every runner label: application builds and promotion workflows
-must be exercised independently before their labels move. After the Ubuntu
-26.04 image is available, run an explicit compatibility PR that executes the
-build, Playwright, CodeQL, Cognito edge, deployment packaging, and promotion
-validation paths on `ubuntu-26.04`. Remove this audit pin only after all four
-Terraform roots return the expected exit code and no tool/runtime regression is
-observed.
+Only runner labels change in the workflows. Job steps, action versions, triggers,
+permissions, environment protections, immutable release selection, OIDC role
+assumption, and deployment gates retain their existing configuration.
+
+## Follow-up: validate Ubuntu 26.04 before removing pins
+
+Ubuntu 26.04 is generally available according to the upstream announcement.
+Use a separate compatibility PR with explicit `ubuntu-26.04` runners to exercise
+builds, Playwright, CodeQL, Cognito edge tests, deployment packaging, and promotion
+validation. Test promotion validation without deploying or promoting to Test or
+Production. Validate the Terraform audit on all four roots with its read-only
+role and no apply. Capture workflow URLs and tool/runtime compatibility evidence
+before replacing any `ubuntu-24.04` pin. An OS version pin still receives GitHub
+image updates within Ubuntu 24.04; it does not freeze all installed tools.
+
+Upstream migration announcement:
+https://github.com/actions/runner-images/issues/14748
 
 ## Node.js action inventory
 
@@ -42,13 +52,18 @@ observed.
    deprecation warning appears.
 4. Do not run `terraform apply`; the workflow must retain no apply command,
    state migration, write credentials, or plan artifacts.
-5. Confirm the Test promotion workflow parses and its existing environment and
-   immutable-SHA safeguards remain unchanged. Do not promote to Test as part of
-   this issue.
+5. Parse every changed workflow and compare its structure against the base:
+   only `runs-on: ubuntu-latest` to `runs-on: ubuntu-24.04` may differ.
+6. Run the existing workflow policy, private-environment lockdown, and smoke
+   regression tests. Confirm new CI runs use Ubuntu 24.04 and do not emit the
+   floating-label migration annotation.
+7. Confirm Test promotion retains its environment and immutable-SHA safeguards.
+   Do not promote to Test or Production as part of this issue.
 
 ## Rollback
 
-If either upgraded action changes behavior, revert this maintenance commit to
-restore the prior action major and runner label. Do not weaken OIDC trust,
-environment approvals, read-only IAM, or Terraform plan safeguards as a
-workaround.
+If the runner-pin change causes a regression, revert its commit through a
+reviewed PR. The previously upgraded action majors remain unchanged. Restoring
+`ubuntu-latest` also restores exposure to GitHub’s automatic OS migration.
+Do not weaken OIDC trust, environment approvals, read-only IAM, or Terraform
+plan safeguards as a workaround.

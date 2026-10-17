@@ -13,7 +13,7 @@ concurrency:
 jobs:
   changes:
     name: Select CodeQL languages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
@@ -61,7 +61,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     permissions:
@@ -101,7 +101,7 @@ jobs:
     name: CodeQL required gate
     if: always()
     needs: [changes, analyze]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:

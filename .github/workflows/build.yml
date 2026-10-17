@@ -23,7 +23,7 @@ env:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -86,7 +86,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: dev
 
     steps:
@@ -252,7 +252,7 @@ jobs:
   verify-dev-seo-http:
     needs: deploy-dev
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: Verify live Dev private access boundary
@@ -264,7 +264,7 @@ jobs:
   reconcile-dev-issues:
     needs: [deploy-dev, verify-dev-seo-http]
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success' && needs.verify-dev-seo-http.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
@@ -291,7 +291,7 @@ jobs:
   dev-lockdown-status:
     needs: [verify, build, deploy-dev, verify-dev-seo-http]
     if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Report deployment verification status
         env:
