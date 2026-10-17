@@ -17,6 +17,16 @@ environments = module("environments", "check-environments.py")
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_provider_check_requires_only_the_secret_environment_and_cannot_apply(self):
+        self.assertEqual(environments.required_environments("prod", "provider-check"),
+                         [("terraform-email-prod-apply", True)])
+        self.assertEqual(environments.required_environments("prod", "email-apply"),
+                         [("terraform-email-prod-plan", True), ("terraform-email-prod-apply", True)])
+        for selected, operation in (("dev", "provider-check"), ("test", "provider-check"),
+                                    ("dev", "email-apply"), ("prod", "unknown")):
+            with self.assertRaises(ValueError):
+                environments.required_environments(selected, operation)
+
     def test_explicit_main_and_review_required(self):
         environment = {"deployment_branch_policy": {"custom_branch_policies": True},
                        "can_admins_bypass": False,

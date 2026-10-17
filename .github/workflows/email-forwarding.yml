@@ -10,8 +10,8 @@ on:
     inputs:
       operation:
         type: choice
-        description: Email DNS plan or separately approved Production DNS apply
-        options: [email-plan, email-apply]
+        description: Email DNS plan, approved Production apply, or read-only provider check
+        options: [email-plan, email-apply, provider-check]
         default: email-plan
       email_environment:
         type: choice
@@ -54,6 +54,24 @@ jobs:
         run: |
           test "$GITHUB_REF" = refs/heads/main
           python3 scripts/email-forwarding/check-environments.py
+  provider-check:
+    needs: email-checks
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'provider-check' && inputs.email_environment == 'prod' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: terraform-email-prod-apply
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Read-only provider diagnostics (no AWS or DNS changes)
+        env:
+          IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
+        run: node scripts/email-forwarding/check-provider.cjs
   email-plan:
     needs: email-checks
     if: github.event_name == 'workflow_dispatch' && startsWith(inputs.operation, 'email-') && github.ref == 'refs/heads/main'

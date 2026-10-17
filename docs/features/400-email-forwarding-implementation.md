@@ -13,7 +13,7 @@ The [free plan](https://improvmx.com/pricing/) currently includes one domain, 25
 - SES reports verified sending and successful DKIM using three existing CNAMEs; no custom MAIL FROM domain is configured. No DMARC record was present; this feature does not introduce or change DMARC policy.
 - Four existing remote Terraform state files were inspected for Route 53 ownership: none owns apex MX/TXT.
 - A read-only live DNS plan passed the resource contract: import/update the existing apex TXT, preserving Google verification and adding one `v=spf1 include:amazonses.com include:spf.improvmx.com ~all`; create MX `10 mx1.improvmx.com` and `20 mx2.improvmx.com`, TTL 300.
-- No DNS, IAM, provider mutation, or test email has been applied/sent by this implementation.
+- The separately approved IAM bootstrap has since been applied and verified. No DNS/provider mutation or test email has occurred; the initial apply run stopped at the provider preflight.
 
 The separate root `infra/aws/terraform/email-forwarding/` owns only these two record sets, with S3 state key `recruiterreply/email-forwarding/terraform.tfstate`. Import is declarative, not overwrite-on-create. `prevent_destroy` blocks accidental removal. Existing website/API records, SES DKIM and MAIL FROM configuration are excluded from this root. Before any apply, the plan gate rejects other resources, destructive actions, alternate routing, unknown values, or an unreviewed apex baseline. If another operator adds a TXT verification value, stop and review preservation instead of overwriting it.
 
@@ -36,6 +36,8 @@ A solo owner may approve their own run; the explicit approval is still required.
 
 Store the ImprovMX API credential as environment secret `IMPROVMX_API_KEY` in `terraform-email-prod-apply`. Obtain it from the [provider API page](https://app.improvmx.com/api). Use read-only permissions if offered. This implementation performs three bounded authenticated GETs (account, domain, complete aliases), never upgrades a plan and never requests message logs. It checks price zero, catch-all destination, alias inventory, and alias-based routing without rule fallback. Provider responses and credentials are withheld from logs. An arbitrary manually written JSON is not deployment evidence.
 
+To diagnose provider configuration before DNS activation, dispatch `operation=provider-check`, `email_environment=prod`. This uses the existing protected secret environment and requires its reviewer approval, but the job has no AWS/OIDC permissions or Terraform steps. Plan/apply jobs are skipped for this operation. Failures report only an allowlisted reason code, a fixed endpoint label, and an HTTP status when available. For example, `HTTP_FAILURE stage=account HTTP=401` identifies an authentication failure; `ALIAS_ROUTING_NOT_ACTIVE` identifies a routing validation failure. Error bodies, original exceptions, actual account fields, alias destinations, and credential values are never printed. This mode retains every existing provider validation requirement.
+
 ## Workflow and exact-plan approval
 
 The existing `.github/workflows/terraform-readonly-audit.yml` and its four-root read-only audit remain intact. `.github/workflows/email-forwarding.yml` extends the same GitHub Actions/Terraform/OIDC setup with the scoped Issue #400 plan/apply jobs. PRs run unprivileged validation only. On `main`, dispatch `operation=email-plan` with `email_environment=dev|test|prod` to inspect DNS. Dev/Test have no ability to apply shared Production apex DNS.
@@ -50,7 +52,7 @@ After apply, check all authoritative nameservers for MX, single merged SPF, pres
 
 Send at most three uniquely tagged messages per authorized acceptance run: `privacy`, `legal`, and a generated `rr400-catchall-<id>` recipient. Publish only correlation IDs/timestamps. SES acceptance and provider readiness do not prove final inbox receipt. The workflow deliberately fails the final acceptance gate with **PENDING MANUAL VERIFICATION** until the owner confirms all three IDs in the destination inbox. Do not close #400 or declare the forwarding accepted based only on apply/SMTP success. No inbox API is connected or authorized.
 
-The four protected GitHub environments have been created and their main-branch/reviewer protections verified. IAM bootstrap, actual provider verification, DNS apply, and final inbox receipt remain pending. Test/Production application promotion is not part of this change.
+The four protected GitHub environments have been created and their main-branch/reviewer protections verified. The owner-approved IAM bootstrap is complete: four roles and policies match the reviewed plan, Terraform reports no IAM changes, and 19 live permission simulations passed. Dev and Production planning OIDC runs passed. Provider verification is pending diagnosis of the failed preflight; DNS apply and final inbox receipt remain pending. Test/Production application promotion is not part of this change.
 
 ## Rollback
 

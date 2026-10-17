@@ -22,16 +22,24 @@ def validate(environment, policies, require_review):
             raise ValueError("reviewer gate with admin bypass disabled required")
 
 
+def required_environments(selected, operation):
+    if selected not in ("dev", "test", "prod") or operation not in ("email-plan", "email-apply", "provider-check"):
+        raise ValueError("unknown environment or operation")
+    if operation == "provider-check":
+        if selected != "prod":
+            raise ValueError("provider credential is scoped to the protected Production environment")
+        return [("terraform-email-prod-apply", True)]
+    names = [(f"terraform-email-{selected}-plan", selected != "dev")]
+    if operation == "email-apply":
+        if selected != "prod":
+            raise ValueError("shared apex DNS requires Production apply")
+        names.append(("terraform-email-prod-apply", True))
+    return names
+
+
 if __name__ == "__main__":
     try:
-        selected = os.environ["EMAIL_ENVIRONMENT"]
-        if selected not in ("dev", "test", "prod"):
-            raise ValueError("unknown environment")
-        names = [(f"terraform-email-{selected}-plan", selected != "dev")]
-        if os.environ.get("EMAIL_OPERATION") == "email-apply":
-            if selected != "prod":
-                raise ValueError("shared apex DNS requires Production apply")
-            names.append(("terraform-email-prod-apply", True))
+        names = required_environments(os.environ["EMAIL_ENVIRONMENT"], os.environ["EMAIL_OPERATION"])
         repo = os.environ["GITHUB_REPOSITORY"]
         for name, review in names:
             path = f"repos/{repo}/environments/{name}"
