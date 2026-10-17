@@ -58,6 +58,9 @@ async function completeOAuthLogin({
 
   const tokens = await exchangeCode({
     ...oauth,
+    approvedDomain: approvedIdentity.domain,
+    approvedClientId: approvedIdentity.clientId,
+    approvedRedirectUri: approvedIdentity.redirectUri,
     code: callback.code,
     verifier: callback.verifier
   });
