@@ -47,6 +47,7 @@ public sealed class GitHubActionsOidcPolicyTests
         new Claim("aud", Options.Audience),
         new Claim("repository", Options.Repository),
         new Claim("job_workflow_ref", Options.WorkflowRef),
+        new Claim("ref", Options.Ref),
         new Claim("environment", Options.Environment)
     ], "GitHubActionsSmoke"));
 }
