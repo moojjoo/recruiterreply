@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   resolve-source:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       sha: ${{ steps.release.outputs.sha }}
     steps:
@@ -41,7 +41,7 @@ jobs:
 
   preflight-backend-image:
     needs: resolve-source
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AWS_ROLE_TO_ASSUME is scoped to the GitHub test environment.
     # This job must use that environment to access its variables and protections.
     environment: test
