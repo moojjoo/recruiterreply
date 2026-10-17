@@ -28,7 +28,7 @@ jobs:
       - name: Run mobile Lighthouse baseline
         run: |
           npm exec --yes --package=@lhci/cli@0.15.1 -- lhci autorun --config=../.lighthouserc.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: lighthouse-baseline
