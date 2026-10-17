@@ -499,7 +499,17 @@ jobs:
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --id "$INVALIDATION_ID"
 
+      - name: Verify private Dev frontend deployment
+        if: inputs.environment == 'dev'
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+          DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
+          DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
+        run: node .github/scripts/private-dev-smoke.cjs
+
       - name: Smoke test deployed frontend
+        if: inputs.environment != 'dev'
         env:
           FRONTEND_URL: ${{ inputs.frontend_url }}
         run: |
@@ -658,6 +668,7 @@ jobs:
           fi
 
       - name: Smoke test live frontend
+        if: inputs.environment != 'dev'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
@@ -744,6 +755,7 @@ jobs:
           done <<< "$EXPECTED_ASSETS"
 
       - name: Verify live environment SEO indexing safeguards
+        if: inputs.environment != 'dev'
         env:
           SEO_ENVIRONMENT: ${{ inputs.environment }}
         run: |
