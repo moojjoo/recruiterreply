@@ -21,7 +21,7 @@ public sealed class SesRecoveryEmailSender(IConfiguration config) : IRecoveryEma
             Destination = new Destination { ToAddresses = [email] },
             Content = new EmailContent { Simple = new Message
             {
-                Subject = new Content { Data = "RecruiterReply password recovery" },
+                Subject = new Content { Data = "RecruiterReply password reset verification" },
                 Body = new Body
                 {
                     Text = new Content { Data = text, Charset = "UTF-8" },
