@@ -508,8 +508,20 @@ jobs:
           DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
         run: node .github/scripts/private-dev-smoke.cjs
 
+      - name: Verify private Test frontend deployment
+        if: inputs.environment == 'test'
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+          TEST_COGNITO_DOMAIN: ${{ vars.TEST_COGNITO_DOMAIN }}
+          TEST_COGNITO_CLIENT_ID: ${{ vars.TEST_COGNITO_CLIENT_ID }}
+          TEST_CLOUDFRONT_DOMAIN: ${{ vars.TEST_CLOUDFRONT_DOMAIN }}
+        run: |
+          node --test .github/scripts/tests/private-test-smoke.test.cjs .github/scripts/tests/private-dev-smoke.test.cjs
+          node .github/scripts/private-test-smoke.cjs
+
       - name: Smoke test deployed frontend
-        if: inputs.environment != 'dev'
+        if: inputs.environment == 'prod'
         env:
           FRONTEND_URL: ${{ inputs.frontend_url }}
         run: |
@@ -668,7 +680,7 @@ jobs:
           fi
 
       - name: Smoke test live frontend
-        if: inputs.environment != 'dev'
+        if: inputs.environment == 'prod'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
@@ -755,7 +767,7 @@ jobs:
           done <<< "$EXPECTED_ASSETS"
 
       - name: Verify live environment SEO indexing safeguards
-        if: inputs.environment != 'dev'
+        if: inputs.environment == 'prod'
         env:
           SEO_ENVIRONMENT: ${{ inputs.environment }}
         run: |

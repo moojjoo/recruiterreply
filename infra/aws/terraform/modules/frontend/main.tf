@@ -199,7 +199,7 @@ resource "aws_cloudfront_distribution" "this" {
       allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
       cached_methods           = ["GET", "HEAD"]
       compress                 = true
-      cache_policy_id          = "4135EA2D-6DF8-44A3-9DF3-4B5A84BE39AD"
+      cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
       origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
 
       lambda_function_association {
