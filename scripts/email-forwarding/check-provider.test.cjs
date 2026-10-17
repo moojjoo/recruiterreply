@@ -38,7 +38,7 @@ test('reports specific validation failures without values from provider payloads
     ['DOMAIN_MISMATCH', (v) => { v[1].domain.domain = 'private-value'; }],
     ['DOMAIN_BANNED_OR_UNKNOWN', (v) => { delete v[1].domain.banned; }],
     ['ALIAS_ROUTING_NOT_ACTIVE', (v) => { v[1].domain.routing_engine = null; }],
-    ['FALLBACK_ENABLED_OR_UNKNOWN', (v) => { v[1].domain.rules_fallback_email = 'private-value'; }],
+    ['FALLBACK_DESTINATION_MISMATCH', (v) => { v[1].domain.rules_fallback_email = 'private-value'; }],
     ['ALIAS_INVENTORY_INVALID', (v) => { v[2].total = 4; }],
     ['ALIAS_CONFIGURATION_INVALID', (v) => { v[2].aliases[0].forward = 'private-value'; }]
   ];
@@ -50,6 +50,32 @@ test('reports specific validation failures without values from provider payloads
       assert.ok(!message.includes('private-value'));
       return true;
     });
+  }
+});
+test('accepts only empty optional fallback metadata or the approved inbox under alias routing', () => {
+  for (const fallback of [undefined, null, '', 'robert.dannelly@dannellysolutions.com']) {
+    const value = fixture();
+    if (fallback === undefined) delete value[1].domain.rules_fallback_email;
+    else value[1].domain.rules_fallback_email = fallback;
+    assert.equal(validateProvider(...value), true);
+    value[1].domain.routing_engine = 'rules';
+    assert.throws(() => validateProvider(...value), (error) => error.code === 'ALIAS_ROUTING_NOT_ACTIVE');
+  }
+});
+test('rejects additional fallback destinations and malformed fallback metadata', () => {
+  for (const fallback of ['elsewhere@example.com', 'robert.dannelly@dannellysolutions.com,elsewhere@example.com',
+    [], {}, false, 0]) {
+    const value = fixture(); value[1].domain.rules_fallback_email = fallback;
+    assert.throws(() => validateProvider(...value), (error) => error.code === 'FALLBACK_DESTINATION_MISMATCH');
+  }
+});
+test('empty fallback never substitutes for a complete approved catch-all inventory', () => {
+  for (const fallback of [undefined, '', 'robert.dannelly@dannellysolutions.com']) {
+    const value = fixture(); value[1].domain.rules_fallback_email = fallback;
+    value[2].aliases[0].forward = 'elsewhere@example.com';
+    assert.throws(() => validateProvider(...value), (error) => error.code === 'ALIAS_CONFIGURATION_INVALID');
+    value[2].aliases = value[2].aliases.slice(1); value[2].total = 2;
+    assert.throws(() => validateProvider(...value), (error) => error.code === 'ALIAS_CONFIGURATION_INVALID');
   }
 });
 test('missing credential fails before network access', async () => {
