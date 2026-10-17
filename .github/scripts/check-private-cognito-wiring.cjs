@@ -37,7 +37,10 @@ assert.match(
   enabledExpression,
   /each\.key\s*==\s*"prod"\s*\|\|[\s\S]*each\.key\s*==\s*"dev"\s*&&[\s\S]*var\.enable_private_dev_distribution\s*&&[\s\S]*var\.enable_private_edge_associations\s*&&[\s\S]*contains\(var\.private_edge_association_environments, each\.key\)/
 );
-assert.doesNotMatch(enabledExpression, /"test"/, 'Test must have no enablement branch');
+assert.match(
+  enabledExpression,
+  /each\.key\s*==\s*"test"\s*&&[\s\S]*var\.enable_private_test_distribution\s*&&[\s\S]*var\.enable_private_edge_associations\s*&&[\s\S]*contains\(var\.private_edge_association_environments, each\.key\)/
+);
 assert.match(
   fs.readFileSync(path.join(root, 'variables.tf'), 'utf8'),
   /variable "enable_private_dev_distribution"\s*\{[^}]*default\s*=\s*false/s
@@ -46,6 +49,9 @@ assert.match(
   frontendVariables,
   /variable "enable_private_dev_distribution"\s*\{[^}]*default\s*=\s*false/s
 );
+const globalVariables = fs.readFileSync(path.join(root, 'variables.tf'), 'utf8');
+assert.match(globalVariables, /variable "enable_private_test_distribution"\s*\{[^}]*default\s*=\s*false/s);
+assert.match(frontendVariables, /variable "enable_private_test_distribution"\s*\{[^}]*default\s*=\s*false/s);
 for (const variable of [
   'enable_private_edge_runtime_state',
   'enable_private_edge_functions',
@@ -81,4 +87,4 @@ assert.match(identityModule, /YOUR VERIFICATION CODE/);
 assert.match(identityModule, /user-select:all/);
 assert.doesNotMatch(identityModule, /<button|<script/i, 'Cognito email must not advertise a nonfunctional copy control');
 assert.match(identityModule, /auth_session_validity\s*=\s*10/);
-console.log('Cognito and edge provisioning remain gated; Dev requires explicit release and Test remains disabled.');
+console.log('Cognito and edge provisioning remain gated; Dev and Test require explicit release gates.');

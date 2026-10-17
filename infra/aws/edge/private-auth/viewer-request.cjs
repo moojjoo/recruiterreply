@@ -1,5 +1,6 @@
 'use strict';
 
+const { createOriginSignature } = require('./origin-signature.cjs');
 const { createSessionGateway } = require('./session-gateway.cjs');
 const { createAuthorizationRequest } = require('./oauth-authorize.cjs');
 const { createTransactionCookie } = require('./oauth-transaction.cjs');
@@ -30,6 +31,10 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
 
     if (!request) {
       return forbidden();
+    }
+
+    if (record.cf.config?.eventType === 'origin-request') {
+      return signApiOriginRequest(request, distributionId, trustedEnvironments);
     }
 
     const environments = {
@@ -71,10 +76,38 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
 
     // Never forward browser authentication cookies to the S3 origin.
     delete request.headers.cookie;
-    rewriteSpaRequest(request);
+    if (!request.uri.startsWith('/api/')) rewriteSpaRequest(request);
 
     return request;
   };
+}
+
+function signApiOriginRequest(request, distributionId, trustedEnvironments, now = Date.now) {
+  if (distributionId !== 'E2IGR9MYMWVQFI' || !request.uri.startsWith('/api/')) return request;
+
+  const environment = trustedEnvironments[distributionId];
+  if (!environment?.signApiOriginRequests || typeof environment.getSigningKeys !== 'function') {
+    return forbidden();
+  }
+
+  return environment.getSigningKeys().then(keys => {
+    const secret = keys?.apiOriginSigningKey;
+    if (typeof secret !== 'string' || Buffer.byteLength(secret) < 32) return forbidden();
+    const timestamp = Math.floor(now() / 1000).toString();
+    const signature = createOriginSignature({
+      method: request.method,
+      uri: request.uri,
+      querystring: request.querystring || '',
+      timestamp,
+      secret
+    });
+    request.headers = request.headers || {};
+    request.headers['x-rr-origin-auth'] = [{
+      key: 'X-RR-Origin-Auth',
+      value: `${timestamp}.${signature}`
+    }];
+    return request;
+  }).catch(() => forbidden());
 }
 
 function protectOriginResponse(response, distributionId, trustedEnvironments) {
@@ -308,5 +341,6 @@ module.exports = {
   getSingleCookie,
   parseQueryString,
   protectOriginResponse,
-  rewriteSpaRequest
+  rewriteSpaRequest,
+  signApiOriginRequest
 };

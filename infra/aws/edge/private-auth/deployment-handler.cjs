@@ -31,6 +31,12 @@ function validateEnvironment(distributionId, config) {
     'Signing-key secret ID'
   );
   const replayTableName = validateString(config.replayTableName, 'Replay table name');
+  if (typeof config.signApiOriginRequests !== 'boolean') {
+    throw new Error('API origin signing flag is required');
+  }
+  if (config.signApiOriginRequests && distributionId !== 'E2IGR9MYMWVQFI') {
+    throw new Error('API origin signing is approved for the Test distribution only');
+  }
 
   if (host !== expectedHost) throw new Error('Environment host is not approved');
   if (!/^https:\/\/cognito-idp\.us-east-1\.amazonaws\.com\/us-east-1_[A-Za-z0-9]+$/.test(issuer)) {
@@ -65,6 +71,7 @@ function validateEnvironment(distributionId, config) {
     tokenConfig: Object.freeze({ issuer, clientId }),
     sessionConfig: Object.freeze({ issuer, clientId }),
     signingKeySecretId,
+    signApiOriginRequests: config.signApiOriginRequests,
     replayTableName
   });
 }
@@ -96,6 +103,7 @@ function createDeploymentHandler(config, dependencies = {}) {
         secretId: environment.signingKeySecretId,
         region: 'us-east-1'
       }),
+      signApiOriginRequests: environment.signApiOriginRequests,
       replayStore: createReplayStore({
         tableName: environment.replayTableName,
         region: 'us-east-1'

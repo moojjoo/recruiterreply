@@ -23,6 +23,7 @@ function devConfig(overrides = {}) {
       domain: 'recruiterreply-dev.auth.us-east-1.amazoncognito.com',
       signingKeySecretId: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:dev',
       replayTableName: 'recruiterreply-dev-oauth-replay',
+      signApiOriginRequests: false,
       ...overrides
     }
   };

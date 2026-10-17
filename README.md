@@ -71,7 +71,7 @@ Copy the commit SHA from that successful run.
 In GitHub Actions, run Promote to Test and paste that SHA.
 Validate test:
 Frontend: https://test.recruiterreply.com
-API: https://api-test.recruiterreply.com
+Test API: same-origin through https://test.recruiterreply.com/api (the api-test origin remains blocked to direct callers)
 Run Promote to Prod with the exact same SHA.
 Validate prod:
 Frontend: https://recruiterreply.com

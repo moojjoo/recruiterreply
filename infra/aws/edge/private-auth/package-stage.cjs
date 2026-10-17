@@ -17,6 +17,7 @@ const SOURCE_FILES = Object.freeze([
   'oauth-replay-guard.cjs',
   'oauth-token-exchange.cjs',
   'oauth-transaction.cjs',
+  'origin-signature.cjs',
   'sealed-cookie.cjs',
   'secrets-manager-key-provider.cjs',
   'session-cookie.cjs',
@@ -34,6 +35,7 @@ const CONFIG_KEYS = Object.freeze([
   'host',
   'issuer',
   'replayTableName',
+  'signApiOriginRequests',
   'signingKeySecretId'
 ]);
 

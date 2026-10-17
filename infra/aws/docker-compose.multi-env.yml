@@ -62,9 +62,10 @@ services:
       Jwt__Key: ${JWT_KEY_TEST}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
-      Google__RedirectUri: https://api-test.recruiterreply.com/api/auth/google/callback
+      Google__RedirectUri: https://test.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://test.recruiterreply.com
       Cors__AllowedOrigins__0: https://test.recruiterreply.com
+      PrivateApiOriginAuth__Enabled: "true"
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_test;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
