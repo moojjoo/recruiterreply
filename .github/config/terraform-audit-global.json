@@ -14,7 +14,8 @@
     },
     "enable_private_dev_distribution": true,
     "enable_private_test_distribution": true,
-    "enable_private_test_api_routing": true
+    "enable_private_test_api_routing": true,
+    "enable_private_dev_api_routing": true
   },
   "packages": {
     "dev": {

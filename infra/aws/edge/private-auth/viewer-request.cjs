@@ -79,8 +79,9 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
         : forbidden();
     }
 
-    // Never forward browser authentication cookies to the S3 origin.
-    delete request.headers.cookie;
+    // API requests need the sealed session cookie so the backend can establish
+    // the application identity. Static S3 requests must never receive it.
+    if (!request.uri.startsWith('/api/')) delete request.headers.cookie;
     delete request.headers['x-rr-ci-oidc-token'];
     if (!request.uri.startsWith('/api/')) rewriteSpaRequest(request);
 
@@ -100,7 +101,7 @@ async function validateCiToken(token, environment) {
 }
 
 function signApiOriginRequest(request, distributionId, trustedEnvironments, now = Date.now) {
-  if (distributionId !== 'E2IGR9MYMWVQFI' || !request.uri.startsWith('/api/')) return request;
+  if (!['E2JWU1TLDA6YRS', 'E2IGR9MYMWVQFI'].includes(distributionId) || !request.uri.startsWith('/api/')) return request;
 
   const environment = trustedEnvironments[distributionId];
   if (!environment?.signApiOriginRequests || typeof environment.getSigningKeys !== 'function') {

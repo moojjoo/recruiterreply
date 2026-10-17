@@ -174,10 +174,13 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "origin" {
-    for_each = each.key == "test" && var.enable_private_test_api_routing ? [1] : []
+    for_each = (
+      (each.key == "dev" && var.enable_private_dev_api_routing) ||
+      (each.key == "test" && var.enable_private_test_api_routing)
+    ) ? [1] : []
     content {
-      domain_name = var.test_api_origin_domain_name
-      origin_id   = "test-api-origin"
+      domain_name = each.key == "dev" ? var.dev_api_origin_domain_name : var.test_api_origin_domain_name
+      origin_id   = "${each.key}-api-origin"
 
       custom_origin_config {
         http_port                = 80
@@ -191,34 +194,37 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "ordered_cache_behavior" {
-    for_each = each.key == "test" && var.enable_private_test_api_routing ? [1] : []
+    for_each = (
+      (each.key == "dev" && var.enable_private_dev_api_routing) ||
+      (each.key == "test" && var.enable_private_test_api_routing)
+    ) ? [1] : []
     content {
-      path_pattern             = "/api/*"
-      target_origin_id         = "test-api-origin"
-      viewer_protocol_policy   = "redirect-to-https"
-      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-      cached_methods           = ["GET", "HEAD"]
-      compress                 = true
-      cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+      path_pattern           = "/api/*"
+      target_origin_id       = "${each.key}-api-origin"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = true
+      cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
       # Use the API origin's Host for TLS and nginx virtual-host routing while
       # forwarding viewer Authorization, signed origin headers and query data.
       origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
 
       lambda_function_association {
         event_type   = "viewer-request"
-        lambda_arn   = lookup(var.private_edge_function_arns, "test", "")
+        lambda_arn   = lookup(var.private_edge_function_arns, each.key, "")
         include_body = false
       }
 
       lambda_function_association {
         event_type   = "origin-request"
-        lambda_arn   = lookup(var.private_edge_function_arns, "test", "")
+        lambda_arn   = lookup(var.private_edge_function_arns, each.key, "")
         include_body = false
       }
 
       lambda_function_association {
         event_type   = "origin-response"
-        lambda_arn   = lookup(var.private_edge_function_arns, "test", "")
+        lambda_arn   = lookup(var.private_edge_function_arns, each.key, "")
         include_body = false
       }
     }
@@ -332,5 +338,17 @@ check "private_test_api_prerequisites" {
       can(regex("^arn:aws:lambda:us-east-1:[0-9]{12}:function:", lookup(var.private_edge_function_arns, "test", "")))
     )
     error_message = "Test API routing requires the explicitly enabled Test distribution and its reviewed private edge function association."
+  }
+}
+
+check "private_dev_api_prerequisites" {
+  assert {
+    condition = !var.enable_private_dev_api_routing || (
+      var.enable_private_dev_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, "dev") &&
+      can(regex("^arn:aws:lambda:us-east-1:[0-9]{12}:function:", lookup(var.private_edge_function_arns, "dev", "")))
+    )
+    error_message = "Dev API routing requires the explicitly enabled Dev distribution and its reviewed private edge function association."
   }
 }
