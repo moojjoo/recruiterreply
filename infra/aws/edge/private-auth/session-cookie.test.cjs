@@ -15,7 +15,11 @@ const now = 1800000000000;
 const dev = {
   subject: 'dev-user',
   issuer: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DEV',
-  clientId: 'dev-client'
+  clientId: 'dev-client',
+  email: 'tester@example.com',
+  emailVerified: true,
+  firstName: 'Dev',
+  lastName: 'Tester'
 };
 
 const devExpected = {
@@ -38,6 +42,8 @@ test('valid session cookie round-trips', () => {
   assert.equal(claims.sub, dev.subject);
   assert.equal(claims.iss, dev.issuer);
   assert.equal(claims.aud, dev.clientId);
+  assert.equal(claims.email, dev.email);
+  assert.equal(claims.emailVerified, true);
 });
 
 test('tampered session cookie is rejected', () => {

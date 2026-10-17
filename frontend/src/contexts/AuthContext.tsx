@@ -14,13 +14,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem("authToken");
-        if (token) {
-          const response = await authService.getCurrentUser();
-          const currentUser = response.data;
-          setUser(currentUser);
-          localStorage.setItem("userData", JSON.stringify(currentUser));
-        }
+        const hasLegacyToken = Boolean(localStorage.getItem("authToken"));
+        const isHostedRecruiterReply =
+          window.location.hostname === "recruiterreply.com" ||
+          window.location.hostname.endsWith(".recruiterreply.com");
+        if (!hasLegacyToken && !isHostedRecruiterReply) return;
+
+        const response = await authService.getCurrentUser();
+        const currentUser = response.data;
+        setUser(currentUser);
+        localStorage.setItem("userData", JSON.stringify(currentUser));
       } catch (error) {
         console.error("Auth check failed:", error);
         localStorage.removeItem("authToken");
