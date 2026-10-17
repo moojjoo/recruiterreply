@@ -278,7 +278,7 @@ jobs:
           persist-credentials: false
 
       - name: Reconcile completed issues
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
           DEV_DEPLOYMENT_VERIFIED: 'true'
