@@ -17,6 +17,8 @@ This is intentionally conservative. GitHub's PR-files API is read with `pull-req
 
 **Before merging this change**, inspect repository rulesets and branch protection. The old per-language checks may be required as `CodeQL / analyze (csharp)` or `CodeQL / analyze (javascript-typescript)`. Those checks will be intentionally absent when their language is skipped, and would block merging if still required. Replace the old per-language required checks with the new stable **`CodeQL / CodeQL required gate`** after the gate appears in PR checks; retain any other security checks. Do not weaken branch protection or merge while required checks are pending. If ruleset changes cannot be made, do not merge this PR.
 
+The repository ruleset must use the CodeQL `code_scanning` merge-protection rule together with the stable **`CodeQL / CodeQL required gate`** status check. Do not enable a `code_quality` ruleset rule unless a separate CodeQL Code Quality workflow is configured; the security workflow's SARIF upload does not satisfy that different result type. An unsupported `code_quality` rule causes GitHub to show a neutral CodeQL result and block otherwise successful frontend-only pull requests.
+
 The gate runs with `if: always()` and succeeds only when language selection and all selected CodeQL analyses succeeded. No successful analysis means no successful gate.
 
 ## Runtime measurement
