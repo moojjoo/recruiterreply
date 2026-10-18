@@ -30,7 +30,7 @@ test('all required checks must pass on the exact PR head SHA', () => {
   assert.equal(checksPass(complete, 'b'.repeat(40)), false);
 });
 
-function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true} = {}) {
+function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true, approvalLabel = true} = {}) {
   const sha = 'a'.repeat(40), headSha = 'b'.repeat(40);
   let state = 'open';
   const comments = [], updates = [], mutations = [];
@@ -42,7 +42,7 @@ function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Complete
       repos: {listPullRequestsAssociatedWithCommit: associated},
       checks: {listForRef: listChecks},
       issues: {
-        get: async () => ({data: {node_id: 'I_320', state, labels: [{name: 'dev-acceptance-verified'}]}}),
+        get: async () => ({data: {node_id: 'I_320', state, labels: approvalLabel ? [{name: 'dev-acceptance-verified'}] : []}}),
         listComments,
         createComment: async ({body: comment}) => comments.push({body: comment}),
         update: async args => { state = args.state; updates.push(args); }
@@ -88,6 +88,13 @@ test('missing trusted deployment evidence performs no writes', async () => {
   assert.equal(subject.state(), 'open');
   assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
   assert.match(subject.warnings.join(';'), /deployment verification/);
+});
+test('missing controlled approval label performs no writes', async () => {
+  const subject = harness({approvalLabel: false});
+  await runWithEvidence(subject);
+  assert.equal(subject.state(), 'open');
+  assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
+  assert.match(subject.notices.join(';'), /missing acceptance verification label/);
 });
 test('partial PR and missing project item never close an issue', async () => {
   const partial = harness({body: '## Acceptance criteria\n- [x] Complete\n\nRefs #320'});

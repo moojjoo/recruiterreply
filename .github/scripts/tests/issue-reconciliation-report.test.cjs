@@ -27,7 +27,9 @@ test('SEO is required only when frontend files changed', () => {
 });
 test('complete evidence clears blockers', () => assert.deepEqual(blockers(valid), []));
 test('partial PR is reported but cannot close', () => assert.match(blockers({...valid, referenceKind: 'partial'}).join(';'), /Dev-Completes/));
-test('completion evidence does not depend on a pre-existing issue label', () => assert.deepEqual(blockers({...valid, issue: {...issue, labels: []}}), []));
+test('missing controlled approval label is reported as a blocker', () => {
+  assert.match(blockers({...valid, issue: {...issue, labels: []}}).join(';'), /controlled.*approval label/);
+});
 test('missing token is distinct from inaccessible project', () => {
   assert.match(blockers({...valid, tokenConfigured: false}).join(';'), /TOKEN/);
   assert.match(blockers({...valid, projectState: 'unavailable'}).join(';'), /unavailable/);
