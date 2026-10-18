@@ -1,6 +1,7 @@
 // Post-deployment reconciliation: fail closed on missing evidence or permissions.
 const DEV_COMPLETES_MARKER = /(?:^|\n)Dev-Completes:\s*#(\d+)\b/gim;
 const CLOSING_REFERENCE = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?[ \t]+#(\d+)\b/gim;
+const eligibleLabel = 'dev-acceptance-verified';
 const requiredChecks = ['verify', 'test', 'CodeQL required gate'];
 
 function linkedIssues(body = '') {

@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using RecruiterReply.Authentication;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 
 var envCandidates = new[]
 {

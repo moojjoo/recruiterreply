@@ -27,7 +27,7 @@ test('all required checks must pass on the exact PR head SHA', () => {
 
 function harness({body = 'Dev-Completes: #320', projectItem = true, initialState = 'open'} = {}) {
   const sha = 'a'.repeat(40), headSha = 'b'.repeat(40);
-  let state = 'open';
+  let state = initialState;
   const comments = [], updates = [], mutations = [], labels = [];
   const associated = async () => [{number: 42, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: sha, head: {sha: headSha}, body}];
   const listChecks = async () => requiredChecks.map(name => ({name, head_sha: headSha, conclusion: 'success'}));
@@ -96,11 +96,12 @@ test('partial PR and missing project item never close an issue', async () => {
   assert.match(absent.warnings.join(';'), /not in target project/);
 });
 
-test('already closed issue is marked Done without requiring checkboxes', async () => {
+test('already closed issue is not modified without reconciliation evidence', async () => {
   const subject = harness({initialState: 'closed'});
   await runWithEvidence(subject);
   assert.equal(subject.state(), 'closed');
   assert.equal(subject.updates.length, 0);
-  assert.equal(subject.mutations.length, 1);
-  assert.equal(subject.comments.length, 1);
+  assert.equal(subject.mutations.length, 0);
+  assert.equal(subject.comments.length, 0);
+  assert.match(subject.warnings.join(';'), /already closed/);
 });
