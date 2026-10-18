@@ -1,10 +1,18 @@
 const configuredAuthMode = import.meta.env.VITE_AUTH_MODE;
+const isHostedRecruiterReply =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "recruiterreply.com" ||
+    window.location.hostname.endsWith(".recruiterreply.com"));
 
 /**
- * Cookie mode is opt-in until the production BFF session endpoints are live.
- * The default preserves the legacy compatibility flow during migration.
+ * Hosted environments use the BFF cookie session by default because legacy
+ * password authentication is retired there. Local development keeps the
+ * legacy compatibility flow unless VITE_AUTH_MODE=cookie is supplied.
+ * VITE_AUTH_MODE=legacy remains an explicit rollback override.
  */
-export const isCookieAuthEnabled = (): boolean => configuredAuthMode === "cookie";
+export const isCookieAuthEnabled = (): boolean =>
+  configuredAuthMode === "cookie" ||
+  (isHostedRecruiterReply && configuredAuthMode !== "legacy");
 
 export const clearLegacyAuthState = (): void => {
   if (typeof window === "undefined") return;
