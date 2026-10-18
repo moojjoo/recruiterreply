@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
@@ -178,11 +179,18 @@ public sealed class CognitoBffService : ICognitoBffService
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private sealed record OAuthState(string State, string Verifier, string Nonce, DateTimeOffset ExpiresAt);
-    private sealed class CognitoTokenResponse
+    internal sealed class CognitoTokenResponse
     {
+        [JsonPropertyName("access_token")]
         public string AccessToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("refresh_token")]
         public string? RefreshToken { get; set; }
+
+        [JsonPropertyName("id_token")]
         public string IdToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("scope")]
         public string? Scope { get; set; }
     }
 }
