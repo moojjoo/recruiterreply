@@ -56,7 +56,9 @@ public sealed class CognitoBffService : ICognitoBffService
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Lax,
-            Path = "/api/auth/cognito",
+            // __Host- cookies must use the root path; otherwise browsers reject
+            // the state cookie before the authorization callback can read it.
+            Path = "/",
             MaxAge = TimeSpan.FromMinutes(5)
         });
 
@@ -83,7 +85,7 @@ public sealed class CognitoBffService : ICognitoBffService
     {
         EnsureConfigured();
         var protectedState = context.Request.Cookies[StateCookie];
-        context.Response.Cookies.Delete(StateCookie, new CookieOptions { Path = "/api/auth/cognito", Secure = true, HttpOnly = true });
+        context.Response.Cookies.Delete(StateCookie, new CookieOptions { Path = "/", Secure = true, HttpOnly = true });
         if (string.IsNullOrWhiteSpace(protectedState) || string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
             throw new InvalidOperationException("Invalid Cognito callback.");
 
