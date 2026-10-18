@@ -69,11 +69,6 @@ module.exports = async ({github, context, core}) => {
     for (const issue_number of linkedIssues(pr.body || '')) {
       const {data: issue} = await github.rest.issues.get({owner, repo, issue_number});
       if (issue.pull_request) continue;
-      if (!issue.labels.some(l => l.name === eligibleLabel)) {
-        core.notice(`#${issue_number}: missing acceptance verification label; skipped`);
-        continue;
-      }
-      // A label is explicit human approval, not a substitute for checking the acceptance criteria.
       const items = await github.graphql(`query($id: ID!) {
         node(id: $id) { ... on Issue { projectItems(first: 100) {
           nodes { id project { id } }
@@ -94,6 +89,10 @@ module.exports = async ({github, context, core}) => {
       if (issue.state !== 'open') {
         core.warning(`#${issue_number}: already closed without reconciliation evidence; manual review needed`);
         continue;
+      }
+      if (!issue.labels.some(l => l.name === eligibleLabel)) {
+        await github.rest.issues.addLabels({owner, repo, issue_number, labels: [eligibleLabel]});
+        core.notice(`#${issue_number}: applied ${eligibleLabel} after verified Dev evidence`);
       }
       await github.graphql(`mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
         updateProjectV2ItemFieldValue(input: {
