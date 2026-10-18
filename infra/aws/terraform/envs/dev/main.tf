@@ -22,18 +22,21 @@ module "security" {
 module "compute" {
   source = "../../modules/compute"
 
-  name_prefix           = local.name_prefix
-  subnet_id             = module.network.public_subnet_ids[0]
-  ec2_security_group_id = module.security.ec2_security_group_id
-  instance_type         = var.instance_type
-  ami_id                = var.ami_id
-  key_name              = var.key_name
-  root_volume_size      = var.ec2_root_volume_size
-  user_data             = local.ec2_user_data
-  enable_public_ip      = true
-  enable_elastic_ip     = true
-  backup_bucket_arn     = "arn:aws:s3:::${var.app_name}-postgres-backups-${data.aws_caller_identity.current.account_id}"
-  backup_environment    = "dev"
+  name_prefix             = local.name_prefix
+  subnet_id               = module.network.public_subnet_ids[0]
+  ec2_security_group_id   = module.security.ec2_security_group_id
+  instance_type           = var.instance_type
+  ami_id                  = var.ami_id
+  key_name                = var.key_name
+  root_volume_size        = var.ec2_root_volume_size
+  user_data               = local.ec2_user_data
+  enable_public_ip        = true
+  enable_elastic_ip       = true
+  backup_bucket_arn       = "arn:aws:s3:::${var.app_name}-postgres-backups-${data.aws_caller_identity.current.account_id}"
+  backup_environment      = "dev"
+  bff_session_table_arn   = var.bff_session_table_arn
+  bff_session_kms_key_arn = var.bff_session_kms_key_arn
+  backend_secret_arn      = module.secrets.secret_arn
 }
 
 module "secrets" {

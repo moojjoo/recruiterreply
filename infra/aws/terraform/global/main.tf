@@ -1,5 +1,28 @@
 data "aws_caller_identity" "current" {}
 
+module "bff_sessions" {
+  count = var.create_bff_session_infrastructure ? 1 : 0
+
+  source = "../modules/bff_sessions"
+
+  app_name     = var.app_name
+  environments = var.bff_session_environments
+  tags         = var.tags
+}
+
+module "cognito_bff" {
+  for_each = var.enable_cognito_bff ? var.cognito_bff_environments : toset([])
+
+  source = "../modules/cognito_bff"
+
+  environment         = each.key
+  user_pool_id        = var.cognito_bff_user_pool_ids[each.key]
+  resource_identifier = var.cognito_bff_resource_identifiers[each.key]
+  callback_urls       = var.cognito_bff_callback_urls[each.key]
+  logout_urls         = var.cognito_bff_logout_urls[each.key]
+  tags                = var.tags
+}
+
 # Account-wide GitHub Actions OIDC trust + deploy role, shared by deploy-dev.yml,
 # deploy-test.yml, and deploy-prod.yml. Not environment-scoped, so it lives here
 # rather than in envs/*.

@@ -12,7 +12,10 @@ using System.Text;
 using System.Threading.RateLimiting;
 using RecruiterReply.Authentication;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
+using Amazon.DynamoDBv2;
+using Amazon.KeyManagementService;
 
 var envCandidates = new[]
 {
@@ -33,6 +36,7 @@ foreach (var envPath in envCandidates.Distinct())
 }
 
 var builder = WebApplication.CreateBuilder(args);
+var legacyAuthEnabled = builder.Configuration.GetValue("LegacyAuth:Enabled", true);
 
 // Load secrets from AWS Secrets Manager when deployed. No-op locally: only runs if
 // Aws:SecretsManager:SecretName (or AWS_SECRETS_MANAGER_SECRET_NAME) is set. Added last so it
@@ -48,6 +52,15 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "__Host-rr_csrf";
+    options.Cookie.HttpOnly = false;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.Path = "/";
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -59,6 +72,12 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddHttpClient();
+builder.Services.Configure<CognitoBffOptions>(builder.Configuration.GetSection("CognitoBff"));
+builder.Services.AddSingleton<IAmazonDynamoDB>(_ => new AmazonDynamoDBClient());
+builder.Services.AddSingleton<IAmazonKeyManagementService>(_ => new AmazonKeyManagementServiceClient());
+builder.Services.AddSingleton<IBffSessionStore, DynamoDbBffSessionStore>();
+builder.Services.AddSingleton<ICognitoBffService, CognitoBffService>();
+builder.Services.AddScoped<IOrganizationAuthorizationService, OrganizationAuthorizationService>();
 
 var githubOidcOptions = new GitHubActionsOidcPolicyOptions(
     builder.Configuration.GetValue<bool>("GitHubActionsOidc:Enabled"),
@@ -81,14 +100,18 @@ builder.Services.AddAuthentication(options =>
             // Google login stores a legacy JWT while the private Dev boundary
             // also supplies rr_session. Prefer the explicit bearer token so
             // /auth/me resolves the account that just completed Google login.
-            var hasBearerToken = context.Request.Headers.Authorization.Any(value =>
-                value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase));
+            var hasBearerToken = legacyAuthEnabled && context.Request.Headers.Authorization.Any(value =>
+                value is not null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase));
 
             return hasBearerToken
                 ? JwtBearerDefaults.AuthenticationScheme
-                : context.Request.Cookies.ContainsKey("rr_session")
-                    ? "EdgeSession"
-                    : JwtBearerDefaults.AuthenticationScheme;
+                : context.Request.Cookies.ContainsKey(BffSessionAuthenticationHandler.CookieName)
+                    ? BffSessionAuthenticationHandler.SchemeName
+                    : context.Request.Cookies.ContainsKey("rr_session")
+                        ? "EdgeSession"
+                        : legacyAuthEnabled
+                            ? JwtBearerDefaults.AuthenticationScheme
+                            : BffSessionAuthenticationHandler.SchemeName;
         };
     })
     .AddJwtBearer(options =>
@@ -109,6 +132,7 @@ builder.Services.AddAuthentication(options =>
         };
     })
     .AddScheme<AuthenticationSchemeOptions, EdgeSessionAuthenticationHandler>("EdgeSession", _ => { })
+    .AddScheme<AuthenticationSchemeOptions, BffSessionAuthenticationHandler>(BffSessionAuthenticationHandler.SchemeName, _ => { })
     .AddJwtBearer("GitHubActionsSmoke", options =>
     {
         options.Authority = githubOidcOptions.Issuer;
@@ -278,6 +302,7 @@ if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Swa
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<PrivateApiOriginAuthMiddleware>();
+app.UseMiddleware<BffCsrfMiddleware>();
 
 // Redirecting the CORS preflight to HTTPS breaks the browser's http://localhost:5002 calls in dev.
 if (!app.Environment.IsDevelopment())

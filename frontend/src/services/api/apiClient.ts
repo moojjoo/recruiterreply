@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from "axios";
-import { clearLegacyAuthState, isCookieAuthEnabled } from "../authMode";
+import { clearLegacyAuthState, ensureCsrfToken, isCookieAuthEnabled } from "../authMode";
 
 const runtimeApiBaseUrl = typeof window !== "undefined" ? window.__APP_CONFIG__?.API_BASE_URL : undefined;
 const API_BASE_URL =
@@ -17,7 +17,11 @@ const apiClient: AxiosInstance = axios.create({
 
 // Request interceptor
 apiClient.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    if (["post", "put", "patch", "delete"].includes((config.method || "get").toLowerCase())) {
+      const csrfToken = await ensureCsrfToken(API_BASE_URL);
+      if (csrfToken) config.headers["X-CSRF-TOKEN"] = csrfToken;
+    }
     const token = !isCookieAuthEnabled() && typeof window !== "undefined"
       ? window.localStorage.getItem("authToken")
       : null;
