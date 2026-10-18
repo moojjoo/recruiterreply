@@ -145,7 +145,7 @@ resource "aws_cloudfront_distribution" "this" {
   comment = local.cloudfront_config[each.key].comment
   # Emergency lockdown #356: nonproduction distributions stay disabled until the
   # reviewed edge authentication gate is deployed and validated.
-  enabled             = each.key == "prod" ? true : false
+  enabled             = each.key == "prod" || (each.key == "dev" && var.enable_private_dev_distribution && var.enable_private_edge_associations)
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_All"
@@ -157,6 +157,55 @@ resource "aws_cloudfront_distribution" "this" {
     domain_name              = local.origin_bucket_domains[each.key]
     origin_id                = "${local.origin_bucket_names[each.key]}-origin"
     origin_access_control_id = aws_cloudfront_origin_access_control.this[each.key].id
+  }
+
+  dynamic "origin" {
+    for_each = each.key == "dev" && var.enable_private_dev_api_routing ? [1] : []
+    content {
+      domain_name = var.dev_api_origin_domain_name
+      origin_id   = "dev-api-origin"
+
+      custom_origin_config {
+        http_port                = 80
+        https_port               = 443
+        origin_protocol_policy   = "https-only"
+        origin_ssl_protocols     = ["TLSv1.2"]
+        origin_read_timeout      = 60
+        origin_keepalive_timeout = 5
+      }
+    }
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = each.key == "dev" && var.enable_private_dev_api_routing ? [1] : []
+    content {
+      path_pattern             = "/api/*"
+      target_origin_id         = "dev-api-origin"
+      viewer_protocol_policy   = "redirect-to-https"
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+      compress                 = true
+      cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+      origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+
+      lambda_function_association {
+        event_type   = "viewer-request"
+        lambda_arn   = lookup(var.private_edge_function_arns, "dev", "")
+        include_body = false
+      }
+
+      lambda_function_association {
+        event_type   = "origin-request"
+        lambda_arn   = lookup(var.private_edge_function_arns, "dev", "")
+        include_body = false
+      }
+
+      lambda_function_association {
+        event_type   = "origin-response"
+        lambda_arn   = lookup(var.private_edge_function_arns, "dev", "")
+        include_body = false
+      }
+    }
   }
 
   default_cache_behavior {

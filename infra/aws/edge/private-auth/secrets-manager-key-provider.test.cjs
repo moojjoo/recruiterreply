@@ -17,7 +17,8 @@ class FakeGetSecretValueCommand {
 const sdk = { GetSecretValueCommand: FakeGetSecretValueCommand };
 const secretValue = JSON.stringify({
   sessionSigningKey: 'session-signing-key-at-least-32-bytes-long',
-  transactionSigningKey: 'transaction-signing-key-at-least-32-bytes'
+  transactionSigningKey: 'transaction-signing-key-at-least-32-bytes',
+  apiOriginSigningKey: 'api-origin-signing-key-at-least-32-bytes'
 });
 
 test('retrieves AWSCURRENT signing keys from an explicit secret ID', async () => {
@@ -44,6 +45,7 @@ test('retrieves AWSCURRENT signing keys from an explicit secret ID', async () =>
   });
   assert.equal(keys.sessionSigningKey.length >= 32, true);
   assert.equal(keys.transactionSigningKey.length >= 32, true);
+  assert.equal(keys.apiOriginSigningKey.length >= 32, true);
   assert.equal(Object.isFrozen(keys), true);
 });
 

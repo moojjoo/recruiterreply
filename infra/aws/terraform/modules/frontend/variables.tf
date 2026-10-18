@@ -68,3 +68,21 @@ variable "private_edge_function_arns" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_private_dev_distribution" {
+  description = "Explicitly enable Dev only after its private authentication gateway is attached."
+  type        = bool
+  default     = false
+}
+
+variable "enable_private_dev_api_routing" {
+  description = "Route Dev /api/* through its authenticated CloudFront distribution."
+  type        = bool
+  default     = false
+}
+
+variable "dev_api_origin_domain_name" {
+  description = "TLS origin for the Dev API behavior."
+  type        = string
+  default     = "api-dev.recruiterreply.com"
+}

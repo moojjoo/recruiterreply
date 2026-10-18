@@ -26,11 +26,11 @@ const testIdentity = {
   logoutUri: 'https://test.recruiterreply.com/'
 };
 
-function makeEvent(uri, headers = {}, distributionId = DEV_ID) {
+function makeEvent(uri, headers = {}, distributionId = DEV_ID, eventType = 'viewer-request') {
   return {
     Records: [{
       cf: {
-        config: { distributionId, eventType: 'viewer-request' },
+        config: { distributionId, eventType },
         request: {
           method: 'GET',
           uri,
@@ -202,6 +202,36 @@ test('authenticated request does not forward session cookies to S3', async () =>
   );
   assert.equal(result.status, undefined);
   assert.equal(result.headers.cookie, undefined);
+});
+
+test('authenticated API request preserves the session cookie for the API origin', async () => {
+  const result = await authenticatedHandler(
+    makeEvent('/api/profile', cookieHeader(`rr_session=${devSession()}`))
+  );
+  assert.equal(result.status, undefined);
+  assert.ok(result.headers.cookie);
+});
+
+test('Dev API origin request receives a fresh origin signature', async () => {
+  const originSecret = 'test-only-api-origin-secret-at-least-32-bytes';
+  const handler = createViewerRequestHandler({
+    [DEV_ID]: {
+      sessionConfig: devIdentity,
+      approvedIdentity: { ...devIdentity },
+      sessionSecret: devSecret,
+      signApiOriginRequests: true,
+      getSigningKeys: async () => ({ apiOriginSigningKey: originSecret })
+    }
+  });
+  const result = await handler(makeEvent('/api/profile', {}, DEV_ID, 'origin-request'));
+  assert.match(result.headers['x-rr-origin-auth'][0].value, /^\d+\.[A-Za-z0-9_-]+$/);
+});
+
+test('unconfigured API origin signing fails closed', async () => {
+  const result = await authenticatedHandler(
+    makeEvent('/api/profile', {}, DEV_ID, 'origin-request')
+  );
+  assert.equal(String(result.status), '403');
 });
 
 test('expired signed session is rejected', async () => {

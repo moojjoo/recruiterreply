@@ -92,6 +92,7 @@ function createDeploymentHandler(config, dependencies = {}) {
       oauth: environment.oauth,
       tokenConfig: environment.tokenConfig,
       sessionConfig: environment.sessionConfig,
+      signApiOriginRequests: distributionId === 'E2JWU1TLDA6YRS',
       getSigningKeys: createKeyProvider({
         secretId: environment.signingKeySecretId,
         region: 'us-east-1'

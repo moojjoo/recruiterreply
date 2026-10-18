@@ -38,6 +38,8 @@ services:
       Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://dev.recruiterreply.com
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
+      PrivateApiOriginAuth__Enabled: "true"
+      apiOriginSigningKey: ${API_ORIGIN_SIGNING_KEY_DEV}
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     volumes:

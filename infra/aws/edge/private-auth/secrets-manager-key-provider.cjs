@@ -47,7 +47,10 @@ function parseSigningKeys(response) {
 
   return Object.freeze({
     sessionSigningKey: value.sessionSigningKey,
-    transactionSigningKey: value.transactionSigningKey
+    transactionSigningKey: value.transactionSigningKey,
+    ...(typeof value.apiOriginSigningKey === 'string'
+      ? { apiOriginSigningKey: value.apiOriginSigningKey }
+      : {})
   });
 }
 
