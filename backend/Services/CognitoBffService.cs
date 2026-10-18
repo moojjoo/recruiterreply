@@ -132,7 +132,8 @@ public sealed class CognitoBffService : ICognitoBffService
             ValidateIssuerSigningKey = true, IssuerSigningKeys = configuration.SigningKeys,
             NameClaimType = "sub"
         };
-        var principal = new JwtSecurityTokenHandler().ValidateToken(idToken, validation, out var validated);
+        var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }
+            .ValidateToken(idToken, validation, out var validated);
         if (validated is not JwtSecurityToken jwt || jwt.Payload.GetValueOrDefault("token_use")?.ToString() != "id"
             || principal.FindFirst("nonce")?.Value != nonce)
             throw new SecurityTokenValidationException("Invalid Cognito ID token use or nonce.");
@@ -157,7 +158,8 @@ public sealed class CognitoBffService : ICognitoBffService
             ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30),
             ValidateIssuerSigningKey = true, IssuerSigningKeys = configuration.SigningKeys
         };
-        var principal = new JwtSecurityTokenHandler().ValidateToken(accessToken, parameters, out var validated);
+        var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }
+            .ValidateToken(accessToken, parameters, out var validated);
         if (validated is not JwtSecurityToken jwt || jwt.Payload.GetValueOrDefault("token_use")?.ToString() != "access"
             || principal.FindFirst("client_id")?.Value != _options.ClientId)
             throw new SecurityTokenValidationException("Invalid Cognito access token use or client.");
