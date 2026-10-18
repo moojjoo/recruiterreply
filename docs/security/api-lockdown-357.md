@@ -5,7 +5,7 @@
 - The unauthenticated `/health/db` and `/api/health/db` endpoints returned counts of user and message records.
 - The unauthenticated `/health/gmail` and `/api/health/gmail` endpoints returned Gmail connection counts and configuration status.
 - The unauthenticated `/health/crud` and `/api/health/crud` endpoints executed database writes inside a rolled-back transaction.
-- Swagger/OpenAPI is enabled in Development; hosted Dev also runs as Development.
+- Swagger/OpenAPI is available only when `Swagger:Enabled=true` is explicitly configured. Hosted Dev runs as Development but does not enable that flag.
 - `infra/aws/terraform/modules/security/main.tf` permits public HTTP/HTTPS ingress from `public_ingress_cidrs`. **Live overrides and deployed security groups are not verified.**
 
 ## First mitigation in this PR
@@ -19,6 +19,14 @@ Require JWT authentication for all deep health probes (db, apis, gmail, crud), i
 - Add integration tests for anonymous/authorized probes, cross-account isolation, forged webhooks, rate limiting, and origin bypass.
 - Validate production login/signup/reset/Stripe webhooks, Dev and Test end-to-end; review Terraform plans, rollback, and explicit approvals before promotion.
 - Do not assume merged code is deployed; no live infrastructure change is authorized here.
+
+## This execution slice
+
+This change removes the hosted-Dev Swagger exposure caused by treating the
+ASP.NET environment name as sufficient authorization for API documentation.
+The issue remains open until the live ingress/origin audit, route-by-route
+authorization review, negative integration tests, and staged AWS evidence are
+complete.
 
 ## Rollout warning
 Existing anonymous consumers of deep diagnostics will receive HTTP 401. Confirm deployment health checks use only the lightweight public health endpoints before approving a rollout.
