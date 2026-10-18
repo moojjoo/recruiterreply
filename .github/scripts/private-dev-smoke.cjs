@@ -84,7 +84,10 @@ async function authenticated(approved, env = process.env, fetchRequest = fetch) 
   const apiUrl = env.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health/ci';
   const apiResponse = await fetchRequest(apiUrl, {
     redirect: 'manual',
-    headers: {authorization: `Bearer ${credentials.token}`},
+    headers: {
+      authorization: `Bearer ${credentials.token}`,
+      'x-rr-ci-oidc-token': credentials.token
+    },
     signal: AbortSignal.timeout(15000)
   });
   try {
