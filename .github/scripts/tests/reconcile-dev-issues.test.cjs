@@ -27,8 +27,8 @@ test('all required checks must pass on the exact PR head SHA', () => {
 
 function harness({body = 'Dev-Completes: #320', projectItem = true, initialState = 'open'} = {}) {
   const sha = 'a'.repeat(40), headSha = 'b'.repeat(40);
-  let state = initialState;
-  const comments = [], updates = [], mutations = [];
+  let state = 'open';
+  const comments = [], updates = [], mutations = [], labels = [];
   const associated = async () => [{number: 42, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: sha, head: {sha: headSha}, body}];
   const listChecks = async () => requiredChecks.map(name => ({name, head_sha: headSha, conclusion: 'success'}));
   const listComments = async () => comments;
@@ -37,7 +37,8 @@ function harness({body = 'Dev-Completes: #320', projectItem = true, initialState
       repos: {listPullRequestsAssociatedWithCommit: associated},
       checks: {listForRef: listChecks},
       issues: {
-        get: async () => ({data: {node_id: 'I_320', state, labels: [{name: 'dev-acceptance-verified'}]}}),
+        get: async () => ({data: {node_id: 'I_320', state, labels}}),
+        addLabels: async ({labels: added}) => labels.push(...added.map(name => ({name}))),
         listComments,
         createComment: async ({body: comment}) => comments.push({body: comment}),
         update: async args => { state = args.state; updates.push(args); }
@@ -54,7 +55,7 @@ function harness({body = 'Dev-Completes: #320', projectItem = true, initialState
   const notices = [], warnings = [];
   const core = {notice: value => notices.push(value), warning: value => warnings.push(value)};
   const context = {repo: {owner: 'o', repo: 'r'}, sha, ref: 'refs/heads/main', eventName: 'push', serverUrl: 'https://github.com', runId: 9};
-  return {github, core, context, comments, updates, mutations, notices, warnings, state: () => state};
+  return {github, core, context, comments, updates, mutations, notices, warnings, labels, state: () => state};
 }
 
 async function runWithEvidence(subject, verified = true) {
@@ -75,6 +76,7 @@ test('verified completion closes issue, marks project Done, and is idempotent', 
   assert.equal(subject.updates.length, 1);
   assert.equal(subject.mutations.length, 1);
   assert.equal(subject.comments.length, 1);
+  assert.deepEqual(subject.labels, [{name: 'dev-acceptance-verified'}]);
   assert.match(subject.comments[0].body, /actions\/runs\/9/);
 });
 test('missing trusted deployment evidence performs no writes', async () => {

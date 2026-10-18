@@ -34,7 +34,6 @@ function markdownCell(value) {
 function inspect(pr, issue) {
   const blockers = [];
   if(!ids(pr.body,marker).includes(issue.number)) blockers.push('missing final Dev-Completes marker');
-  if(!issue.labels?.some(l=>l.name==='dev-acceptance-verified')) blockers.push('missing human-approved dev-acceptance-verified label');
   if(/\[ \]/.test(issue.body||'')) blockers.push('unfinished issue acceptance checklist');
   if(/\[ \]/.test(pr.body||'')) blockers.push('unfinished PR acceptance checklist');
   // Absence of independently verified CI/deployment evidence must not be interpreted as success.

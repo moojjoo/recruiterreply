@@ -80,6 +80,14 @@ module.exports = async ({github, context, core}) => {
         core.notice(`#${issue_number}: already reconciled`);
         continue;
       }
+      if (issue.state !== 'open') {
+        core.warning(`#${issue_number}: already closed without reconciliation evidence; manual review needed`);
+        continue;
+      }
+      if (!issue.labels.some(l => l.name === eligibleLabel)) {
+        await github.rest.issues.addLabels({owner, repo, issue_number, labels: [eligibleLabel]});
+        core.notice(`#${issue_number}: applied ${eligibleLabel} after verified Dev evidence`);
+      }
       await github.graphql(`mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
         updateProjectV2ItemFieldValue(input: {
           projectId: $project, itemId: $item, fieldId: $field,

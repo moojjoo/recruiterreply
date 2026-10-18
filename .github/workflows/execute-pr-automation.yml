@@ -45,6 +45,16 @@ jobs:
                 core.notice('PR #' + full.number + ': applied execute-dev label');
               }
               const {validateReadiness, classifyRisk} = require('./.github/scripts/pr-readiness.cjs');
+              const {issueNumberFromPullRequest, ensureIssueLink} = require('./.github/scripts/pr-issue-linking.cjs');
+              const linkedIssue = issueNumberFromPullRequest(full);
+              if (linkedIssue) {
+                const linkedBody = ensureIssueLink(full.body || '', linkedIssue);
+                if (linkedBody !== (full.body || '')) {
+                  await github.rest.pulls.update({owner, repo, pull_number: full.number, body: linkedBody});
+                  full.body = linkedBody;
+                  core.notice('PR #' + full.number + ': added guarded issue link for #' + linkedIssue);
+                }
+              }
               const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
               const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
               const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
