@@ -5,6 +5,8 @@ import { useToast } from "../../hooks/useToast";
 import { Input } from "../common/Input";
 import { Button } from "../common/Button";
 import { Card } from "../common/Card";
+import { authService } from "../../services/api/authService";
+import { isCookieAuthEnabled } from "../../services/authMode";
 
 export const RegisterForm: React.FC = () => {
   const [name, setName] = useState("");
@@ -18,6 +20,17 @@ export const RegisterForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCookieAuthEnabled()) {
+      setLoading(true);
+      try {
+        const response = await authService.cognitoLoginStart();
+        window.location.href = response.data.authorizationUrl;
+      } catch {
+        showToast("Registration is currently unavailable.", "error");
+        setLoading(false);
+      }
+      return;
+    }
     if (loading) return;
     setFormError("");
     if (password !== confirmPassword) {

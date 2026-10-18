@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { clearLegacyAuthState, isCookieAuthEnabled } from './authMode';
+import { clearLegacyAuthState, ensureCsrfToken, isCookieAuthEnabled } from './authMode';
 import {
   AnalyzeMessageRequest,
   AnalyzeMessageResponse,
@@ -28,7 +28,11 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    if (['post', 'put', 'patch', 'delete'].includes((config.method || 'get').toLowerCase())) {
+      const csrfToken = await ensureCsrfToken(API_BASE_URL);
+      if (csrfToken) config.headers['X-CSRF-TOKEN'] = csrfToken;
+    }
     const token = !isCookieAuthEnabled() && typeof window !== 'undefined'
       ? window.localStorage.getItem('authToken')
       : null;

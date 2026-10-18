@@ -665,6 +665,69 @@ namespace RecruiterReply.Migrations
                     b.ToTable("opportunities", (string)null);
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.OrganizationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("organizations", (string)null);
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.OrganizationMemberEntity", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("OrganizationId", "UserId");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("organization_members", (string)null);
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -940,6 +1003,10 @@ namespace RecruiterReply.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password_hash");
 
+                    b.Property<Guid?>("PersonalOrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("personal_organization_id");
+
                     b.Property<string>("ProfilePictureUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
@@ -1072,6 +1139,21 @@ namespace RecruiterReply.Migrations
 
             modelBuilder.Entity("RecruiterReply.Entities.OpportunityEntity", b =>
                 {
+                    b.HasOne("RecruiterReply.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.OrganizationMemberEntity", b =>
+                {
+                    b.HasOne("RecruiterReply.Entities.OrganizationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
                         .WithMany()
                         .HasForeignKey("UserId")

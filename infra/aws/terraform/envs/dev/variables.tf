@@ -147,3 +147,15 @@ variable "db_engine_version" {
   type        = string
   default     = "16.3"
 }
+
+variable "bff_session_table_arn" {
+  description = "Optional ARN of the provisioned Dev BFF session table."
+  type        = string
+  default     = null
+}
+
+variable "bff_session_kms_key_arn" {
+  description = "Optional ARN of the provisioned Dev BFF session KMS key."
+  type        = string
+  default     = null
+}

@@ -4,6 +4,7 @@ import { MainLayout } from "../components/layout/MainLayout";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { useToast } from "../hooks/useToast";
 import { trackProductEvent } from "../utils/productAnalytics";
+import { isCookieAuthEnabled } from "../services/authMode";
 
 export const GoogleCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -17,6 +18,11 @@ export const GoogleCallback: React.FC = () => {
     }
 
     hasHandled.current = true;
+
+    if (isCookieAuthEnabled()) {
+      window.location.replace("/login?error=legacy_auth_retired");
+      return;
+    }
 
     const token = searchParams.get("token");
     if (token) {

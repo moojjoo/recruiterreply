@@ -13,6 +13,8 @@ public class RecruiterReplyDbContext : DbContext
     public DbSet<ConsentAuditEventEntity> ConsentAuditEvents => Set<ConsentAuditEventEntity>();
     public DbSet<PasswordRecoveryEntity> PasswordRecoveries => Set<PasswordRecoveryEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<OrganizationEntity> Organizations => Set<OrganizationEntity>();
+    public DbSet<OrganizationMemberEntity> OrganizationMembers => Set<OrganizationMemberEntity>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<MessageAnalysisEntity> MessageAnalyses => Set<MessageAnalysisEntity>();
     public DbSet<GeneratedReplyEntity> GeneratedReplies => Set<GeneratedReplyEntity>();
@@ -60,6 +62,7 @@ public class RecruiterReplyDbContext : DbContext
             entity.ToTable("users");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.PersonalOrganizationId).HasColumnName("personal_organization_id");
             entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
             entity.Property(e => e.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsRequired();
             entity.Property(e => e.FirstName).HasColumnName("first_name").HasMaxLength(100);
@@ -79,6 +82,31 @@ public class RecruiterReplyDbContext : DbContext
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => new { e.AuthProvider, e.ProviderUserId }).IsUnique();
             entity.HasIndex(e => e.StripeCustomerId).IsUnique();
+        });
+
+        modelBuilder.Entity<OrganizationEntity>(entity =>
+        {
+            entity.ToTable("organizations");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<OrganizationMemberEntity>(entity =>
+        {
+            entity.ToTable("organization_members");
+            entity.HasKey(e => new { e.OrganizationId, e.UserId });
+            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Role).HasColumnName("role").HasMaxLength(32).IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(32).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasOne<OrganizationEntity>().WithMany().HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.Status });
         });
 
         modelBuilder.Entity<MessageEntity>(entity =>
