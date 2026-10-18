@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { clearLegacyAuthState, isCookieAuthEnabled } from './authMode';
 import {
   AnalyzeMessageRequest,
   AnalyzeMessageResponse,
@@ -19,6 +20,7 @@ const API_BASE_URL =
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,7 +29,9 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('authToken') : null;
+    const token = !isCookieAuthEnabled() && typeof window !== 'undefined'
+      ? window.localStorage.getItem('authToken')
+      : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -41,8 +45,7 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('userData');
+      if (!isCookieAuthEnabled()) clearLegacyAuthState();
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
