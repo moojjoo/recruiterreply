@@ -74,3 +74,15 @@ Test uses the existing host, with no new EC2 instance. Incremental costs include
 Cognito Essentials/email MFA, SES deliveries, Secrets Manager, DynamoDB replay
 operations, Lambda@Edge requests and CloudFront usage/plan charges. Verify actual
 billing configuration and usage in AWS; no numeric cost estimate is assumed.
+
+## Completion evidence
+
+The owner has completed the invited-user browser validation for Test, including
+password setup, email MFA, deep-link access, same-origin API use and logout.
+The deployed perimeter checks also confirm that anonymous Test requests are
+redirected to the local Cognito login, the distribution hostname bypass is
+denied, and the direct `api-test` origin remains blocked.
+
+This evidence completes the remaining live-validation portion of #421. Future
+changes to the Test perimeter must repeat the negative boundary checks and the
+invited-user browser flow before promotion.

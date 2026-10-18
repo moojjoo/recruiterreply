@@ -76,9 +76,19 @@ builder.Services.AddAuthentication(options =>
     .AddPolicyScheme("Application", null, options =>
     {
         options.ForwardDefaultSelector = context =>
-            context.Request.Cookies.ContainsKey("rr_session")
-                ? "EdgeSession"
-                : JwtBearerDefaults.AuthenticationScheme;
+        {
+            // Google login stores a legacy JWT while the private Dev boundary
+            // also supplies rr_session. Prefer the explicit bearer token so
+            // /auth/me resolves the account that just completed Google login.
+            var hasBearerToken = context.Request.Headers.Authorization.Any(value =>
+                value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase));
+
+            return hasBearerToken
+                ? JwtBearerDefaults.AuthenticationScheme
+                : context.Request.Cookies.ContainsKey("rr_session")
+                    ? "EdgeSession"
+                    : JwtBearerDefaults.AuthenticationScheme;
+        };
     })
     .AddJwtBearer(options =>
     {
@@ -249,7 +259,9 @@ if (shouldAutoMigrate)
 }
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+// Development mode is also used by the hosted Dev container. Swagger must be
+// an explicit local opt-in so it is not exposed by environment name alone.
+if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.MapOpenApi();
     app.UseSwagger();

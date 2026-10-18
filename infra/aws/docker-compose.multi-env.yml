@@ -35,7 +35,9 @@ services:
       Jwt__Key: ${JWT_KEY_DEV}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
-      Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
+      # The Dev API is private; send OAuth callbacks through the authenticated
+      # same-origin CloudFront behavior so it can add X-RR-Origin-Auth.
+      Google__RedirectUri: https://dev.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://dev.recruiterreply.com
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
       GitHubActionsOidc__Enabled: "true"
