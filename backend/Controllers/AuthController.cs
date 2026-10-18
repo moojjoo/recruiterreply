@@ -192,8 +192,12 @@ public class AuthController : ControllerBase
         try
         {
             var tokens = await _cognitoBff.CompleteLoginAsync(HttpContext, code ?? string.Empty, state ?? string.Empty, ct);
-            var user = await _db.Users.FirstOrDefaultAsync(candidate =>
-                candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct);
+            var identity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
+                candidate.Provider == "cognito" && candidate.Subject == tokens.Identity.Subject, ct);
+            var user = identity is null
+                ? await _db.Users.FirstOrDefaultAsync(candidate =>
+                    candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct)
+                : await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == identity.UserId, ct);
             if (user is null)
             {
                 if (await _db.Users.AnyAsync(candidate => candidate.Email == tokens.Identity.Email, ct))
@@ -208,6 +212,21 @@ public class AuthController : ControllerBase
                 _db.Users.Add(user);
             }
             else if (!user.IsActive) throw new InvalidOperationException("Account is inactive.");
+            if (identity is null)
+            {
+                identity = new UserIdentityEntity
+                {
+                    Id = Guid.NewGuid(), UserId = user.Id, Provider = "cognito",
+                    Subject = tokens.Identity.Subject, Email = tokens.Identity.Email,
+                    CreatedAt = DateTime.UtcNow, LastUsedAt = DateTime.UtcNow
+                };
+                _db.UserIdentities.Add(identity);
+            }
+            else
+            {
+                identity.Email = tokens.Identity.Email;
+                identity.LastUsedAt = DateTime.UtcNow;
+            }
             user.LastLogin = DateTime.UtcNow;
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
