@@ -23,7 +23,10 @@ export const GoogleCallback: React.FC = () => {
       localStorage.setItem("authToken", token);
       trackProductEvent("login", { method: "google" });
       showToast("Google login successful.", "success");
-      navigate("/dashboard", { replace: true });
+      // AuthProvider owns the in-memory user state. Reloading after storing the
+      // token lets its normal bootstrap call /auth/me before ProtectedRoute
+      // evaluates the dashboard, avoiding an immediate redirect back to login.
+      window.location.replace("/dashboard");
       return;
     }
 
