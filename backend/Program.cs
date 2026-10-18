@@ -14,6 +14,7 @@ using RecruiterReply.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Amazon.DynamoDBv2;
 using Amazon.KeyManagementService;
 
@@ -52,6 +53,14 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // nginx is the only public reverse proxy for the hosted API. The container
+    // receives its forwarded headers from the host-side private network.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
@@ -301,6 +310,7 @@ if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Swa
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseForwardedHeaders();
 app.UseMiddleware<PrivateApiOriginAuthMiddleware>();
 app.UseMiddleware<BffCsrfMiddleware>();
 
