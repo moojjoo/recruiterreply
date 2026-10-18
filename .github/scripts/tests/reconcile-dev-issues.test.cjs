@@ -1,13 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const reconcile = require('../reconcile-dev-issues.cjs');
-const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, requiredChecks} = reconcile;
+const {linkedIssues, findProject, checksPass, requiredChecks} = reconcile;
 
-test('only explicit Dev-Completes markers qualify', () => {
-  assert.deepEqual(linkedIssues('Refs #12\nCloses #13\nDev-Completes: #14\nDev-Completes: #14\nDev-Completes: #15'), [14, 15]);
+test('Dev completion markers and standard closing references qualify', () => {
+  assert.deepEqual(linkedIssues('Refs #12\nCloses #13\nDev-Completes: #14\nDev-Completes: #14\nDev-Completes: #15\nFixes #16'), [13, 14, 15, 16]);
 });
-test('missing completion markers never qualify', () => {
-  assert.deepEqual(linkedIssues('Closes #239\nFixes #217'), []);
+test('non-closing references never qualify', () => {
+  assert.deepEqual(linkedIssues('Refs #239\nSee #217'), []);
 });
 test('project matches either GitHub display title or bare title', () => {
   assert.equal(findProject([{id:'p',title:'recruiterreply project'}]).id, 'p');
@@ -17,11 +17,6 @@ test('missing or ambiguous project fails closed', () => {
   assert.throws(() => findProject([]), /exactly one/);
   assert.throws(() => findProject([{title:'recruiterreply project'},{title:"@moojjoo's recruiterreply project"}]), /exactly one/);
 });
-test('acceptance checklist fails closed when any item is unchecked', () => {
-  assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One'), true);
-  assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One\n- [ ] Two'), false);
-  assert.equal(acceptanceChecklistComplete('Dev-Completes: #320'), false);
-});
 test('all required checks must pass on the exact PR head SHA', () => {
   const sha = 'a'.repeat(40);
   const complete = requiredChecks.map(name => ({name, head_sha: sha, conclusion: 'success'}));
@@ -30,9 +25,9 @@ test('all required checks must pass on the exact PR head SHA', () => {
   assert.equal(checksPass(complete, 'b'.repeat(40)), false);
 });
 
-function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true} = {}) {
+function harness({body = 'Dev-Completes: #320', projectItem = true, initialState = 'open'} = {}) {
   const sha = 'a'.repeat(40), headSha = 'b'.repeat(40);
-  let state = 'open';
+  let state = initialState;
   const comments = [], updates = [], mutations = [];
   const associated = async () => [{number: 42, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: sha, head: {sha: headSha}, body}];
   const listChecks = async () => requiredChecks.map(name => ({name, head_sha: headSha, conclusion: 'success'}));
@@ -90,11 +85,20 @@ test('missing trusted deployment evidence performs no writes', async () => {
   assert.match(subject.warnings.join(';'), /deployment verification/);
 });
 test('partial PR and missing project item never close an issue', async () => {
-  const partial = harness({body: '## Acceptance criteria\n- [x] Complete\n\nRefs #320'});
+  const partial = harness({body: 'Refs #320'});
   await runWithEvidence(partial);
   assert.equal(partial.state(), 'open');
   const absent = harness({projectItem: false});
   await runWithEvidence(absent);
   assert.equal(absent.state(), 'open');
   assert.match(absent.warnings.join(';'), /not in target project/);
+});
+
+test('already closed issue is marked Done without requiring checkboxes', async () => {
+  const subject = harness({initialState: 'closed'});
+  await runWithEvidence(subject);
+  assert.equal(subject.state(), 'closed');
+  assert.equal(subject.updates.length, 0);
+  assert.equal(subject.mutations.length, 1);
+  assert.equal(subject.comments.length, 1);
 });
