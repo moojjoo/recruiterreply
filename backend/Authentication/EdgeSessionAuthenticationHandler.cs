@@ -10,6 +10,8 @@ using Microsoft.Extensions.Options;
 using RecruiterReply.Data;
 using RecruiterReply.Entities;
 
+#pragma warning disable CS0618 // ASP.NET Core 10.0.12 exposes the legacy AuthenticationHandler constructor.
+
 namespace RecruiterReply.Authentication;
 
 /// <summary>
@@ -189,3 +191,5 @@ public sealed class EdgeSessionAuthenticationHandler : AuthenticationHandler<Aut
         string? FirstName,
         string? LastName);
 }
+
+#pragma warning restore CS0618

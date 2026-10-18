@@ -70,6 +70,14 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
       return logout(environment, expectedHost);
     }
 
+    // The BFF owns the Cognito authorization-code flow. These are the only
+    // unauthenticated API paths allowed through the private edge; the API
+    // origin-request Lambda still adds the sealed origin signature later.
+    if (isCognitoBffPublicRoute(request.uri)) {
+      delete request.headers['x-rr-ci-oidc-token'];
+      return request;
+    }
+
     const ciToken = getCiToken(request);
     if (ciToken) {
       if (!(await validateCiToken(ciToken, environment))) return forbidden();
@@ -87,6 +95,10 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
 
     return request;
   };
+}
+
+function isCognitoBffPublicRoute(uri) {
+  return uri === '/api/auth/cognito/start' || uri === '/api/auth/cognito/callback';
 }
 
 async function validateCiToken(token, environment) {

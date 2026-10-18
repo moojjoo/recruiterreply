@@ -428,8 +428,7 @@
 /* #252: Restore light navigation surfaces after dark-to-light transitions.
    Explicitly scope both states so previously dark menu panels never remain dark. */
 @layer utilities {
-  [data-theme="light"] nav[aria-label="Primary navigation"],
-  [data-theme="light"] nav[aria-label="Primary navigation"].bg-white\\/80 {
+  [data-theme="light"] nav[aria-label="Primary navigation"] {
     background-color: rgb(255 255 255 / 0.95);
     color: #111827;
     border-bottom-color: #e5e7eb;

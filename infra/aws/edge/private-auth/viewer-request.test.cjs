@@ -112,6 +112,30 @@ test('Test API viewer requests preserve their path after the session gate', asyn
   assert.equal(response.uri, '/api/health');
 });
 
+test('unauthenticated Dev Cognito BFF start reaches the API origin', async () => {
+  const event = makeEvent('/api/auth/cognito/start', {
+    'x-rr-ci-oidc-token': [{ key: 'X-RR-CI-OIDC-Token', value: 'must-not-forward' }]
+  });
+  const response = await authenticatedHandler(event);
+  assert.equal(response.uri, '/api/auth/cognito/start');
+  assert.equal(response.status, undefined);
+  assert.equal(response.headers['x-rr-ci-oidc-token'], undefined);
+});
+
+test('unauthenticated Test Cognito BFF callback reaches the API origin', async () => {
+  const event = makeEvent('/api/auth/cognito/callback', cookieHeader('rr_oauth_tx=transaction'), TEST_ID);
+  const response = await authenticatedHandler(event);
+  assert.equal(response.uri, '/api/auth/cognito/callback');
+  assert.equal(response.status, undefined);
+  assert.equal(response.headers.cookie[0].value, 'rr_oauth_tx=transaction');
+});
+
+test('unlisted Cognito API paths remain protected by the private edge', async () => {
+  assert.equal(String((await authenticatedHandler(
+    makeEvent('/api/auth/cognito/token', {})
+  )).status), '403');
+});
+
 test('Test API origin requests receive a short-lived request signature', async () => {
   const secret = 'test-only-origin-signing-key-with-32-bytes';
   const handlerWithOriginSigning = createViewerRequestHandler({

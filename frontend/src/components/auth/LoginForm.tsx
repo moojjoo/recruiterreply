@@ -7,6 +7,7 @@ import { Button } from "../common/Button";
 import { Card } from "../common/Card";
 import { authService } from "../../services/api/authService";
 import { trackProductEvent } from "../../utils/productAnalytics";
+import { isCookieAuthEnabled } from "../../services/authMode";
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -26,6 +27,17 @@ export const LoginForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCookieAuthEnabled()) {
+      setLoading(true);
+      try {
+        const response = await authService.cognitoLoginStart();
+        window.location.href = response.data.authorizationUrl;
+      } catch {
+        showToast("Login is currently unavailable.", "error");
+        setLoading(false);
+      }
+      return;
+    }
     setFormError("");
     setLoading(true);
     try {
