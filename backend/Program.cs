@@ -76,9 +76,19 @@ builder.Services.AddAuthentication(options =>
     .AddPolicyScheme("Application", null, options =>
     {
         options.ForwardDefaultSelector = context =>
-            context.Request.Cookies.ContainsKey("rr_session")
-                ? "EdgeSession"
-                : JwtBearerDefaults.AuthenticationScheme;
+        {
+            // Google login stores a legacy JWT while the private Dev boundary
+            // also supplies rr_session. Prefer the explicit bearer token so
+            // /auth/me resolves the account that just completed Google login.
+            var hasBearerToken = context.Request.Headers.Authorization.Any(value =>
+                value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase));
+
+            return hasBearerToken
+                ? JwtBearerDefaults.AuthenticationScheme
+                : context.Request.Cookies.ContainsKey("rr_session")
+                    ? "EdgeSession"
+                    : JwtBearerDefaults.AuthenticationScheme;
+        };
     })
     .AddJwtBearer(options =>
     {
