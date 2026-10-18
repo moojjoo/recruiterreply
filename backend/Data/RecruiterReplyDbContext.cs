@@ -13,6 +13,7 @@ public class RecruiterReplyDbContext : DbContext
     public DbSet<ConsentAuditEventEntity> ConsentAuditEvents => Set<ConsentAuditEventEntity>();
     public DbSet<PasswordRecoveryEntity> PasswordRecoveries => Set<PasswordRecoveryEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<UserIdentityEntity> UserIdentities => Set<UserIdentityEntity>();
     public DbSet<OrganizationEntity> Organizations => Set<OrganizationEntity>();
     public DbSet<OrganizationMemberEntity> OrganizationMembers => Set<OrganizationMemberEntity>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
@@ -82,6 +83,21 @@ public class RecruiterReplyDbContext : DbContext
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => new { e.AuthProvider, e.ProviderUserId }).IsUnique();
             entity.HasIndex(e => e.StripeCustomerId).IsUnique();
+        });
+        modelBuilder.Entity<UserIdentityEntity>(entity =>
+        {
+            entity.ToTable("user_identities");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Provider).HasColumnName("provider").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Subject).HasColumnName("subject").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.LastUsedAt).HasColumnName("last_used_at");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.Provider, e.Subject }).IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.Provider }).IsUnique();
         });
 
         modelBuilder.Entity<OrganizationEntity>(entity =>
