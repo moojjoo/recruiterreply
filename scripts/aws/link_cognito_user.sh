@@ -63,17 +63,24 @@ SUB_SQL="$(sql_escape "$COGNITO_SUB")"
 SQL="$(cat <<EOF
 BEGIN;
 DO \\\$\\$
-DECLARE target_id uuid; target_provider text; target_provider_id text; subject_owner uuid;
+DECLARE target_id uuid; subject_owner uuid; existing_target_subject text;
 BEGIN
-  SELECT id, auth_provider, provider_user_id INTO target_id, target_provider, target_provider_id
+  SELECT id INTO target_id
     FROM users WHERE lower(email) = '$EMAIL_SQL' AND is_active = true FOR UPDATE;
   IF target_id IS NULL THEN RAISE EXCEPTION 'No active PostgreSQL user matches the approved email'; END IF;
-  SELECT id INTO subject_owner FROM users WHERE auth_provider = 'cognito' AND provider_user_id = '$SUB_SQL' FOR UPDATE;
-  IF subject_owner IS NOT NULL AND subject_owner <> target_id THEN RAISE EXCEPTION 'Cognito subject is already linked to another PostgreSQL user'; END IF;
-  IF target_provider_id IS NOT NULL AND target_provider_id <> '' AND NOT (target_provider = 'cognito' AND target_provider_id = '$SUB_SQL') THEN
-    RAISE EXCEPTION 'Target PostgreSQL user is already linked to another provider identity';
+  SELECT user_id INTO subject_owner FROM user_identities WHERE provider = 'cognito' AND subject = '$SUB_SQL' FOR UPDATE;
+  IF subject_owner IS NULL THEN
+    SELECT id INTO subject_owner FROM users WHERE auth_provider = 'cognito' AND provider_user_id = '$SUB_SQL' FOR UPDATE;
   END IF;
-  UPDATE users SET auth_provider = 'cognito', provider_user_id = '$SUB_SQL', updated_at = CURRENT_TIMESTAMP WHERE id = target_id;
+  IF subject_owner IS NOT NULL AND subject_owner <> target_id THEN RAISE EXCEPTION 'Cognito subject is already linked to another PostgreSQL user'; END IF;
+  SELECT subject INTO existing_target_subject FROM user_identities WHERE user_id = target_id AND provider = 'cognito' FOR UPDATE;
+  IF existing_target_subject IS NOT NULL AND existing_target_subject <> '$SUB_SQL' THEN
+    RAISE EXCEPTION 'Target PostgreSQL user is already linked to another Cognito subject';
+  END IF;
+  INSERT INTO user_identities (id, user_id, provider, subject, email, created_at, last_used_at)
+    VALUES (gen_random_uuid(), target_id, 'cognito', '$SUB_SQL', '$EMAIL_SQL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (provider, subject) DO UPDATE SET email = EXCLUDED.email, last_used_at = EXCLUDED.last_used_at;
+  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = target_id;
   RAISE NOTICE 'COGNITO_LINK result=success user_id=% environment=$ENVIRONMENT', target_id;
 END \\\$\\$;
 COMMIT;
