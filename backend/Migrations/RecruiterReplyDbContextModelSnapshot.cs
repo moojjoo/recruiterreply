@@ -1062,6 +1062,54 @@ namespace RecruiterReply.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.UserIdentityEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "Subject")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("user_identities", (string)null);
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.CareerProfileEntity", b =>
                 {
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
@@ -1194,6 +1242,15 @@ namespace RecruiterReply.Migrations
                 });
 
             modelBuilder.Entity("RecruiterReply.Entities.UsageRecordEntity", b =>
+                {
+                    b.HasOne("RecruiterReply.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.UserIdentityEntity", b =>
                 {
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
                         .WithMany()
