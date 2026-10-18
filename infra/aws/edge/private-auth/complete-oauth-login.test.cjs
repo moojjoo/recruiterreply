@@ -85,6 +85,9 @@ function makeTransaction() {
 function dependencies(token = signedIdToken()) {
   return {
     exchangeCode: async args => {
+      assert.equal(args.approvedDomain, domain);
+      assert.equal(args.approvedClientId, clientId);
+      assert.equal(args.approvedRedirectUri, redirectUri);
       assert.equal(args.code, 'test.authorization-code');
       assert.equal(args.verifier, verifier);
       assert.equal(args.approvedDomain, domain);

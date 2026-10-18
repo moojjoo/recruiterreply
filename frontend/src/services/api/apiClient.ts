@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from "axios";
+import { clearLegacyAuthState, isCookieAuthEnabled } from "../authMode";
 
 const runtimeApiBaseUrl = typeof window !== "undefined" ? window.__APP_CONFIG__?.API_BASE_URL : undefined;
 const API_BASE_URL =
@@ -17,7 +18,9 @@ const apiClient: AxiosInstance = axios.create({
 // Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
-    const token = typeof window !== "undefined" ? window.localStorage.getItem("authToken") : null;
+    const token = !isCookieAuthEnabled() && typeof window !== "undefined"
+      ? window.localStorage.getItem("authToken")
+      : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -32,9 +35,8 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && localStorage.getItem("authToken")) {
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("userData");
+    if (error.response?.status === 401 && !isCookieAuthEnabled() && typeof window !== "undefined" && window.localStorage.getItem("authToken")) {
+      clearLegacyAuthState();
       window.location.href = "/login";
     }
     return Promise.reject(error);

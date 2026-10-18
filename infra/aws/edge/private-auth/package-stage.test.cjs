@@ -71,10 +71,10 @@ test('stages only runtime sources and generated entry files', () => {
   assert.deepEqual(files, [
     ...SOURCE_FILES,
     'deployment-config.cjs',
-    'index.cjs'
+    'index.js'
   ].sort());
   assert.equal(files.some(file => file.endsWith('.test.cjs')), false);
-  assert.match(fs.readFileSync(path.join(outputPath, 'index.cjs'), 'utf8'), /createDeploymentHandler/);
+  assert.match(fs.readFileSync(path.join(outputPath, 'index.js'), 'utf8'), /createDeploymentHandler/);
 });
 
 test('refuses to overwrite an existing output directory', () => {

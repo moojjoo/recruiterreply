@@ -115,7 +115,7 @@ function stagePackage({ configPath, outputPath, installDependencies = true }) {
     { encoding: 'utf8', mode: 0o600 }
   );
   fs.writeFileSync(
-    path.join(resolvedOutput, 'index.cjs'),
+    path.join(resolvedOutput, 'index.js'),
     renderEntryModule(),
     { encoding: 'utf8', mode: 0o600 }
   );

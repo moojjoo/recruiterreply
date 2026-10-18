@@ -157,6 +157,26 @@ public class AuthController : ControllerBase
         return Ok(ToUserDto(user));
     }
 
+    [HttpPost("logout")]
+    [AllowAnonymous]
+    public IActionResult Logout()
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Lax,
+            Path = "/"
+        };
+
+        // rr_session is the current Dev/Test edge gate. The production BFF
+        // uses a host-only cookie and will adopt this same logout contract.
+        Response.Cookies.Delete("rr_session", cookieOptions);
+        Response.Cookies.Delete("__Host-rr_session", cookieOptions);
+
+        return NoContent();
+    }
+
     private AuthResponse CreateAuthResponse(UserEntity user)
     {
         return new AuthResponse

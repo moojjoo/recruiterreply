@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using RecruiterReply.Authentication;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 
 var envCandidates = new[]
 {
@@ -139,6 +140,12 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
+    // New controllers and minimal API endpoints must be authenticated unless
+    // they explicitly opt into the reviewed anonymous-route inventory.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
     options.AddPolicy("GitHubActionsSmoke", policy =>
     {
         policy.AddAuthenticationSchemes("GitHubActionsSmoke");
@@ -282,12 +289,13 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", status = "ok" }));
+app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", status = "ok" }))
+    .AllowAnonymous();
 
 // nginx prepends /api to all requests, so these are also mapped under /api for external reachability.
 Func<IResult> healthHandler = () => Results.Ok(new { status = "healthy" });
-app.MapGet("/health", healthHandler);
-app.MapGet("/api/health", healthHandler);
+app.MapGet("/health", healthHandler).AllowAnonymous();
+app.MapGet("/api/health", healthHandler).AllowAnonymous();
 app.MapGet("/health/ci", () => Results.Ok(new { status = "healthy", smoke = "github-actions-oidc" }))
     .RequireAuthorization("GitHubActionsSmoke");
 app.MapGet("/api/health/ci", () => Results.Ok(new { status = "healthy", smoke = "github-actions-oidc" }))
