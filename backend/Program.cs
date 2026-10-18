@@ -249,7 +249,9 @@ if (shouldAutoMigrate)
 }
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+// Development mode is also used by the hosted Dev container. Swagger must be
+// an explicit local opt-in so it is not exposed by environment name alone.
+if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.MapOpenApi();
     app.UseSwagger();
