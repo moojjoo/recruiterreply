@@ -145,9 +145,13 @@ if (require.main === module) main().then(async () => {
     const result = await authenticated(approved);
     console.log(`Authenticated Dev smoke passed: assets=${result.assetCount}; API health verified`);
   }
-}).catch(() => {
+}).catch(error => {
   // Fetch/AWS errors can contain response details. Do not log raw exceptions.
-  console.error('Private Dev smoke failed: check approved identity configuration, private redirects, and deployed artifact integrity.');
+  if (error instanceof assert.AssertionError) {
+    console.error(`Private Dev smoke assertion failed: ${error.message}`);
+  } else {
+    console.error('Private Dev smoke failed: check approved identity configuration, private redirects, and deployed artifact integrity.');
+  }
   process.exitCode = 1;
 });
 module.exports = {identity, authorize, boundary, authenticatedCredentials, authenticated, verifyArtifacts};
