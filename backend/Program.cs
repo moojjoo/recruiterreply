@@ -312,7 +312,6 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseForwardedHeaders();
 app.UseMiddleware<PrivateApiOriginAuthMiddleware>();
-app.UseMiddleware<BffCsrfMiddleware>();
 
 // Redirecting the CORS preflight to HTTPS breaks the browser's http://localhost:5002 calls in dev.
 if (!app.Environment.IsDevelopment())
@@ -322,6 +321,7 @@ if (!app.Environment.IsDevelopment())
 app.UseCors("AllowFrontend");
 app.UseRateLimiter();
 app.UseAuthentication();
+app.UseMiddleware<BffCsrfMiddleware>();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", status = "ok" }))
