@@ -46,7 +46,13 @@ public sealed class BffCsrfMiddleware
         }
         catch (AntiforgeryValidationException)
         {
-            _logger.LogWarning("Rejected BFF mutation with an invalid CSRF token");
+            // Record only presence flags. Never log cookie/header values or
+            // exception text because antiforgery diagnostics can contain
+            // sensitive request material.
+            _logger.LogWarning(
+                "Rejected BFF mutation with an invalid CSRF token; headerPresent={HeaderPresent}, cookiePresent={CookiePresent}",
+                context.Request.Headers.ContainsKey("X-CSRF-TOKEN"),
+                context.Request.Cookies.ContainsKey("__Host-rr_csrf"));
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
