@@ -154,7 +154,10 @@ public sealed class CognitoBffService : ICognitoBffService
         var parameters = new TokenValidationParameters
         {
             ValidateIssuer = true, ValidIssuer = _options.Issuer,
-            ValidateAudience = true, ValidAudience = _options.ResourceIdentifier,
+            // Cognito access tokens for this resource-server flow do not emit
+            // an aud claim. The signed issuer, client_id, token_use, lifetime,
+            // and required API scopes below provide the authorization boundary.
+            ValidateAudience = false,
             ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30),
             ValidateIssuerSigningKey = true, IssuerSigningKeys = configuration.SigningKeys
         };
