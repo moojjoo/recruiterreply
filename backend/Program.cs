@@ -207,26 +207,9 @@ builder.Services.AddSwaggerGen();
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-        ?? ["http://localhost:3000", "http://localhost:5173"];
-
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        if (builder.Environment.IsDevelopment())
-        {
-            // Vite may bind a different port or be opened via 127.0.0.1.
-            // Configured origins still apply: the hosted dev env runs as Development.
-            policy.SetIsOriginAllowed(origin =>
-                allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase)
-                || (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback));
-        }
-        else
-        {
-            policy.WithOrigins(allowedOrigins);
-        }
-
-        policy.AllowAnyMethod().AllowAnyHeader();
-    });
+    options.AddPolicy(
+        "AllowFrontend",
+        FrontendCorsPolicy.Create(builder.Configuration, builder.Environment.IsDevelopment()));
 });
 
 // Add PostgreSQL DbContext
