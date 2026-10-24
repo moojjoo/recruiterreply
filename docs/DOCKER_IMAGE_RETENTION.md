@@ -15,7 +15,7 @@ sudo docker system df
 
 Preview is the default; the script does not delete images without `--apply`. An explicit manual `--apply` is possible **only after a separate approval**, confirming no deployment or rollback is running. Do not automate it yet.
 
-The reusable Dev/Test/Prod promotion workflow installs the reviewed script, waits for the environment backend `/health` endpoint, releases the deployment side of `/tmp/recruiterreply-docker-deploy.lock`, and runs this preview under the same lock. Actions logs contain the candidate/protected counts, root filesystem metrics, `docker system df`, and a JSON `SUMMARY`. The manual EC2 deployment helper uses the same lock. The previous broad `docker image prune -f` step has been removed.
+The reusable Dev/Test/Prod promotion workflow installs the reviewed script and waits for the environment backend `/health` endpoint before releasing the deployment side of `/tmp/recruiterreply-docker-deploy.lock`. A separate SSM command then runs the preview under that same host lock. Keeping the preview in its own command prevents earlier deployment output from consuming SSM's bounded output capture, so Actions logs reliably contain the candidate/protected counts, root filesystem metrics, `docker system df`, and a JSON `SUMMARY`. The workflow fails if that preview summary is absent. The manual EC2 deployment helper uses the same lock. The previous broad `docker image prune -f` step has been removed.
 
 ## Before enabling unattended cleanup
 

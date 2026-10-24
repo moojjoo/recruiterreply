@@ -103,7 +103,9 @@ class RetentionTests(unittest.TestCase):
         self.assertIn(lock, helper)
         self.assertNotIn("docker image prune -f", workflow)
         self.assertLess(workflow.index("Backend health check failed"),
-                        workflow.index("recruiterreply-image-prune --repo"))
+                        workflow.index("- name: Preview backend image retention"))
+        self.assertIn('grep -q \'^SUMMARY .*"mode": "preview"\'', workflow)
+        self.assertEqual(workflow.count("recruiterreply-image-prune --repo"), 1)
         self.assertNotIn("recruiterreply-image-prune --apply", workflow)
 
 
