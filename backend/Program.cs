@@ -50,6 +50,13 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
     builder.Configuration.AddInMemoryCollection(secretValues);
 }
 
+// Legacy auth is a deployment mode, not a secret. Apply an explicit deployment
+// setting after Secrets Manager so a stale non-secret value in the secret document
+// cannot silently override the environment's approved authentication mode.
+DeploymentConfigurationOverrides.ApplyLegacyAuth(
+    builder.Configuration,
+    Environment.GetEnvironmentVariable("LEGACY_AUTH_ENABLED"));
+
 // Email/password and legacy Google authentication remain supported by default
 // in every environment. An environment may still explicitly opt into the
 // Cognito-only BFF path by setting LegacyAuth:Enabled to false.
