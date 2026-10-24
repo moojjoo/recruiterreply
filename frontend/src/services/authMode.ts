@@ -1,18 +1,12 @@
 const configuredAuthMode = import.meta.env.VITE_AUTH_MODE;
-const isHostedRecruiterReply =
-  typeof window !== "undefined" &&
-  (window.location.hostname === "recruiterreply.com" ||
-    window.location.hostname.endsWith(".recruiterreply.com"));
-
 /**
- * Hosted environments use the BFF cookie session by default because legacy
- * password authentication is retired there. Local development keeps the
- * legacy compatibility flow unless VITE_AUTH_MODE=cookie is supplied.
- * VITE_AUTH_MODE=legacy remains an explicit rollback override.
+ * Keep email/password and legacy Google authentication available by default
+ * in every environment. The Cognito BFF remains available through the explicit
+ * VITE_AUTH_MODE=cookie switch.
  */
-export const isCookieAuthEnabled = (): boolean =>
-  configuredAuthMode === "cookie" ||
-  (isHostedRecruiterReply && configuredAuthMode !== "legacy");
+export const isCookieAuthEnabled = (): boolean => {
+  return configuredAuthMode === "cookie";
+};
 
 export const clearLegacyAuthState = (): void => {
   if (typeof window === "undefined") return;

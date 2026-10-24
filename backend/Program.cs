@@ -50,10 +50,12 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
     builder.Configuration.AddInMemoryCollection(secretValues);
 }
 
-// Resolve feature flags only after deployed Secrets Manager values have been loaded.
-// Otherwise the authentication selector can retain the local fallback even when the
-// authoritative environment secret has retired legacy JWT authentication.
-var legacyAuthEnabled = builder.Configuration.GetValue("LegacyAuth:Enabled", true);
+// Email/password and legacy Google authentication remain supported by default
+// in every environment. An environment may still explicitly opt into the
+// Cognito-only BFF path by setting LegacyAuth:Enabled to false.
+const bool legacyAuthEnabledByDefault = true;
+var legacyAuthEnabled = builder.Configuration.GetValue(
+    "LegacyAuth:Enabled", legacyAuthEnabledByDefault);
 
 // Add services to the container
 builder.Services.AddControllers();
