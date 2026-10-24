@@ -64,7 +64,13 @@ export const ReplyPage: React.FC = () => {
           {/* Results */}
           {result && (
             <div className="mt-12 tool-results" role="region" aria-label="Generated results">
-              <h2 ref={resultHeadingRef} tabIndex={-1} className="sr-only tool-results-heading">Results</h2>
+              <h2
+                ref={resultHeadingRef}
+                tabIndex={-1}
+                className="sr-only tool-results-heading"
+              >
+                Results
+              </h2>
               <ReplyResult result={result} />
             </div>
           )}

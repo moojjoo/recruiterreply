@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef } from "react";
 
-/** Reveal newly generated results, including repeat submissions. */
-export function useResultReveal(revision: number) {
-  const headingRef = useRef<HTMLHeadingElement>(null);
+/** Reveal newly rendered results or errors, including repeat submissions. */
+export function useResultReveal<T extends HTMLElement = HTMLHeadingElement>(revision: number) {
+  const headingRef = useRef<T>(null);
   useLayoutEffect(() => {
     if (revision === 0) return;
     const heading = headingRef.current;

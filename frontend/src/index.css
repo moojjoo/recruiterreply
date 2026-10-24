@@ -525,9 +525,14 @@
 .tool-results-heading { scroll-margin-top: 6.5rem; }
 .tool-results { scroll-margin-top: 6.5rem; }
 [data-theme="dark"] .tool-results :is(.bg-gradient-to-r, .bg-gradient-to-br, .bg-gradient-to-b, .bg-gradient-to-l) {
+  background-color: #172235;
+  background-image: none;
   color: #f8fafc;
 }
-[data-theme="dark"] .tool-results :is(.bg-white, .bg-gray-50, .bg-gray-100, .bg-primary-50, .bg-success-50) {
+[data-theme="dark"] .tool-results :is(
+  .bg-white, .bg-gray-50, .bg-gray-100, .bg-primary-50, .bg-success-50,
+  .bg-accent-50, .bg-blue-50, .bg-green-50, .bg-yellow-50, .bg-red-50
+) {
   background-color: #172235;
   color: #f8fafc;
 }

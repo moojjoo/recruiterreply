@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { AxiosError } from "axios";
 import { comparisonService, isQuotaExceededError } from "../services/api";
 import { CompareOffersResponse, JobOffer } from "../types/index";
+import { useResultReveal } from "../hooks/useResultReveal";
 
 interface ComparisonToolProps {
   onResult: (result: CompareOffersResponse) => void;
@@ -26,6 +27,13 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [errorRevision, setErrorRevision] = useState(0);
+  const errorRef = useResultReveal<HTMLParagraphElement>(errorRevision);
+
+  const showError = (message: string) => {
+    setError(message);
+    setErrorRevision((previous) => previous + 1);
+  };
 
   const handleOfferOneChange = (field: keyof JobOffer, value: OfferFieldValue) => {
     setOfferOne({ ...offerOne, [field]: value });
@@ -41,7 +49,7 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
     setQuotaExceeded(false);
 
     if (!offerOne.company.trim() || !offerTwo.company.trim()) {
-      setError("Please enter company names for both offers");
+      showError("Please enter company names for both offers");
       return;
     }
 
@@ -51,7 +59,7 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
       offerOne.salary <= 0 ||
       offerTwo.salary <= 0
     ) {
-      setError("Please enter salary for both offers");
+      showError("Please enter salary for both offers");
       return;
     }
 
@@ -65,11 +73,11 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
     } catch (err) {
       if (isQuotaExceededError(err)) {
         setQuotaExceeded(true);
-        setError("You've reached your plan's monthly limit for offer comparisons.");
+        showError("You've reached your plan's monthly limit for offer comparisons.");
       } else {
         const message =
           err instanceof AxiosError ? err.response?.data?.error : undefined;
-        setError(message || "Failed to compare offers. Check your OpenAI API key.");
+        showError(message || "Failed to compare offers. Check your OpenAI API key.");
       }
     } finally {
       setLoading(false);
@@ -94,7 +102,7 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
       </div>
 
       {error && (
-        <p className="error-text mb-4">
+        <p ref={errorRef} tabIndex={-1} className="error-text mb-4 tool-results-heading" role="alert">
           {error}
           {quotaExceeded && (
             <a href="/pricing" className="ml-2 font-semibold underline">
