@@ -241,6 +241,10 @@ if (string.IsNullOrWhiteSpace(openAiKey))
 builder.Services.AddSingleton<IOpenAIService>(sp =>
     new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>(), model: builder.Configuration["OpenAI:Model"]));
 
+// Reject mismatched billing credentials before serving deployed traffic.
+StripeEnvironmentGuard.Validate(builder.Configuration, builder.Environment.EnvironmentName,
+    !string.IsNullOrWhiteSpace(secretsManagerSecretName));
+
 // Configure Stripe billing (test-mode key until the account goes live). No-op if unset —
 // billing endpoints will fail at call time rather than at startup, same pattern as OpenAI above.
 Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
