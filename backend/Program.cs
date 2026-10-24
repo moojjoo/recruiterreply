@@ -234,8 +234,9 @@ if (string.IsNullOrWhiteSpace(openAiKey))
 {
     openAiKey = "sk-proj-NOT_CONFIGURED";
 }
+var openAiModel = builder.Configuration["OpenAI:Model"];
 builder.Services.AddSingleton<IOpenAIService>(sp =>
-    new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>(), model: builder.Configuration["OpenAI:Model"]));
+    new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>(), model: openAiModel));
 
 // Configure Stripe billing (test-mode key until the account goes live). No-op if unset —
 // billing endpoints will fail at call time rather than at startup, same pattern as OpenAI above.
@@ -367,6 +368,7 @@ Func<IResult> healthApisHandler = () =>
         services = new
         {
             openAiConfigured = hasOpenAiKey,
+            openAiModel = string.IsNullOrWhiteSpace(openAiModel) ? OpenAIService.DefaultModel : openAiModel,
             analysisApi = true,
             replyApi = true,
             comparisonApi = true

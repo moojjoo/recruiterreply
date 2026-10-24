@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RecruiterReply.Services;
 using RecruiterReply.Tests.Testing;
@@ -12,8 +14,12 @@ public class OpenAIServiceTests
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string json) =>
         new(status) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
 
-    private static OpenAIService CreateSut(Func<HttpRequestMessage, HttpResponseMessage> responder, string apiKey = ConfiguredKey) =>
-        new(apiKey, NullLogger<OpenAIService>.Instance, new FakeHttpMessageHandler(responder));
+    private static OpenAIService CreateSut(
+        Func<HttpRequestMessage, HttpResponseMessage> responder,
+        string apiKey = ConfiguredKey,
+        ILogger<OpenAIService>? logger = null,
+        string? model = null) =>
+        new(apiKey, logger ?? NullLogger<OpenAIService>.Instance, new FakeHttpMessageHandler(responder), model);
 
     [Fact]
     public void Constructor_WithEmptyApiKey_Throws()
@@ -50,7 +56,7 @@ public class OpenAIServiceTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.AnalyzeRecruiterMessageAsync("hi", null, null));
 
-        Assert.Contains("authentication failed", ex.Message);
+        Assert.Contains("authentication is unavailable", ex.Message);
     }
 
     [Fact]
@@ -60,18 +66,30 @@ public class OpenAIServiceTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.AnalyzeRecruiterMessageAsync("hi", null, null));
 
-        Assert.Contains("rate limit or quota exceeded", ex.Message);
+        Assert.Contains("temporarily unavailable", ex.Message);
     }
 
     [Fact]
     public async Task CallOpenAI_OnBadRequestMentioningModel_ThrowsModelUnavailableMessage()
     {
-        var sut = CreateSut(_ => JsonResponse(HttpStatusCode.BadRequest, "{\"error\":\"the model 'gpt-4-turbo' does not exist\"}"));
+        var sut = CreateSut(_ => JsonResponse(HttpStatusCode.BadRequest,
+            "{\"error\":{\"message\":\"the model does not exist\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\"}}"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.AnalyzeRecruiterMessageAsync("hi", null, null));
 
         Assert.Contains("model", ex.Message);
         Assert.Contains("unavailable", ex.Message);
+    }
+
+    [Fact]
+    public async Task CallOpenAI_OnNotFoundModel_ThrowsModelUnavailableMessage()
+    {
+        var sut = CreateSut(_ => JsonResponse(HttpStatusCode.NotFound,
+            "{\"error\":{\"message\":\"missing\",\"code\":\"model_not_found\"}}"));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.GenerateReplyAsync("interested", "hi", null, null, null));
+
+        Assert.Contains("model is unavailable", ex.Message);
     }
 
     [Fact]
@@ -81,7 +99,25 @@ public class OpenAIServiceTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.AnalyzeRecruiterMessageAsync("hi", null, null));
 
-        Assert.Contains("billing status", ex.Message);
+        Assert.Equal("The AI service could not complete this request. Please try again later.", ex.Message);
+    }
+
+    [Fact]
+    public async Task CallOpenAI_OnFailure_LogsMetadataWithoutProviderBody()
+    {
+        const string sensitiveBody = "{\"error\":{\"message\":\"secret provider detail\",\"code\":\"server_error\"}}";
+        var logger = new CapturingLogger<OpenAIService>();
+        var response = JsonResponse(HttpStatusCode.InternalServerError, sensitiveBody);
+        response.Headers.Add("x-request-id", "req-safe-id");
+        var sut = CreateSut(_ => response, logger: logger);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.AnalyzeRecruiterMessageAsync("hi", null, null));
+
+        var log = Assert.Single(logger.Messages, message => message.Contains("OpenAI request failed"));
+        Assert.Contains("server_error", log);
+        Assert.Contains("req-safe-id", log);
+        Assert.DoesNotContain("secret provider detail", log);
+        Assert.DoesNotContain(sensitiveBody, log);
     }
 
     [Fact]
@@ -107,6 +143,47 @@ public class OpenAIServiceTests
     }
 
     [Fact]
+    public async Task Request_UsesCurrentDefaultModelAndCompletionTokenField()
+    {
+        string? requestBody = null;
+        var sut = CreateSut(request =>
+        {
+            requestBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return JsonResponse(HttpStatusCode.OK, "{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}");
+        });
+
+        await sut.GenerateReplyAsync("interested", "hi", null, null, null);
+
+        using var document = JsonDocument.Parse(requestBody!);
+        Assert.Equal("gpt-4.1-mini", document.RootElement.GetProperty("model").GetString());
+        Assert.Equal(2000, document.RootElement.GetProperty("max_completion_tokens").GetInt32());
+        Assert.False(document.RootElement.TryGetProperty("max_tokens", out _));
+    }
+
+    [Fact]
+    public async Task AllOpenAIBackedOperations_UseSharedSuccessfulTransport()
+    {
+        var calls = 0;
+        var sut = CreateSut(_ =>
+        {
+            calls++;
+            var content = calls == 4
+                ? "{\"isRecruiter\":true,\"skills\":[]}"
+                : "ok";
+            return JsonResponse(HttpStatusCode.OK,
+                JsonSerializer.Serialize(new { choices = new[] { new { message = new { content } } } }));
+        });
+
+        Assert.Equal("ok", await sut.AnalyzeRecruiterMessageAsync("message", null, null));
+        Assert.Equal("ok", await sut.GenerateReplyAsync("interested", "message", null, null, null));
+        Assert.Equal("ok", await sut.CompareOffersAsync("{}", "{}"));
+        Assert.True((await sut.ExtractRecruiterFactsAsync("subject", "from", "body")).IsRecruiter);
+        Assert.Equal("ok", await sut.GenerateTriageReplyAsync(
+            new TriageReplyContext(TriageStates.Qualified, [], [], null, "Jane", "Role", "body")));
+        Assert.Equal(5, calls);
+    }
+
+    [Fact]
     public async Task GenerateReplyAsync_WithEmptyReplyType_Throws()
     {
         var sut = CreateSut(_ => JsonResponse(HttpStatusCode.OK, "{}"));
@@ -121,6 +198,16 @@ public class OpenAIServiceTests
 
         await Assert.ThrowsAsync<ArgumentException>(() => sut.CompareOffersAsync("", "{}"));
     }
+}
+
+internal sealed class CapturingLogger<T> : ILogger<T>
+{
+    public List<string> Messages { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
 }
 
 public class OpenAIServiceParseRecruiterFactsTests
