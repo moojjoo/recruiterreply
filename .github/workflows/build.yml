@@ -58,6 +58,9 @@ jobs:
       - name: Test Terraform audit maintenance policy
         run: node --test .github/scripts/tests/terraform-readonly-audit.test.cjs
 
+      - name: Test promotion command contract
+        run: node --test .github/scripts/tests/promotion-contract.test.cjs
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
