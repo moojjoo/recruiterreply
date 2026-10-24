@@ -3,6 +3,7 @@ import importlib.util
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -45,6 +46,54 @@ class RetentionTests(unittest.TestCase):
     def test_target_tags_preserve_unrelated_tag(self):
         image = self.image(1, ["example/backend:old", "postgres:preserve"])
         self.assertEqual(module.target_tags(image, "example/backend"), ["example/backend:old"])
+
+    def test_policy_retains_union_of_environment_shas(self):
+        shared = "a" * 40
+        test_sha = "b" * 40
+        prod_sha = "c" * 40
+        images = [
+            self.image(1, [f"example/backend:{shared}"]),
+            self.image(2, [f"example/backend:{test_sha}"]),
+            self.image(3, [f"example/backend:{prod_sha}"]),
+            self.image(4, ["example/backend:old"]),
+        ]
+        policy = {"dev": [shared], "test": [shared, test_sha], "prod": [prod_sha]}
+        _, pinned, retained, candidates = module.plan_with_policy(
+            images, {images[3]["Id"]}, "example/backend", policy)
+        self.assertEqual(len(pinned), 1)
+        self.assertEqual({image["Id"] for image in retained},
+                         {images[0]["Id"], images[1]["Id"], images[2]["Id"]})
+        self.assertEqual(candidates, [])
+
+    def test_load_policy_rejects_excess_history(self):
+        import json
+        invalid = {"dev": [f"{number:040x}" for number in range(11)],
+                   "test": ["b" * 40], "prod": ["c" * 40]}
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8") as policy_file:
+            json.dump(invalid, policy_file)
+            policy_file.flush()
+            with self.assertRaisesRegex(ValueError, "exceeds limit 10"):
+                module.load_policy(policy_file.name)
+
+    def test_plan_digest_changes_when_candidate_tags_change(self):
+        policy = {"dev": ["a" * 40], "test": ["b" * 40], "prod": ["c" * 40]}
+        candidate = self.image(1, ["example/backend:old"])
+        first = module.plan_digest("example/backend", policy, [], [], [candidate])
+        candidate["RepoTags"].append("example/backend:new")
+        second = module.plan_digest("example/backend", policy, [], [], [candidate])
+        self.assertNotEqual(first, second)
+
+    @mock.patch.object(module, "disk_metrics", return_value={"root_used_percent": 25})
+    @mock.patch.object(module, "referenced_images", return_value=set())
+    @mock.patch.object(module, "inspect_images", return_value=[])
+    @mock.patch.object(module.fcntl, "flock")
+    @mock.patch("builtins.open", mock.mock_open())
+    def test_apply_rejects_stale_plan_digest(self, _flock, _images, _references, _metrics):
+        with mock.patch.object(sys, "argv", [str(SCRIPT), "--apply",
+                                             "--expected-plan-digest", "0" * 64]), \
+             mock.patch.object(module, "remove_candidates") as remove:
+            self.assertEqual(module.main(), 2)
+            remove.assert_not_called()
 
     @mock.patch.object(module, "referenced_images", return_value={"sha256:1"})
     def test_new_reference_skips_removal(self, _references):
@@ -105,8 +154,17 @@ class RetentionTests(unittest.TestCase):
         self.assertLess(workflow.index("Backend health check failed"),
                         workflow.index("- name: Preview backend image retention"))
         self.assertIn('grep -q \'^SUMMARY .*"mode": "preview"\'', workflow)
+        self.assertIn("--policy-file", workflow)
+        self.assertIn("deployments: read", workflow)
         self.assertEqual(workflow.count("recruiterreply-image-prune --repo"), 1)
         self.assertNotIn("recruiterreply-image-prune --apply", workflow)
+
+    def test_manual_apply_requires_confirmation_and_preview_digest(self):
+        workflow = (SCRIPT.parents[1] / ".github/workflows/image-retention.yml").read_text()
+        self.assertIn("DELETE-DEV10-TEST5-PROD4", workflow)
+        self.assertIn("expected_plan_digest", workflow)
+        self.assertIn("--expected-plan-digest", workflow)
+        self.assertIn("--apply", workflow)
 
 
 if __name__ == "__main__":
