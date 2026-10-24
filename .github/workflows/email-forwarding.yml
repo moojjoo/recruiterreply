@@ -126,7 +126,7 @@ jobs:
             echo 'No other resources or DNS changes are permitted. Dev/Test are read-only. Production apply requires a separate protected job approval.'
             echo 'Provider verification and final inbox receipt are separate acceptance gates.'
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: issue-400-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -259,7 +259,7 @@ jobs:
           cat receipt-pending.txt >> "$GITHUB_STEP_SUMMARY"
           echo '::error::PENDING MANUAL VERIFICATION: confirm all three correlation IDs in the destination inbox before declaring #400 accepted.'
           exit 1
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: issue-400-receipts-${{ github.run_id }}
