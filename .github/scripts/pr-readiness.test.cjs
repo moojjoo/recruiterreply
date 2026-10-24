@@ -19,5 +19,14 @@ const pr={draft:false,head:{sha},labels:[{name:'automation-ready'}],body:'## Imp
 test('medium code with complete checks is eligible',()=>assert.equal(validateReadiness({pr,checks,changedFiles:[{filename:'frontend/src/App.tsx',status:'modified'}]}).eligible,true));
 test('high-risk code cannot auto-merge even with labels and checks',()=>assert.equal(validateReadiness({pr,checks,changedFiles:[{filename:'infra/aws/terraform/main.tf',status:'modified'}]}).eligible,false));
 test('missing required check blocks medium PR',()=>assert.equal(validateReadiness({pr,checks:checks.slice(1),changedFiles:['frontend/src/App.tsx']}).eligible,false));
+test('GitHub capitalization of CodeQL checks is accepted',()=>assert.equal(validateReadiness({pr,checks:checks.map(c=>c.name.startsWith('analyze')?{...c,name:c.name.replace(/^analyze/,'Analyze')}:c),changedFiles:['frontend/src/App.tsx']}).eligible,true));
+for (const [label, update] of [
+  ['wrong SHA', c => ({...c,head_sha:'b'.repeat(40)} )],
+  ['failed conclusion', c => ({...c,conclusion:'failure'} )],
+  ['skipped check', c => ({...c,conclusion:'skipped'} )]
+]) {
+  test(`${label} CodeQL check remains blocking`,()=>assert.equal(validateReadiness({pr,checks:checks.map(c=>c.name === 'analyze (csharp)' ? update(c) : c),changedFiles:['frontend/src/App.tsx']}).eligible,false));
+}
+test('absent CodeQL check remains blocking',()=>assert.equal(validateReadiness({pr,checks:checks.filter(c=>c.name !== 'analyze (csharp)'),changedFiles:['frontend/src/App.tsx']}).eligible,false));
 test('changed head SHA blocks stale checks',()=>assert.equal(validateReadiness({pr:{...pr,head:{sha:'b'.repeat(40)}},checks,changedFiles:['frontend/src/App.tsx']}).eligible,false));
 test('unresolved thread blocks',()=>assert.equal(validateReadiness({pr,checks,threads:[{isResolved:false,isOutdated:false}],changedFiles:['frontend/src/App.tsx']}).eligible,false));
