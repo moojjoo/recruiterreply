@@ -15,14 +15,18 @@ public class BillingService : IBillingService
     private readonly ILogger<BillingService> _logger;
     private readonly IStripeClient? _stripeClient;
     private readonly RecruiterReplyDbContext? _dbContext;
+    private readonly string _environmentName;
 
-    public BillingService(IUserRepository userRepository, IConfiguration configuration, ILogger<BillingService> logger, IStripeClient? stripeClient = null, RecruiterReplyDbContext? dbContext = null)
+    public BillingService(IUserRepository userRepository, IConfiguration configuration, ILogger<BillingService> logger, IStripeClient? stripeClient = null, RecruiterReplyDbContext? dbContext = null, IHostEnvironment? environment = null)
     {
         _userRepository = userRepository;
         _configuration = configuration;
         _logger = logger;
         _stripeClient = stripeClient;
         _dbContext = dbContext;
+        _environmentName = environment?.EnvironmentName
+            ?? configuration["ASPNETCORE_ENVIRONMENT"]
+            ?? Environments.Development;
     }
 
     public async Task<string> CreateCheckoutSessionAsync(Guid userId, string tier, CancellationToken cancellationToken = default)
@@ -100,6 +104,11 @@ public class BillingService : IBillingService
         }
 
         var stripeEvent = EventUtility.ConstructEvent(json, stripeSignatureHeader, webhookSecret);
+        var expectedLiveMode = StripeEnvironmentGuard.LoadSettings(_configuration, _environmentName).ExpectedLiveMode;
+        if (stripeEvent.Livemode != expectedLiveMode)
+        {
+            throw new StripeException("Stripe webhook mode does not match the application environment.");
+        }
 
         switch (stripeEvent.Type)
         {

@@ -241,6 +241,12 @@ builder.Services.AddSingleton<IOpenAIService>(sp =>
 // Configure Stripe billing (test-mode key until the account goes live). No-op if unset —
 // billing endpoints will fail at call time rather than at startup, same pattern as OpenAI above.
 Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
+builder.Services.AddHttpClient("StripePreflight", client =>
+{
+    client.BaseAddress = new Uri("https://api.stripe.com");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddSingleton<IStripeEnvironmentGuard, StripeEnvironmentGuard>();
 
 // Add application services
 builder.Services.AddScoped<IAnalysisService, AnalysisService>();
@@ -284,6 +290,8 @@ builder.Services.AddScoped<IGmailSyncService, GmailSyncService>();
 builder.Services.AddHostedService<GmailPollingBackgroundService>();
 
 var app = builder.Build();
+
+await app.Services.GetRequiredService<IStripeEnvironmentGuard>().ValidateAsync();
 
 var shouldAutoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate");
 if (shouldAutoMigrate)

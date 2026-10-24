@@ -118,6 +118,16 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task HandleWebhookAsync_WithWrongLivemode_ThrowsStripeException()
+    {
+        var payload = """{"id":"evt_live","object":"event","request":null,"api_version":"2025-04-30.basil","livemode":true,"type":"some.unhandled.event","data":{"object":{"object":"customer"}}}""";
+        var signature = StripeSignatureHelper.BuildSignatureHeader(payload, WebhookSecret);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<StripeException>(() => sut.HandleWebhookAsync(payload, signature));
+    }
+
+    [Fact]
     public async Task HandleWebhookAsync_WithUnhandledEventType_IsNoOp()
     {
         var payload = """{"id":"evt_1","object":"event","type":"some.unhandled.event","request":null,"api_version":"2025-04-30.basil","data":{"object":{"object":"customer"}}}""";
