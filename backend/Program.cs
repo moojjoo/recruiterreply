@@ -37,7 +37,6 @@ foreach (var envPath in envCandidates.Distinct())
 }
 
 var builder = WebApplication.CreateBuilder(args);
-var legacyAuthEnabled = builder.Configuration.GetValue("LegacyAuth:Enabled", true);
 
 // Load secrets from AWS Secrets Manager when deployed. No-op locally: only runs if
 // Aws:SecretsManager:SecretName (or AWS_SECRETS_MANAGER_SECRET_NAME) is set. Added last so it
@@ -50,6 +49,11 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
     var secretValues = AwsSecretsLoader.FetchFlattenedSecretsAsync(secretsManagerSecretName).GetAwaiter().GetResult();
     builder.Configuration.AddInMemoryCollection(secretValues);
 }
+
+// Resolve feature flags only after deployed Secrets Manager values have been loaded.
+// Otherwise the authentication selector can retain the local fallback even when the
+// authoritative environment secret has retired legacy JWT authentication.
+var legacyAuthEnabled = builder.Configuration.GetValue("LegacyAuth:Enabled", true);
 
 // Add services to the container
 builder.Services.AddControllers();
