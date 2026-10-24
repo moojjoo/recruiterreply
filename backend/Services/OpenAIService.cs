@@ -11,7 +11,9 @@ public class OpenAIService : IOpenAIService
     private readonly HttpClient _httpClient;
     private readonly bool _isConfigured;
     private const string OpenAIBaseUrl = "https://api.openai.com/v1";
-    private const string DefaultModel = "gpt-4-turbo";
+    // Keep the default on a current, broadly available Chat Completions model.
+    // Deployments can override this with OpenAI:Model without changing code.
+    internal const string DefaultModel = "gpt-4.1-mini";
     private const int MaxExtractionBodyChars = 8000;
     private readonly string _model;
 
@@ -197,7 +199,7 @@ Subject: {context.Subject}
     {
         if (!_isConfigured)
         {
-            throw new InvalidOperationException("OpenAI API key is not configured. Set OpenAI:ApiKey or OPENAI_API_KEY and restart the backend.");
+            throw new InvalidOperationException("The AI service is not configured. Please contact support.");
         }
 
         var request = new OpenAIChatRequest
@@ -208,32 +210,44 @@ Subject: {context.Subject}
                 new OpenAIMessage { Role = "user", Content = prompt }
             },
             Temperature = temperature,
-            MaxTokens = 2000
+            MaxCompletionTokens = 2000
         };
 
         var response = await _httpClient.PostAsJsonAsync($"{OpenAIBaseUrl}/chat/completions", request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            var errorBody = await response.Content.ReadAsStringAsync();
-            _logger.LogError("OpenAI request failed with status {StatusCode}: {ErrorBody}", (int)response.StatusCode, errorBody);
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            var providerError = ParseProviderError(errorBody);
+            var requestId = response.Headers.TryGetValues("x-request-id", out var requestIds)
+                ? requestIds.FirstOrDefault()
+                : null;
+            _logger.LogError(
+                "OpenAI request failed with status {StatusCode}, code {ProviderCode}, request {RequestId}",
+                (int)response.StatusCode,
+                providerError.Code ?? "unknown",
+                requestId ?? "unavailable");
 
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
             {
-                throw new InvalidOperationException("OpenAI authentication failed. Verify your API key and project access.");
+                throw new InvalidOperationException("AI service authentication is unavailable. Please contact support.");
             }
 
             if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
             {
-                throw new InvalidOperationException("OpenAI rate limit or quota exceeded. Check usage and billing, then retry.");
+                throw new InvalidOperationException("AI service capacity is temporarily unavailable. Please try again later.");
             }
 
-            if ((int)response.StatusCode == 400 && errorBody.Contains("model", StringComparison.OrdinalIgnoreCase))
+            var isModelError = providerError.Code?.Contains("model", StringComparison.OrdinalIgnoreCase) == true
+                || providerError.Type?.Contains("model", StringComparison.OrdinalIgnoreCase) == true
+                || providerError.Message?.Contains("model", StringComparison.OrdinalIgnoreCase) == true;
+            if (response.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.NotFound
+                && isModelError)
             {
-                throw new InvalidOperationException($"OpenAI model '{_model}' is unavailable for this key/project.");
+                throw new InvalidOperationException("The configured AI model is unavailable. Please contact support.");
             }
 
-            throw new InvalidOperationException("OpenAI request failed. Check API key, model access, and billing status.");
+            throw new InvalidOperationException("The AI service could not complete this request. Please try again later.");
         }
         
         var content = await response.Content.ReadAsStringAsync();
@@ -246,6 +260,38 @@ Subject: {context.Subject}
 
         return result.Choices[0].Message.Content;
     }
+
+    private static OpenAIProviderError ParseProviderError(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("error", out var error))
+            {
+                return new OpenAIProviderError();
+            }
+            if (error.ValueKind != JsonValueKind.Object)
+            {
+                return new OpenAIProviderError();
+            }
+
+            return new OpenAIProviderError
+            {
+                Code = ReadProviderErrorField(error, "code"),
+                Type = ReadProviderErrorField(error, "type"),
+                Message = ReadProviderErrorField(error, "message"),
+            };
+        }
+        catch (JsonException)
+        {
+            return new OpenAIProviderError();
+        }
+    }
+
+    private static string? ReadProviderErrorField(JsonElement error, string name) =>
+        error.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static string BuildAnalysisPrompt(string message, string? companyName, string? jobTitle)
     {
@@ -349,8 +395,8 @@ Consider: salary, benefits, work arrangement, commute, quality of life.";
         [JsonPropertyName("temperature")]
         public double Temperature { get; set; } = 0.7;
 
-        [JsonPropertyName("max_tokens")]
-        public int MaxTokens { get; set; } = 2000;
+        [JsonPropertyName("max_completion_tokens")]
+        public int MaxCompletionTokens { get; set; } = 2000;
     }
 
     private class OpenAIMessage
@@ -372,5 +418,12 @@ Consider: salary, benefits, work arrangement, commute, quality of life.";
     {
         [JsonPropertyName("message")]
         public OpenAIMessage Message { get; set; } = new();
+    }
+
+    private sealed class OpenAIProviderError
+    {
+        public string? Code { get; init; }
+        public string? Type { get; init; }
+        public string? Message { get; init; }
     }
 }
