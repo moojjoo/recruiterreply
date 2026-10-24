@@ -40,7 +40,7 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   if (!dependenciesMerged) reasons.push('Unmerged PR dependency');
   const required = ['verify', 'test', 'analyze (javascript-typescript)', 'analyze (csharp)'];
   for (const name of required) {
-    if (!checks.some(c => c.name === name && c.head_sha === pr.head.sha && c.status === 'completed' && c.conclusion === 'success')) reasons.push('Missing successful current-SHA check: ' + name);
+    if (!checks.some(c => typeof c.name === 'string' && c.name.toLowerCase() === name && c.head_sha === pr.head.sha && c.status === 'completed' && c.conclusion === 'success')) reasons.push('Missing successful current-SHA check: ' + name);
   }
   // Only the latest submitted review by each reviewer counts.
   const latest = new Map();
