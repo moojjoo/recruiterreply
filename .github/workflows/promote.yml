@@ -28,6 +28,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
+  deployments: read
 
 env:
   BACKEND_IMAGE_NAME: recruiterreply-backend
@@ -44,6 +45,22 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Resolve environment image retention policy
+        id: retention-policy
+        uses: actions/github-script@v9
+        env:
+          CURRENT_ENVIRONMENT: ${{ inputs.environment }}
+          CURRENT_SHA: ${{ inputs.sha }}
+        with:
+          script: |
+            const resolvePolicy = require('./.github/scripts/resolve-image-retention-policy.cjs');
+            const policy = await resolvePolicy({
+              github, context, core,
+              currentEnvironment: process.env.CURRENT_ENVIRONMENT,
+              currentSha: process.env.CURRENT_SHA
+            });
+            core.setOutput('policy_b64', Buffer.from(JSON.stringify(policy)).toString('base64'));
 
       - name: Resolve AWS auth inputs
         id: aws-auth
@@ -630,8 +647,7 @@ jobs:
                 "for attempt in $(seq 1 30); do curl -fsS http://127.0.0.1:$HEALTH_PORT/health >/dev/null && break; [ $attempt -eq 30 ] && { echo Backend health check failed; exit 1; }; sleep 2; done",
                 "sudo install -m 0755 \"$DEPLOY_SOURCE_PATH/scripts/recruiterreply-image-prune.py\" /usr/local/sbin/recruiterreply-image-prune",
                 "sudo bash \"$DEPLOY_SOURCE_PATH/scripts/aws/install_postgres_backup_schedule.sh\" \($environment) \($region)",
-                "flock -u 9",
-                "sudo /usr/local/sbin/recruiterreply-image-prune --repo \($ecr_registry)/recruiterreply-backend --keep 10"
+                "flock -u 9"
               ]
             }
           JQ
@@ -685,6 +701,65 @@ jobs:
               exit 1
             fi
             echo "SSM deploy command failed with status: $INVOCATION_STATUS"
+            exit 1
+          fi
+
+      - name: Preview backend image retention
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
+          BACKEND_IMAGE: ${{ steps.verify-backend.outputs.backend_image }}
+          RETENTION_POLICY_B64: ${{ steps.retention-policy.outputs.policy_b64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${EC2_INSTANCE_ID:-}" ]]; then
+            echo "::error::EC2_INSTANCE_ID variable is required"
+            exit 1
+          fi
+
+          ECR_REGISTRY="${BACKEND_IMAGE%%/*}"
+          COMMANDS_JSON=$(jq -n \
+            --arg repo "$ECR_REGISTRY/recruiterreply-backend" \
+            --arg policy_b64 "$RETENTION_POLICY_B64" \
+            '{commands: [
+              "set -eu",
+              "POLICY=$(mktemp /tmp/recruiterreply-image-retention.XXXXXX); trap '\''rm -f -- \"$POLICY\"'\'' EXIT",
+              "printf %s \($policy_b64) | base64 -d > \"$POLICY\"",
+              "sudo /usr/local/sbin/recruiterreply-image-prune --repo \($repo) --policy-file \"$POLICY\""
+            ]}')
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Preview RecruiterReply backend image retention" \
+            --parameters "$COMMANDS_JSON" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          if ! aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"; then
+            echo "::error::Image-retention preview command failed or timed out (command: $COMMAND_ID)"
+          fi
+
+          INVOCATION_JSON=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID")
+          INVOCATION_STATUS=$(jq -r '.Status' <<< "$INVOCATION_JSON")
+          STDOUT_CONTENT=$(jq -r '.StandardOutputContent' <<< "$INVOCATION_JSON")
+          STDERR_CONTENT=$(jq -r '.StandardErrorContent' <<< "$INVOCATION_JSON")
+
+          echo "$STDOUT_CONTENT"
+          if [[ -n "$STDERR_CONTENT" && "$STDERR_CONTENT" != "null" ]]; then
+            echo "$STDERR_CONTENT"
+          fi
+
+          if [[ "$INVOCATION_STATUS" != "Success" ]]; then
+            echo "::error::Image-retention preview failed with status $INVOCATION_STATUS (command: $COMMAND_ID)"
+            exit 1
+          fi
+          if ! grep -q '^SUMMARY .*"mode": "preview"' <<< "$STDOUT_CONTENT"; then
+            echo "::error::Image-retention preview did not emit its structured preview summary"
             exit 1
           fi
 

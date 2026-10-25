@@ -37,7 +37,6 @@ foreach (var envPath in envCandidates.Distinct())
 }
 
 var builder = WebApplication.CreateBuilder(args);
-var legacyAuthEnabled = builder.Configuration.GetValue("LegacyAuth:Enabled", true);
 
 // Load secrets from AWS Secrets Manager when deployed. No-op locally: only runs if
 // Aws:SecretsManager:SecretName (or AWS_SECRETS_MANAGER_SECRET_NAME) is set. Added last so it
@@ -50,6 +49,20 @@ if (!string.IsNullOrWhiteSpace(secretsManagerSecretName))
     var secretValues = AwsSecretsLoader.FetchFlattenedSecretsAsync(secretsManagerSecretName).GetAwaiter().GetResult();
     builder.Configuration.AddInMemoryCollection(secretValues);
 }
+
+// Legacy auth is a deployment mode, not a secret. Apply an explicit deployment
+// setting after Secrets Manager so a stale non-secret value in the secret document
+// cannot silently override the environment's approved authentication mode.
+DeploymentConfigurationOverrides.ApplyLegacyAuth(
+    builder.Configuration,
+    Environment.GetEnvironmentVariable("LEGACY_AUTH_ENABLED"));
+
+// Email/password and legacy Google authentication remain supported by default
+// in every environment. An environment may still explicitly opt into the
+// Cognito-only BFF path by setting LegacyAuth:Enabled to false.
+const bool legacyAuthEnabledByDefault = true;
+var legacyAuthEnabled = builder.Configuration.GetValue(
+    "LegacyAuth:Enabled", legacyAuthEnabledByDefault);
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -194,26 +207,9 @@ builder.Services.AddSwaggerGen();
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-        ?? ["http://localhost:3000", "http://localhost:5173"];
-
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        if (builder.Environment.IsDevelopment())
-        {
-            // Vite may bind a different port or be opened via 127.0.0.1.
-            // Configured origins still apply: the hosted dev env runs as Development.
-            policy.SetIsOriginAllowed(origin =>
-                allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase)
-                || (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback));
-        }
-        else
-        {
-            policy.WithOrigins(allowedOrigins);
-        }
-
-        policy.AllowAnyMethod().AllowAnyHeader();
-    });
+    options.AddPolicy(
+        "AllowFrontend",
+        FrontendCorsPolicy.Create(builder.Configuration, builder.Environment.IsDevelopment()));
 });
 
 // Add PostgreSQL DbContext
@@ -238,8 +234,9 @@ if (string.IsNullOrWhiteSpace(openAiKey))
 {
     openAiKey = "sk-proj-NOT_CONFIGURED";
 }
+var openAiModel = builder.Configuration["OpenAI:Model"];
 builder.Services.AddSingleton<IOpenAIService>(sp =>
-    new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>(), model: builder.Configuration["OpenAI:Model"]));
+    new OpenAIService(openAiKey, sp.GetRequiredService<ILogger<OpenAIService>>(), model: openAiModel));
 
 // Configure Stripe billing (test-mode key until the account goes live). No-op if unset —
 // billing endpoints will fail at call time rather than at startup, same pattern as OpenAI above.
@@ -371,6 +368,7 @@ Func<IResult> healthApisHandler = () =>
         services = new
         {
             openAiConfigured = hasOpenAiKey,
+            openAiModel = string.IsNullOrWhiteSpace(openAiModel) ? OpenAIService.DefaultModel : openAiModel,
             analysisApi = true,
             replyApi = true,
             comparisonApi = true

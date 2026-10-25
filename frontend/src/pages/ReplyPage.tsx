@@ -1,3 +1,4 @@
+import { useResultReveal } from "../hooks/useResultReveal";
 import { trackProductEvent } from "../utils/productAnalytics";
 import React, { useState } from "react";
 import { ReplyGenerator } from "../components/ReplyGenerator";
@@ -7,6 +8,8 @@ import { MainLayout } from "../components/layout/MainLayout";
 import { ToolNavigation } from "../components/ToolNavigation";
 
 export const ReplyPage: React.FC = () => {
+  const [revision, setRevision] = useState(0);
+  const resultHeadingRef = useResultReveal(revision);
   const [result, setResult] = useState<GenerateReplyResponse | null>(null);
 
   return (
@@ -28,7 +31,7 @@ export const ReplyPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Form */}
             <div className="lg:col-span-2">
-              <ReplyGenerator onResult={(res) => { setResult(res); trackProductEvent("reply_generated", { feature: "generate" }); }} />
+              <ReplyGenerator onResult={(res) => { setResult(res); setRevision((previous) => previous + 1); trackProductEvent("reply_generated", { feature: "generate" }); }} />
             </div>
 
             {/* Info Sidebar */}
@@ -60,7 +63,14 @@ export const ReplyPage: React.FC = () => {
 
           {/* Results */}
           {result && (
-            <div className="mt-12">
+            <div className="mt-12 tool-results" role="region" aria-label="Generated results">
+              <h2
+                ref={resultHeadingRef}
+                tabIndex={-1}
+                className="sr-only tool-results-heading"
+              >
+                Results
+              </h2>
               <ReplyResult result={result} />
             </div>
           )}

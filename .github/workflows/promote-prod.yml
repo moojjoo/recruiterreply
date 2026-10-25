@@ -2,6 +2,11 @@ name: Promote to Prod
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full SHA of the successful Test deployment approved for Production
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -18,10 +23,17 @@ jobs:
       - name: Select latest successful test deployment
         id: release
         uses: actions/github-script@v9
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         with:
           script: |
             const {owner, repo} = context.repo;
             const environment = 'test';
+            const expectedSha = process.env.EXPECTED_SHA;
+            if (!/^[a-f0-9]{40}$/.test(expectedSha)) {
+              core.setFailed('expected_sha must be a full lowercase commit SHA.');
+              return;
+            }
             const deployments = await github.paginate(github.rest.repos.listDeployments, {
               owner, repo, environment, per_page: 100
             });
@@ -33,6 +45,10 @@ jobs:
               // Only the latest status is authoritative; never select an older success
               // if the same deployment was subsequently marked failed/inactive.
               if (statuses[0]?.state !== 'success') continue;
+              if (deployment.sha !== expectedSha) {
+                core.setFailed(`Release race: latest successful ${environment} deployment is ${deployment.sha}, but ${expectedSha} was approved. Re-verify before promoting.`);
+                return;
+              }
               core.info(`Selected ${environment} deployment ${deployment.id} SHA ${deployment.sha}`);
               core.setOutput('sha', deployment.sha);
               return;
