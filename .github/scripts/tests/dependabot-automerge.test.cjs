@@ -52,3 +52,15 @@ test('trusted Dependabot metadata does not bypass required checks', () => {
   assert.equal(result.eligible, false);
   assert.match(result.reasons.join('; '), /Missing successful current-SHA check/);
 });
+
+test('frontend-only trusted Dependabot update does not require skipped C# CodeQL', () => {
+  const pr = {...base, head: {...base.head, sha: 'frontend-sha'}};
+  const checks = [
+    {name: 'verify', head_sha: 'frontend-sha', status: 'completed', conclusion: 'success'},
+    {name: 'test', head_sha: 'frontend-sha', status: 'completed', conclusion: 'success'},
+    {name: 'CodeQL required gate', head_sha: 'frontend-sha', status: 'completed', conclusion: 'success'},
+    {name: 'Analyze (javascript-typescript)', head_sha: 'frontend-sha', status: 'completed', conclusion: 'success'},
+  ];
+  const result = validateReadiness({pr, checks, changedFiles: files, trustedDependabotUpdate: true});
+  assert.equal(result.eligible, true);
+});

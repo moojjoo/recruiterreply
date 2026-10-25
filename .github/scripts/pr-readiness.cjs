@@ -87,6 +87,30 @@ function classifyDependabotUpdate(pr, changedFiles = []) {
   return {eligible: true, ecosystem, updateType, reason: 'Trusted patch/minor Dependabot update'};
 }
 
+function requiredCodeQLChecks(changedFiles = []) {
+  const files = Array.isArray(changedFiles) ? changedFiles : [];
+  if (!files.length) return ['analyze (javascript-typescript)', 'analyze (csharp)'];
+
+  let frontend = false;
+  let backend = false;
+  let shared = false;
+  for (const item of files) {
+    const filename = typeof item === 'string' ? item : item?.filename;
+    const previous = typeof item === 'object' && item ? item.previous_filename : undefined;
+    const names = [filename, previous].filter(Boolean);
+    if (!names.length) return ['analyze (javascript-typescript)', 'analyze (csharp)'];
+    for (const name of names) {
+      if (/^frontend\//.test(name)) frontend = true;
+      else if (/^backend\//.test(name)) backend = true;
+      else shared = true;
+    }
+  }
+
+  if (!shared && frontend && !backend) return ['analyze (javascript-typescript)'];
+  if (!shared && backend && !frontend) return ['analyze (csharp)'];
+  return ['analyze (javascript-typescript)', 'analyze (csharp)'];
+}
+
 function validateReadiness({pr, checks = [], reviews = [], threads = [], dependenciesMerged = true, changedFiles = [], trustedDependabotUpdate = false}) {
   const reasons = [];
   if (pr.draft) reasons.push('PR is draft');
@@ -101,7 +125,7 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   if (!trustedDependabotUpdate && !lines.length) reasons.push('No acceptance criteria checklist');
   if (!trustedDependabotUpdate && lines.some(x => !/^\s*[-*]\s*\[[xX]\]/.test(x))) reasons.push('Unchecked acceptance criteria');
   if (!dependenciesMerged) reasons.push('Unmerged PR dependency');
-  const required = ['verify', 'test', 'analyze (javascript-typescript)', 'analyze (csharp)'];
+  const required = ['verify', 'test', 'codeql required gate', ...requiredCodeQLChecks(changedFiles)];
   for (const name of required) {
     if (!checks.some(c => typeof c.name === 'string' && c.name.toLowerCase() === name && c.head_sha === pr.head.sha && c.status === 'completed' && c.conclusion === 'success')) reasons.push('Missing successful current-SHA check: ' + name);
   }
@@ -112,4 +136,4 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   if (threads.some(t => !t.isResolved && !t.isOutdated)) reasons.push('Unresolved review thread');
   return {eligible: reasons.length === 0, risk, reasons};
 }
-module.exports = {validateReadiness,classifyRisk,classifyDependabotUpdate};
+module.exports = {validateReadiness,classifyRisk,classifyDependabotUpdate,requiredCodeQLChecks};
