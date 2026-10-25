@@ -26,7 +26,7 @@ public class ErrorHandlingMiddleware
                 ex,
                 "Request validation failed eventName={EventName} path={Path} traceId={TraceId}",
                 "RequestValidationFailed",
-                context.Request.Path.ToString(), Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
+                context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""), Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
             await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "Invalid request.");
         }
         catch (Exception ex)
@@ -35,7 +35,7 @@ public class ErrorHandlingMiddleware
                 ex,
                 "Unhandled request exception eventName={EventName} path={Path} traceId={TraceId}",
                 "UnhandledRequestException",
-                context.Request.Path.ToString(), Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
+                context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""), Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
             await WriteErrorAsync(context, StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
         }
     }
