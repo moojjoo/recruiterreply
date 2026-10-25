@@ -16,6 +16,16 @@ variable "tags" {
   default     = {}
 }
 
+variable "cloudwatch_budget_notification_email" {
+  description = "Owner-approved email that must confirm AWS Budgets notifications."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.cloudwatch_budget_notification_email))
+    error_message = "Provide a valid owner-approved budget notification email address."
+  }
+}
+
 variable "github_repo" {
   description = "GitHub repo allowed to assume the deploy role, as \"owner/repo\"."
   type        = string

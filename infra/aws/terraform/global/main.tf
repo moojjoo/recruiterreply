@@ -1,5 +1,34 @@
 data "aws_caller_identity" "current" {}
 
+resource "aws_budgets_budget" "cloudwatch_observability" {
+  name         = "${var.app_name}-cloudwatch-observability"
+  budget_type  = "COST"
+  limit_amount = "10"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  cost_filter {
+    name   = "Service"
+    values = ["AmazonCloudWatch"]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.cloudwatch_budget_notification_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.cloudwatch_budget_notification_email]
+  }
+}
+
 module "bff_sessions" {
   count = var.create_bff_session_infrastructure ? 1 : 0
 
