@@ -79,14 +79,39 @@ public class BillingServiceTests
     }
 
     [Fact]
-    public async Task UpgradeToRecruiterProAsync_WithoutSubscription_Throws()
+    public async Task UpgradeToRecruiterProAsync_WithoutSubscription_StartsRecruiterProCheckout()
     {
         var user = BuildUser(stripeCustomerId: "cus_existing");
         user.SubscriptionTier = PlanTiers.Professional;
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
-        var sut = CreateSut();
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(
+                It.IsAny<HttpMethod>(),
+                It.IsAny<string>(),
+                It.Is<BaseOptions>(options =>
+                    options is Stripe.Checkout.SessionCreateOptions sessionOptions
+                    && sessionOptions.Customer == "cus_existing"
+                    && sessionOptions.LineItems.Single().Price == "price_recruiterpro_test"),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Stripe.Checkout.Session
+            {
+                Url = "https://checkout.stripe.com/pay/cs_recovery",
+            });
+        var sut = CreateSut(stripeClient: stripeClient.Object);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.UpgradeToRecruiterProAsync(user.Id));
+        var checkoutUrl = await sut.UpgradeToRecruiterProAsync(user.Id);
+
+        Assert.Equal("https://checkout.stripe.com/pay/cs_recovery", checkoutUrl);
+        stripeClient.Verify(
+            c => c.RequestAsync<Subscription>(
+                It.IsAny<HttpMethod>(),
+                It.IsAny<string>(),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
