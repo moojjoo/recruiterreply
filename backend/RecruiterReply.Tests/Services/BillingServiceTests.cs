@@ -86,6 +86,14 @@ public class BillingServiceTests
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         var stripeClient = new Mock<IStripeClient>();
         stripeClient
+            .Setup(c => c.RequestAsync<Customer>(
+                HttpMethod.Get,
+                It.IsAny<string>(),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_existing" });
+        stripeClient
             .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(
                 It.IsAny<HttpMethod>(),
                 It.IsAny<string>(),
@@ -487,12 +495,15 @@ public class BillingServiceTests
     }
 
     [Fact]
-    public async Task CreateCheckoutSessionAsync_WithExistingCustomer_DoesNotCreateANewStripeCustomer()
+    public async Task CreateCheckoutSessionAsync_WithExistingCustomer_ValidatesAndReusesCustomer()
     {
         var user = BuildUser(stripeCustomerId: "cus_existing");
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_existing" });
         stripeClient
             .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Stripe.Checkout.Session { Url = "https://checkout.stripe.com/pay/cs_test_456" });
@@ -502,9 +513,38 @@ public class BillingServiceTests
         await sut.CreateCheckoutSessionAsync(user.Id, PlanTiers.RecruiterPro);
 
         stripeClient.Verify(
-            c => c.RequestAsync<Customer>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()),
+            c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        stripeClient.Verify(
+            c => c.RequestAsync<Customer>(HttpMethod.Post, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _userRepository.Verify(r => r.UpdateAsync(It.IsAny<UserEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_WithStaleCustomer_CreatesReplacementAndStartsCheckout()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_stale");
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new StripeException("No such customer: 'cus_stale'"));
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Post, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_replacement" });
+        stripeClient
+            .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Stripe.Checkout.Session { Url = "https://checkout.stripe.com/pay/cs_recovered" });
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        var url = await sut.CreateCheckoutSessionAsync(user.Id, PlanTiers.Professional);
+
+        Assert.Equal("https://checkout.stripe.com/pay/cs_recovered", url);
+        Assert.Equal("cus_replacement", user.StripeCustomerId);
+        _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
