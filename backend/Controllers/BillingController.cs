@@ -105,6 +105,26 @@ public class BillingController : ControllerBase
         }
     }
 
+    [HttpPost("cancel-subscription")]
+    public async Task<IActionResult> CancelSubscription(CancellationToken ct)
+    {
+        try
+        {
+            var userId = User.GetRequiredUserId();
+            await _billingService.CancelSubscriptionAsync(userId, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling Stripe subscription");
+            return StatusCode(500, new { error = "An error occurred while cancelling the subscription" });
+        }
+    }
+
     [HttpGet("usage")]
     public async Task<IActionResult> GetUsage(CancellationToken ct)
     {

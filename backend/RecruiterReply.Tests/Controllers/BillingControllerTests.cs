@@ -115,6 +115,26 @@ public class BillingControllerTests
     }
 
     [Fact]
+    public async Task CancelSubscription_OnSuccess_Returns204()
+    {
+        var result = await _sut.CancelSubscription(CancellationToken.None);
+
+        _billingService.Verify(s => s.CancelSubscriptionAsync(_userId, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public async Task CancelSubscription_OnInvalidOperationException_Returns400()
+    {
+        _billingService.Setup(s => s.CancelSubscriptionAsync(_userId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("no active subscription"));
+
+        var result = await _sut.CancelSubscription(CancellationToken.None);
+
+        Assert.Equal(400, Assert.IsType<BadRequestObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
     public async Task GetUsage_ReturnsUsageStatusFromService()
     {
         var status = new UsageStatusResponse { SubscriptionTier = PlanTiers.Free };

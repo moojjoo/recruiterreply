@@ -16,5 +16,8 @@ export const billingService = {
   createPortalSession: () =>
     apiClient.post<{ url: string }>("/billing/portal-session"),
 
+  cancelSubscription: () =>
+    apiClient.post("/billing/cancel-subscription"),
+
   getUsage: () => apiClient.get<UsageStatus>("/billing/usage"),
 };

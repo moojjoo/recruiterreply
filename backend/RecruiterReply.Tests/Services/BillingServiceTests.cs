@@ -524,4 +524,40 @@ public class BillingServiceTests
 
         Assert.Equal("https://billing.stripe.com/session/bps_test_123", url);
     }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_UpdatesStripeSubscriptionToCancelAtPeriodEnd()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Subscription>(
+                It.IsAny<HttpMethod>(),
+                It.Is<string>(path => path.Contains("sub_existing")),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Subscription
+            {
+                Id = "sub_existing",
+                Status = "active",
+                CancelAtPeriodEnd = true,
+                Items = new StripeList<SubscriptionItem>
+                {
+                    Data = [new SubscriptionItem { CurrentPeriodEnd = new DateTime(2027, 2, 1, 0, 0, 0, DateTimeKind.Utc) }],
+                },
+            });
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        await sut.CancelSubscriptionAsync(user.Id);
+
+        Assert.True(user.SubscriptionCancelAtPeriodEnd);
+        Assert.Equal(new DateTime(2027, 2, 1, 0, 0, 0, DateTimeKind.Utc), user.SubscriptionCurrentPeriodEnd);
+        _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

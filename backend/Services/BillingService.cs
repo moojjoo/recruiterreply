@@ -177,6 +177,35 @@ public class BillingService : IBillingService
         return session.Url;
     }
 
+    public async Task CancelSubscriptionAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
+        {
+            throw new InvalidOperationException("No active subscription found.");
+        }
+
+        if (user.SubscriptionCancelAtPeriodEnd)
+        {
+            return;
+        }
+
+        var subscriptionService = _stripeClient is null
+            ? new SubscriptionService()
+            : new SubscriptionService(_stripeClient);
+        var subscription = await subscriptionService.UpdateAsync(
+            user.StripeSubscriptionId,
+            new SubscriptionUpdateOptions { CancelAtPeriodEnd = true },
+            cancellationToken: cancellationToken);
+
+        user.SubscriptionStatus = subscription.Status;
+        user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
+        user.SubscriptionCancelAtPeriodEnd = subscription.CancelAtPeriodEnd;
+        await _userRepository.UpdateAsync(user, cancellationToken);
+    }
+
     public async Task HandleWebhookAsync(string json, string stripeSignatureHeader, CancellationToken cancellationToken = default)
     {
         var webhookSecret = _configuration["Stripe:WebhookSecret"];
