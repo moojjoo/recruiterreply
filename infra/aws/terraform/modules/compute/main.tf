@@ -76,6 +76,21 @@ resource "aws_iam_role_policy" "container_logs" {
   })
 }
 
+resource "aws_iam_role_policy" "private_api_origin_signing" {
+  count = var.private_api_origin_signing_secret_arn != null ? 1 : 0
+  name  = "${var.name_prefix}-private-api-origin-signing"
+  role  = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+      Resource = var.private_api_origin_signing_secret_arn
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "bff_runtime" {
   count = var.bff_session_table_arn != null && var.bff_session_kms_key_arn != null && var.backend_secret_arn != null ? 1 : 0
   name  = "${var.name_prefix}-bff-runtime"
