@@ -18,30 +18,44 @@ environment — never rebuilding. That's done via `.github/workflows/promote.yml
 
 ## Steps
 
-1. Determine which SHA to promote. Usually this is the current tip of `main`:
-   `git rev-parse origin/main`. If the user names a specific commit or a past SHA,
-   use that instead.
-2. Confirm that SHA was actually built: check for a successful "Build (Dev)" run
-   at that commit — `gh run list --workflow=build.yml --branch=main --limit=5`.
-   If there's no successful build for it, say so and stop; don't guess.
-3. To promote to test:
-   `gh workflow run promote-test.yml --ref main -f sha=<sha>`
-   (`--ref main` is required — that's the branch these workflow files live on).
-4. Report back what's happening and where to watch it (`gh run watch` or the
-   Actions tab). **Do not also run promote-prod.yml in the same turn** — prod
-   promotion is a separate, deliberate action after the user has verified test.
-5. Only once the user explicitly confirms test looks right ("looks good", "ship
-   it", "promote to prod") do you run:
-   `gh workflow run promote-prod.yml --ref main -f sha=<same sha>`
-   Always state clearly that this deploys production, and wait for that
-   confirmation in the same turn — the phrase "promote to test" alone does not
-   imply "and then prod."
+1. Refresh `origin/main`, then inspect the latest successful deployment in the
+   source environment. Test resolves from `dev`; production resolves from `test`.
+   Use the latest status for each deployment as authoritative, exactly as the
+   workflow does. Ignore a deployment whose latest status is not `success`.
+2. Record the expected 40-character deployment SHA. Confirm a completed,
+   successful "Build (Dev)" run exists for that exact SHA and report both the SHA
+   and build URL. If the source deployment or matching build is missing, stop;
+   do not dispatch or guess.
+3. To promote to test, run:
+   `gh workflow run promote-test.yml --ref main -f expected_sha=<expected-sha>`
+   The required guard input must be the SHA verified in step 2. The workflow
+   resolves the latest successful Dev deployment itself and fails before promotion
+   if it differs from `expected_sha`. `--ref main` selects the branch containing
+   the workflow; it does not select the promoted artifact SHA.
+4. Retrieve the new promotion run and verify its source resolution before treating
+   it as successful. After completion, confirm the new successful `test`
+   deployment records the expected SHA. A different SHA is a release race: report
+   it clearly and do not claim the expected release was promoted.
+5. Report the run URL and final result. **Do not also run promote-prod.yml in the
+   same turn** — production is a separate, deliberate action after the user has
+   verified Test.
+6. Only once the user explicitly confirms Test looks right ("looks good", "ship
+   it", "promote to prod") repeat steps 1 and 2 with `test` as the source, state
+   clearly that the next action deploys Production, and run:
+   `gh workflow run promote-prod.yml --ref main -f expected_sha=<expected-sha>`
+   Approve the protected `prod` environment only when the authenticated owner can
+   approve and the same explicit Production authorization covers the pending run.
+   After completion, confirm the new successful `prod` deployment records the
+   expected Test SHA.
 
 ## Notes
 
-- There's no PR, no branch merge, no new commit involved in promotion — the `sha`
-  input is the entire mechanism. Promoting the same SHA to test twice, or to test
-  then prod, re-runs the exact same artifacts; it does not rebuild anything.
+- There is no PR, branch merge, or new commit involved in promotion. The required
+  `expected_sha` input is a fail-closed race guard, not an override: the wrapper
+  workflow selects the latest successful deployment from the preceding environment
+  and proceeds only when its SHA exactly matches the approved expectation.
+- Promoting the same SHA to Test twice, or to Test then Production, reuses the
+  exact same artifacts; it does not rebuild anything.
 - `promote.yml` refuses to run if the ECR image or the S3 frontend artifact for
   that SHA doesn't exist — that failure means the SHA was never built (or was
   built before this artifact-promotion pipeline existed).

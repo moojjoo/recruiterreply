@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { AxiosError } from "axios";
 import { replyService, isQuotaExceededError } from "../services/api";
 import { GenerateReplyResponse } from "../types/index";
+import { useResultReveal } from "../hooks/useResultReveal";
 
 interface ReplyGeneratorProps {
   onResult: (result: GenerateReplyResponse) => void;
@@ -44,6 +45,13 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [errorRevision, setErrorRevision] = useState(0);
+  const errorRef = useResultReveal<HTMLDivElement>(errorRevision);
+
+  const showError = (message: string) => {
+    setError(message);
+    setErrorRevision((previous) => previous + 1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +59,7 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
     setQuotaExceeded(false);
 
     if (!message.trim()) {
-      setError("Please paste the recruiter message");
+      showError("Please paste the recruiter message");
       return;
     }
 
@@ -68,11 +76,11 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
     } catch (err) {
       if (isQuotaExceededError(err)) {
         setQuotaExceeded(true);
-        setError("You've reached your plan's monthly limit for reply generation.");
+        showError("You've reached your plan's monthly limit for reply generation.");
       } else {
         const message =
           err instanceof AxiosError ? err.response?.data?.error : undefined;
-        setError(message || "Failed to generate reply. Check your OpenAI API key.");
+        showError(message || "Failed to generate reply. Check your OpenAI API key.");
       }
     } finally {
       setLoading(false);
@@ -91,7 +99,9 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
           {replyTypes.map((type) => (
             <label
               key={type.value}
-              className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-accent-300 hover:bg-accent-50 transition-all"
+              className={`reply-option flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-accent-300 hover:bg-accent-50 transition-all${
+                replyType === type.value ? " reply-option-selected" : ""
+              }${loading ? " reply-option-disabled" : ""}`}
             >
               <input
                 type="radio"
@@ -172,7 +182,7 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
       </div>
 
       {error && (
-        <div className="alert alert-error mb-6" role="alert">
+        <div ref={errorRef} tabIndex={-1} className="alert alert-error mb-6 tool-results-heading" role="alert">
           <span>⚠️</span>
           <span>{error}</span>
           {quotaExceeded && (

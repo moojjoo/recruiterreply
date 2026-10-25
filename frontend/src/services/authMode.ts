@@ -1,10 +1,12 @@
 const configuredAuthMode = import.meta.env.VITE_AUTH_MODE;
-
 /**
- * Cookie mode is opt-in until the production BFF session endpoints are live.
- * The default preserves the legacy compatibility flow during migration.
+ * Keep email/password and legacy Google authentication available by default
+ * in every environment. The Cognito BFF remains available through the explicit
+ * VITE_AUTH_MODE=cookie switch.
  */
-export const isCookieAuthEnabled = (): boolean => configuredAuthMode === "cookie";
+export const isCookieAuthEnabled = (): boolean => {
+  return configuredAuthMode === "cookie";
+};
 
 export const clearLegacyAuthState = (): void => {
   if (typeof window === "undefined") return;

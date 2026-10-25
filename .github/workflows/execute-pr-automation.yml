@@ -55,6 +55,14 @@ jobs:
                   core.notice('PR #' + full.number + ': added guarded issue link for #' + linkedIssue);
                 }
               }
+              const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
+              const {classifyDependabotUpdate} = require('./.github/scripts/pr-readiness.cjs');
+              const dependabot = classifyDependabotUpdate(full, changedFiles);
+              const trustedDependabotUpdate = dependabot.eligible;
+              if (!labeled && !managed && !trustedDependabotUpdate) {
+                core.notice('PR #' + full.number + ': not an execute-dev PR or eligible Dependabot update (' + dependabot.reason + ')');
+                continue;
+              }
               const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
               const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
               const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
@@ -68,20 +76,19 @@ jobs:
                 const {data: dep} = await github.rest.pulls.get({owner, repo, pull_number:number});
                 if (!dep.merged) dependenciesMerged = false;
               }
-              const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
               const risk = classifyRisk(changedFiles);
               // A label must never lower the risk tier or bypass required checks.
               // Trusted automation may label only low/medium PRs with a complete evidence checklist.
               const hasEvidence = /^## Implementation evidence\\s*\\n[\\s\\S]*?\\b(?:commit|test|verification|workflow)\\b/im.test(full.body || '');
               const hasCompleteCriteria = /^## Acceptance criteria\\s*\\n(?:[\\s\\S]*?\\n)?\\s*[-*]\\s*\\[[xX]\\]/im.test(full.body || '') && !/^\\s*[-*]\\s*\\[ \\]/m.test(full.body || '');
-              if (risk !== 'high' && hasEvidence && hasCompleteCriteria && !full.labels.some(l => l.name === 'automation-ready')) {
+              if ((trustedDependabotUpdate || (risk !== 'high' && hasEvidence && hasCompleteCriteria)) && !full.labels.some(l => l.name === 'automation-ready')) {
                 await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['automation-ready']});
                 full.labels.push({name: 'automation-ready'});
               }
               const result = validateReadiness({
                 pr:full, checks:checkResponse.check_runs, reviews,
                 changedFiles,
-                threads:item.reviewThreads.nodes, dependenciesMerged
+                threads:item.reviewThreads.nodes, dependenciesMerged, trustedDependabotUpdate
               });
               if (!result.eligible) {
                 const remediation = require('./.github/scripts/ci-remediation-comment.cjs');
