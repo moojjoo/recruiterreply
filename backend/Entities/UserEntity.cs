@@ -20,4 +20,5 @@ public class UserEntity
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
     public DateTime? SubscriptionCurrentPeriodEnd { get; set; }
+    public Guid? SubscriptionCancellationEventId { get; set; }
 }

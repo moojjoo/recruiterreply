@@ -3,6 +3,7 @@ import { AxiosError } from "axios";
 import { comparisonService, isQuotaExceededError } from "../services/api";
 import { CompareOffersResponse, JobOffer } from "../types/index";
 import { useResultReveal } from "../hooks/useResultReveal";
+import { trackProductEvent } from "../utils/productAnalytics";
 
 interface ComparisonToolProps {
   onResult: (result: CompareOffersResponse) => void;
@@ -72,9 +73,11 @@ export const ComparisonTool: React.FC<ComparisonToolProps> = ({ onResult }) => {
       onResult(result);
     } catch (err) {
       if (isQuotaExceededError(err)) {
+        trackProductEvent("feature_error", { feature: "compare", error_code: "quota_exceeded" });
         setQuotaExceeded(true);
         showError("You've reached your plan's monthly limit for offer comparisons.");
       } else {
+        trackProductEvent("feature_error", { feature: "compare", error_code: "request_failed" });
         const message =
           err instanceof AxiosError ? err.response?.data?.error : undefined;
         showError(message || "Failed to compare offers. Check your OpenAI API key.");

@@ -7,6 +7,8 @@ export type ProductEventMap = {
   offer_compared: { feature: "compare" };
   pricing_viewed: undefined;
   begin_checkout: { plan_tier: "professional" | "recruiter_pro" };
+  feature_error: { feature: "analyze" | "generate" | "compare"; error_code: "quota_exceeded" | "request_failed" };
+  subscription_cancelled: { plan_tier: "professional" | "recruiter_pro" };
   page_view: { page_path: string; page_title: string };
 };
 export type ProductEvent = keyof ProductEventMap;
@@ -47,4 +49,12 @@ export function trackPageView(pathname: string, title: string): void {
   } catch {
     // Analytics must never interrupt navigation.
   }
+}
+
+export function trackSubscriptionCancelled(eventId: string, planTier: "professional" | "recruiter_pro"): void {
+  if (typeof sessionStorage === "undefined" || !eventId) return;
+  const key = `rr-analytics-subscription-cancelled-${eventId}`;
+  if (sessionStorage.getItem(key) === "1") return;
+  sessionStorage.setItem(key, "1");
+  trackProductEvent("subscription_cancelled", { plan_tier: planTier });
 }

@@ -3,6 +3,7 @@ import { AxiosError } from "axios";
 import { replyService, isQuotaExceededError } from "../services/api";
 import { GenerateReplyResponse } from "../types/index";
 import { useResultReveal } from "../hooks/useResultReveal";
+import { trackProductEvent } from "../utils/productAnalytics";
 
 interface ReplyGeneratorProps {
   onResult: (result: GenerateReplyResponse) => void;
@@ -75,9 +76,11 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
       onResult(result);
     } catch (err) {
       if (isQuotaExceededError(err)) {
+        trackProductEvent("feature_error", { feature: "generate", error_code: "quota_exceeded" });
         setQuotaExceeded(true);
         showError("You've reached your plan's monthly limit for reply generation.");
       } else {
+        trackProductEvent("feature_error", { feature: "generate", error_code: "request_failed" });
         const message =
           err instanceof AxiosError ? err.response?.data?.error : undefined;
         showError(message || "Failed to generate reply. Check your OpenAI API key.");

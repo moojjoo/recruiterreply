@@ -3,6 +3,8 @@ using RecruiterReply.Data;
 using RecruiterReply.Models;
 using RecruiterReply.Repositories;
 using Stripe;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace RecruiterReply.Services;
 
@@ -180,6 +182,7 @@ public class BillingService : IBillingService
         user.StripeCustomerId = session.CustomerId;
         user.StripeSubscriptionId = session.SubscriptionId;
         user.SubscriptionTier = tier;
+        user.SubscriptionCancellationEventId = null;
 
         if (!string.IsNullOrWhiteSpace(session.SubscriptionId))
         {
@@ -215,6 +218,10 @@ public class BillingService : IBillingService
         {
             user.SubscriptionTier = tier;
         }
+        if (subscription.Status is not "canceled" and not "incomplete_expired")
+        {
+            user.SubscriptionCancellationEventId = null;
+        }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
     }
@@ -236,12 +243,23 @@ public class BillingService : IBillingService
             return;
         }
 
+        var wasActive = user.SubscriptionTier != PlanTiers.Free || user.SubscriptionStatus != "canceled";
         user.SubscriptionTier = PlanTiers.Free;
         user.SubscriptionStatus = "canceled";
         user.StripeSubscriptionId = null;
         user.SubscriptionCurrentPeriodEnd = null;
+        if (wasActive)
+        {
+            user.SubscriptionCancellationEventId = ToOpaqueEventId(stripeEvent.Id);
+        }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
+    }
+
+    private static Guid ToOpaqueEventId(string eventId)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(eventId));
+        return new Guid(bytes[..16]);
     }
 
     private string? ResolveTierFromPriceId(string? priceId)

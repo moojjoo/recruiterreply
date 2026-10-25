@@ -81,5 +81,6 @@ public class UsageStatusResponse
     public string SubscriptionTier { get; set; } = string.Empty;
     public string? SubscriptionStatus { get; set; }
     public DateTime? SubscriptionCurrentPeriodEnd { get; set; }
+    public Guid? SubscriptionCancellationEventId { get; set; }
     public List<FeatureUsageStatus> Usage { get; set; } = new();
 }

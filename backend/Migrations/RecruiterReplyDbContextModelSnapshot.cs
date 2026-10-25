@@ -1031,6 +1031,10 @@ namespace RecruiterReply.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("subscription_current_period_end");
 
+                    b.Property<Guid?>("SubscriptionCancellationEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subscription_cancellation_event_id");
+
                     b.Property<string>("SubscriptionStatus")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")

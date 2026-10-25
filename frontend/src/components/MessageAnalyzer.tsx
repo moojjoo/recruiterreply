@@ -3,6 +3,7 @@ import { AxiosError } from "axios";
 import { analysisService, isQuotaExceededError } from "../services/api";
 import { AnalyzeMessageResponse } from "../types/index";
 import { useResultReveal } from "../hooks/useResultReveal";
+import { trackProductEvent } from "../utils/productAnalytics";
 
 interface AnalyzerProps {
   onResult: (result: AnalyzeMessageResponse) => void;
@@ -43,9 +44,11 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
       onResult(result);
     } catch (err) {
       if (isQuotaExceededError(err)) {
+        trackProductEvent("feature_error", { feature: "analyze", error_code: "quota_exceeded" });
         setQuotaExceeded(true);
         showError("You've reached your plan's monthly limit for message analyses.");
       } else {
+        trackProductEvent("feature_error", { feature: "analyze", error_code: "request_failed" });
         const errorMessage =
           (err instanceof AxiosError ? err.response?.data?.error : undefined) ||
           (err instanceof Error ? err.message : null) ||

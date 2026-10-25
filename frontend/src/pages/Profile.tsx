@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { useAuth } from "../hooks/useAuth";
@@ -9,6 +9,7 @@ import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { gmailService } from "../services/api/gmailService";
 import { billingService } from "../services/api/billingService";
 import { GmailStatus, UsageStatus } from "../types/index";
+import { trackSubscriptionCancelled } from "../utils/productAnalytics";
 
 const TIER_LABELS: Record<string, string> = {
   free: "Free",
@@ -35,6 +36,7 @@ export const Profile: React.FC = () => {
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const previousSubscriptionTier = useRef<string | undefined>(undefined);
 
   const loadGmailStatus = useCallback(async () => {
     setIsLoadingStatus(true);
@@ -62,6 +64,10 @@ export const Profile: React.FC = () => {
       try {
         const response = await billingService.getUsage();
         setUsageStatus(response.data);
+        if (response.data.subscriptionCancellationEventId && previousSubscriptionTier.current && response.data.subscriptionTier === "free") {
+          trackSubscriptionCancelled(response.data.subscriptionCancellationEventId, previousSubscriptionTier.current === "recruiter_pro" ? "recruiter_pro" : "professional");
+        }
+        previousSubscriptionTier.current = response.data.subscriptionTier;
       } catch {
         showToast("Failed to load billing status.", "error");
       } finally {

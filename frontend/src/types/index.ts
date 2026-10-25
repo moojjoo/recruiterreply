@@ -19,6 +19,7 @@ export interface UsageStatus {
   subscriptionTier: SubscriptionTier;
   subscriptionStatus?: string;
   subscriptionCurrentPeriodEnd?: string;
+  subscriptionCancellationEventId?: string;
   usage: FeatureUsageStatus[];
 }
 
