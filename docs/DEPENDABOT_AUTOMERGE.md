@@ -9,7 +9,7 @@ An update is eligible only when all of these are true:
 - The title/body contains parseable semantic-version metadata describing a patch or minor update.
 - Changed files stay within that ecosystem's dependency allowlist.
 - The pull request is not a draft, conflicted, or blocked by unresolved review threads or unmerged dependencies.
-- The current head SHA has successful required checks: `verify`, `test`, and both CodeQL language gates.
+- The current head SHA has successful required checks: `verify`, `test`, the stable `CodeQL required gate`, and only the CodeQL language analyses applicable to the changed scope. Frontend-only changes require `javascript-typescript`; backend-only changes require `csharp`; shared, cross-stack, or uncertain changes require both.
 
 Major, unclassified, spoofed, cross-repository, malformed, and out-of-allowlist updates remain open for manual review. Branch protection remains authoritative; labels do not bypass checks.
 
