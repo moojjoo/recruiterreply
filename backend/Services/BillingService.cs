@@ -90,18 +90,7 @@ public class BillingService : IBillingService
         string tier,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
-        {
-            var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
-            var customer = await customerService.CreateAsync(new CustomerCreateOptions
-            {
-                Email = user.Email,
-                Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString() },
-            }, cancellationToken: cancellationToken);
-
-            user.StripeCustomerId = customer.Id;
-            await _userRepository.UpdateAsync(user, cancellationToken);
-        }
+        await EnsureStripeCustomerAsync(user, cancellationToken);
 
         var frontendBaseUrl = GetFrontendBaseUrl();
         var sessionService = _stripeClient is null
@@ -132,6 +121,52 @@ public class BillingService : IBillingService
 
         return session.Url;
     }
+
+    private async Task EnsureStripeCustomerAsync(
+        RecruiterReply.Entities.UserEntity user,
+        CancellationToken cancellationToken)
+    {
+        var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
+
+        if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        {
+            try
+            {
+                var existingCustomer = await customerService.GetAsync(
+                    user.StripeCustomerId,
+                    cancellationToken: cancellationToken);
+                if (existingCustomer is not null)
+                {
+                    return;
+                }
+            }
+            catch (StripeException ex) when (IsMissingStripeResource(ex))
+            {
+                _logger.LogWarning(
+                    "Stored Stripe customer is unavailable in the configured Stripe environment; creating a replacement customer");
+            }
+
+            user.StripeCustomerId = null;
+        }
+
+        var customer = await customerService.CreateAsync(new CustomerCreateOptions
+        {
+            Email = user.Email,
+            Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString() },
+        }, cancellationToken: cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(customer.Id))
+        {
+            throw new InvalidOperationException("Stripe did not return a customer reference.");
+        }
+
+        user.StripeCustomerId = customer.Id;
+        await _userRepository.UpdateAsync(user, cancellationToken);
+    }
+
+    private static bool IsMissingStripeResource(StripeException exception) =>
+        string.Equals(exception.StripeError?.Code, "resource_missing", StringComparison.OrdinalIgnoreCase)
+        || exception.Message.Contains("No such customer", StringComparison.OrdinalIgnoreCase);
 
     public async Task<BillingPlanCatalogResponse> GetPlanCatalogAsync(CancellationToken cancellationToken = default)
     {
