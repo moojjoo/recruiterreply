@@ -1035,6 +1035,12 @@ namespace RecruiterReply.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("subscription_cancellation_event_id");
 
+                    b.Property<bool>("SubscriptionCancelAtPeriodEnd")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("subscription_cancel_at_period_end");
+
                     b.Property<string>("SubscriptionStatus")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")

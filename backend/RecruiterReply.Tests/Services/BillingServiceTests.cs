@@ -150,6 +150,7 @@ public class BillingServiceTests
                   "object": "subscription",
                   "customer": "cus_123",
                   "status": "active",
+                  "cancel_at_period_end": true,
                   "items": {
                     "object": "list",
                     "data": [
@@ -172,6 +173,7 @@ public class BillingServiceTests
 
         Assert.Equal("sub_123", user.StripeSubscriptionId);
         Assert.Equal("active", user.SubscriptionStatus);
+        Assert.True(user.SubscriptionCancelAtPeriodEnd);
         Assert.Equal(PlanTiers.Professional, user.SubscriptionTier);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1893456000).UtcDateTime, user.SubscriptionCurrentPeriodEnd);
         _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
@@ -219,6 +221,7 @@ public class BillingServiceTests
         user.SubscriptionStatus = "active";
         user.StripeSubscriptionId = "sub_123";
         user.SubscriptionCurrentPeriodEnd = DateTime.UtcNow.AddDays(10);
+        user.SubscriptionCancelAtPeriodEnd = true;
         _userRepository.Setup(r => r.GetByStripeCustomerIdAsync("cus_123", It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var payload = """
@@ -253,6 +256,7 @@ public class BillingServiceTests
         await sut.HandleWebhookAsync(payload, signature);
 
         Assert.Equal(cancellationEventId, user.SubscriptionCancellationEventId);
+        Assert.False(user.SubscriptionCancelAtPeriodEnd);
     }
 
     // ----- HandleWebhookAsync: checkout.session.completed -----
@@ -364,6 +368,7 @@ public class BillingServiceTests
             {
                 Id = "sub_123",
                 Status = "trialing",
+                CancelAtPeriodEnd = true,
                 Items = new StripeList<SubscriptionItem>
                 {
                     Data = [new SubscriptionItem { CurrentPeriodEnd = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc) }],
@@ -396,6 +401,7 @@ public class BillingServiceTests
 
         Assert.Equal("sub_123", user.StripeSubscriptionId);
         Assert.Equal("trialing", user.SubscriptionStatus);
+        Assert.True(user.SubscriptionCancelAtPeriodEnd);
         Assert.Equal(new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc), user.SubscriptionCurrentPeriodEnd);
         Assert.Equal(PlanTiers.Professional, user.SubscriptionTier);
     }
