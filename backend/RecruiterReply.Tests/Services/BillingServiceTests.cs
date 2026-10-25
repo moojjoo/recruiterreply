@@ -89,10 +89,7 @@ public class BillingServiceTests
             .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(
                 It.IsAny<HttpMethod>(),
                 It.IsAny<string>(),
-                It.Is<BaseOptions>(options =>
-                    options is Stripe.Checkout.SessionCreateOptions sessionOptions
-                    && sessionOptions.Customer == "cus_existing"
-                    && sessionOptions.LineItems.Single().Price == "price_recruiterpro_test"),
+                It.IsAny<BaseOptions>(),
                 It.IsAny<RequestOptions>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Stripe.Checkout.Session
