@@ -4,6 +4,7 @@ using RecruiterReply.Data;
 using RecruiterReply.Entities;
 using RecruiterReply.Middleware;
 using RecruiterReply.Models;
+using RecruiterReply.Observability;
 using RecruiterReply.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -17,6 +18,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Amazon.DynamoDBv2;
 using Amazon.KeyManagementService;
+using System.Diagnostics;
 
 var envCandidates = new[]
 {
@@ -37,6 +39,15 @@ foreach (var envPath in envCandidates.Distinct())
 }
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(options =>
+{
+    options.IncludeScopes = true;
+    options.TimestampFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
+    options.UseUtcTimestamp = true;
+});
+Activity.DefaultIdFormat = ActivityIdFormat.W3C;
+Activity.ForceDefaultIdFormat = true;
 
 // Load secrets from AWS Secrets Manager when deployed. No-op locally: only runs if
 // Aws:SecretsManager:SecretName (or AWS_SECRETS_MANAGER_SECRET_NAME) is set. Added last so it
@@ -92,8 +103,13 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("consent-audit", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("frontend-telemetry", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<FrontendTelemetryQueue>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<FrontendTelemetryQueue>());
 builder.Services.Configure<CognitoBffOptions>(builder.Configuration.GetSection("CognitoBff"));
 builder.Services.AddSingleton<IAmazonDynamoDB>(_ => new AmazonDynamoDBClient());
 builder.Services.AddSingleton<IAmazonKeyManagementService>(_ => new AmazonKeyManagementServiceClient());
@@ -307,6 +323,15 @@ if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Swa
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers.TryAdd("X-Trace-Id", Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseForwardedHeaders();
 app.UseMiddleware<PrivateApiOriginAuthMiddleware>();
 

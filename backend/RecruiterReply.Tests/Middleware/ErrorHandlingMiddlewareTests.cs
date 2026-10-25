@@ -34,13 +34,13 @@ public class ErrorHandlingMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenNextThrowsArgumentException_Returns400WithMessage()
+    public async Task InvokeAsync_WhenNextThrowsArgumentException_Returns400WithoutEchoingInput()
     {
         var (statusCode, body) = await InvokeAsync(_ => throw new ArgumentException("bad input"));
 
         Assert.Equal(400, statusCode);
         using var json = JsonDocument.Parse(body);
-        Assert.Equal("bad input", json.RootElement.GetProperty("error").GetString());
+        Assert.Equal("Invalid request.", json.RootElement.GetProperty("error").GetString());
         Assert.Equal(400, json.RootElement.GetProperty("statusCode").GetInt32());
     }
 

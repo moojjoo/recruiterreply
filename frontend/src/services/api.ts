@@ -8,6 +8,7 @@ import {
   CompareOffersRequest,
   CompareOffersResponse,
 } from '../types/index';
+import { createTraceparent, reportTelemetry } from './telemetry';
 
 // API configuration - runtime config.js (deploy-time) takes priority, then
 // build-time Vite env vars for local dev, then a relative-path default.
@@ -39,6 +40,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.headers.traceparent = createTraceparent();
     return config;
   },
   (error) => Promise.reject(error)
@@ -48,6 +50,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    reportTelemetry({
+      eventName: 'ApiRequestFailed', severity: error.response?.status && error.response.status >= 500 ? 'Error' : 'Warning',
+      traceId: error.response?.headers?.['x-trace-id'],
+      metadata: { component: 'api', statusCode: String(error.response?.status ?? 0), errorType: error.code ?? 'HttpError' },
+    });
     if (error.response?.status === 401) {
       if (!isCookieAuthEnabled()) clearLegacyAuthState();
       if (window.location.pathname !== '/login') {

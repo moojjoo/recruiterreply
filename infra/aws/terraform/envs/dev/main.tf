@@ -1,5 +1,17 @@
 data "aws_caller_identity" "current" {}
 
+module "logging" {
+  source = "../../modules/logging"
+
+  app_name = var.app_name
+  environments = {
+    dev  = 7
+    test = 14
+    prod = 30
+  }
+  tags = var.tags
+}
+
 module "network" {
   source = "../../modules/network"
 
@@ -37,6 +49,7 @@ module "compute" {
   bff_session_table_arn   = var.bff_session_table_arn
   bff_session_kms_key_arn = var.bff_session_kms_key_arn
   backend_secret_arn      = module.secrets.secret_arn
+  log_group_arns          = values(module.logging.backend_log_group_arns)
 }
 
 module "secrets" {

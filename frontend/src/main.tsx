@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { installGlobalTelemetryHandlers } from './services/telemetry';
+
+installGlobalTelemetryHandlers();
 
 const root = document.getElementById('root')!;
 const app = (

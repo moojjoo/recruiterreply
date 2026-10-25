@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 
 namespace RecruiterReply.Middleware;
 
@@ -23,16 +24,18 @@ public class ErrorHandlingMiddleware
         {
             _logger.LogWarning(
                 ex,
-                "Validation error while processing {Path}",
-                context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""));
-            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, ex.Message);
+                "Request validation failed eventName={EventName} path={Path} traceId={TraceId}",
+                "RequestValidationFailed",
+                context.Request.Path.ToString(), Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
+            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "Invalid request.");
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
-                "Unhandled exception while processing {Path}",
-                context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""));
+                "Unhandled request exception eventName={EventName} path={Path} traceId={TraceId}",
+                "UnhandledRequestException",
+                context.Request.Path.ToString(), Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
             await WriteErrorAsync(context, StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
         }
     }
@@ -46,7 +49,7 @@ public class ErrorHandlingMiddleware
         {
             error = message,
             statusCode,
-            traceId = context.TraceIdentifier
+            traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier
         });
 
         return context.Response.WriteAsync(payload);
