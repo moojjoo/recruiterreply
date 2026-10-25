@@ -6,7 +6,9 @@ export const billingService = {
     apiClient.post<{ url: string }>("/billing/checkout-session", { tier }),
 
   upgradeToRecruiterPro: () =>
-    apiClient.post<{ status: string; tier: SubscriptionTier }>("/billing/upgrade-recruiter-pro"),
+    apiClient.post<{ status: "pending" | "checkout_required"; tier: SubscriptionTier; url?: string | null }>(
+      "/billing/upgrade-recruiter-pro",
+    ),
 
   getPlans: () =>
     apiClient.get<{ plans: Array<{ tier: SubscriptionTier; unitAmount: number | null; currency: string; interval?: string; intervalCount?: number | null }> }>("/billing/plans"),
