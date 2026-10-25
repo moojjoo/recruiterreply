@@ -33,6 +33,13 @@ export const Navbar: React.FC = () => {
             <a href="/pricing" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-700 hover:text-primary-600">Pricing</a>
             {isAuthenticated && user ? (
               <>
+                <Link
+                  to="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="text-sm font-medium text-gray-700 hover:text-primary-600"
+                >
+                  Profile & billing
+                </Link>
                 <span className="text-sm text-gray-600">Welcome, {user.name}</span>
                 <Button variant="secondary" size="sm" onClick={() => { setMenuOpen(false); logout(); }}>Logout</Button>
               </>

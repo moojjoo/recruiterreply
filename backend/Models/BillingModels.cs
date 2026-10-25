@@ -96,5 +96,6 @@ public class UsageStatusResponse
     public string? SubscriptionStatus { get; set; }
     public DateTime? SubscriptionCurrentPeriodEnd { get; set; }
     public Guid? SubscriptionCancellationEventId { get; set; }
+    public bool SubscriptionCancelAtPeriodEnd { get; set; }
     public List<FeatureUsageStatus> Usage { get; set; } = new();
 }

@@ -255,6 +255,7 @@ public class BillingService : IBillingService
             var subscription = await subscriptionService.GetAsync(session.SubscriptionId, cancellationToken: cancellationToken);
             user.SubscriptionStatus = subscription.Status;
             user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
+            user.SubscriptionCancelAtPeriodEnd = subscription.CancelAtPeriodEnd;
         }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
@@ -276,6 +277,7 @@ public class BillingService : IBillingService
         user.StripeSubscriptionId = subscription.Id;
         user.SubscriptionStatus = subscription.Status;
         user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
+        user.SubscriptionCancelAtPeriodEnd = subscription.CancelAtPeriodEnd;
 
         var priceId = subscription.Items?.Data?.FirstOrDefault()?.Price?.Id;
         var tier = ResolveTierFromPriceId(priceId);
@@ -313,6 +315,7 @@ public class BillingService : IBillingService
         user.SubscriptionStatus = "canceled";
         user.StripeSubscriptionId = null;
         user.SubscriptionCurrentPeriodEnd = null;
+        user.SubscriptionCancelAtPeriodEnd = false;
         if (wasActive)
         {
             user.SubscriptionCancellationEventId = ToOpaqueEventId(stripeEvent.Id);

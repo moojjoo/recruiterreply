@@ -185,6 +185,16 @@ export const Profile: React.FC = () => {
                     ).toLocaleDateString()}
                   </p>
                 )}
+              {usageStatus.subscriptionCancelAtPeriodEnd &&
+                usageStatus.subscriptionCurrentPeriodEnd && (
+                  <p className="text-sm text-amber-700 mt-1">
+                    Cancellation scheduled — your plan remains active until{" "}
+                    {new Date(
+                      usageStatus.subscriptionCurrentPeriodEnd,
+                    ).toLocaleDateString()}
+                    .
+                  </p>
+                )}
             </div>
 
             <div className="space-y-2">
