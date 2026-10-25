@@ -76,11 +76,9 @@ public sealed class StripeEnvironmentGuard : IStripeEnvironmentGuard
 
         var account = await GetAsync(client, "/v1/account", cancellationToken);
         var accountId = account.GetProperty("id").GetString();
-        var accountLiveMode = account.GetProperty("livemode").GetBoolean();
-        if (!string.Equals(accountId, settings.ExpectedAccountId, StringComparison.Ordinal)
-            || accountLiveMode != settings.ExpectedLiveMode)
+        if (!string.Equals(accountId, settings.ExpectedAccountId, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Stripe account identity or mode does not match the configured environment.");
+            throw new InvalidOperationException("Stripe account identity does not match the configured environment.");
         }
 
         foreach (var priceId in new[] { settings.ProfessionalPriceId, settings.RecruiterProPriceId })
@@ -122,7 +120,10 @@ public sealed class StripeEnvironmentGuard : IStripeEnvironmentGuard
 
     public static void ValidateSecretKeyMode(string secretKey, bool expectedLiveMode, IReadOnlyCollection<string> allowedPrefixes)
     {
-        if (allowedPrefixes.Count == 0 || !allowedPrefixes.Any(prefix =>
+        var requiredPrefixes = expectedLiveMode ? DefaultLivePrefixes : DefaultTestPrefixes;
+        if (!requiredPrefixes.Any(prefix => secretKey.StartsWith(prefix, StringComparison.Ordinal))
+            || allowedPrefixes.Count == 0
+            || !allowedPrefixes.Any(prefix =>
                 secretKey.StartsWith(prefix, StringComparison.Ordinal)))
         {
             var expected = expectedLiveMode ? "live" : "test";

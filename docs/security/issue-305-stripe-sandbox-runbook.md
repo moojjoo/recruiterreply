@@ -43,8 +43,10 @@ not copy them into a real secret.
 ## Deployment preflight
 
 When preflight is enabled, startup calls Stripe's account and price APIs. It
-refuses to start if the key prefix, account ID, account livemode, or either
-configured price's livemode disagrees with the environment. Missing required
+refuses to start if the key prefix, account ID, or either configured price's
+livemode disagrees with the environment. Stripe's account endpoint does not
+expose an account-level `livemode` field, so mode is enforced by the secret-key
+prefix and price livemode checks. Missing required
 credentials also fail closed. Validation errors contain no key or secret value.
 
 The application additionally verifies the Stripe signature before processing a

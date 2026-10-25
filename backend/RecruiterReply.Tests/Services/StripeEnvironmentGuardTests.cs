@@ -37,6 +37,20 @@ public class StripeEnvironmentGuardTests
         Assert.Contains("sk_live_", settings.AllowedSecretKeyPrefixes);
     }
 
+    [Theory]
+    [InlineData("sk_live_123", false, "sk_live_")]
+    [InlineData("sk_test_123", true, "sk_test_")]
+    public void ValidateSecretKeyMode_ConfiguredPrefixesCannotOverrideEnvironmentMode(
+        string key,
+        bool expectedLiveMode,
+        string configuredPrefix)
+    {
+        Assert.Throws<InvalidOperationException>(() => StripeEnvironmentGuard.ValidateSecretKeyMode(
+            key,
+            expectedLiveMode,
+            [configuredPrefix]));
+    }
+
     [Fact]
     public async Task ValidateAsync_RequiredWithoutSecretFailsClosed()
     {
@@ -56,7 +70,7 @@ public class StripeEnvironmentGuardTests
     public async Task ValidateAsync_WrongAccountFailsClosed()
     {
         var configuration = BuildPreflightConfiguration();
-        var factory = BuildClientFactory(_ => "{\"id\":\"acct_wrong\",\"livemode\":false}");
+        var factory = BuildClientFactory(_ => "{\"id\":\"acct_wrong\"}");
         var guard = CreateGuard(configuration, factory);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => guard.ValidateAsync());
@@ -67,11 +81,23 @@ public class StripeEnvironmentGuardTests
     {
         var configuration = BuildPreflightConfiguration();
         var factory = BuildClientFactory(path => path.Contains("/v1/account", StringComparison.Ordinal)
-            ? "{\"id\":\"acct_test\",\"livemode\":false}"
+            ? "{\"id\":\"acct_test\"}"
             : "{\"id\":\"price_1\",\"livemode\":true}");
         var guard = CreateGuard(configuration, factory);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => guard.ValidateAsync());
+    }
+
+    [Fact]
+    public async Task ValidateAsync_SuccessfulPreflightDoesNotRequireAccountLivemode()
+    {
+        var configuration = BuildPreflightConfiguration();
+        var factory = BuildClientFactory(path => path.Contains("/v1/account", StringComparison.Ordinal)
+            ? "{\"id\":\"acct_test\"}"
+            : "{\"id\":\"price_1\",\"livemode\":false}");
+        var guard = CreateGuard(configuration, factory);
+
+        await guard.ValidateAsync();
     }
 
     private static IConfiguration BuildPreflightConfiguration() => new ConfigurationBuilder()
