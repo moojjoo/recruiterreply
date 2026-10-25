@@ -14,6 +14,9 @@ test('analytics adapter enforces production hostname and affirmative consent', a
 
 test('analytics event contract is bounded and SPA page views omit query strings', async () => {
   expect(adapter).toContain('begin_checkout: { plan_tier: "professional" | "recruiter_pro" }');
+  expect(adapter).toContain('feature_error: { feature: "analyze" | "generate" | "compare"; error_code: "quota_exceeded" | "request_failed" }');
+  expect(adapter).toContain('subscription_cancelled: { plan_tier: "professional" | "recruiter_pro" }');
+  expect(adapter).toContain('rr-analytics-subscription-cancelled-');
   expect(adapter).toContain('pathname.split(/[?#]/, 1)[0]');
   expect(adapter).toContain('previousPagePath === safePath');
 });

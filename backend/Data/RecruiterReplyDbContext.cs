@@ -80,6 +80,7 @@ public class RecruiterReplyDbContext : DbContext
             entity.Property(e => e.StripeCustomerId).HasColumnName("stripe_customer_id").HasMaxLength(255);
             entity.Property(e => e.StripeSubscriptionId).HasColumnName("stripe_subscription_id").HasMaxLength(255);
             entity.Property(e => e.SubscriptionCurrentPeriodEnd).HasColumnName("subscription_current_period_end");
+            entity.Property(e => e.SubscriptionCancellationEventId).HasColumnName("subscription_cancellation_event_id");
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => new { e.AuthProvider, e.ProviderUserId }).IsUnique();
             entity.HasIndex(e => e.StripeCustomerId).IsUnique();

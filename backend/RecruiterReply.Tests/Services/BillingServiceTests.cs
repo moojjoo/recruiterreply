@@ -247,6 +247,12 @@ public class BillingServiceTests
         Assert.Equal("canceled", user.SubscriptionStatus);
         Assert.Null(user.StripeSubscriptionId);
         Assert.Null(user.SubscriptionCurrentPeriodEnd);
+        Assert.NotNull(user.SubscriptionCancellationEventId);
+        var cancellationEventId = user.SubscriptionCancellationEventId;
+
+        await sut.HandleWebhookAsync(payload, signature);
+
+        Assert.Equal(cancellationEventId, user.SubscriptionCancellationEventId);
     }
 
     // ----- HandleWebhookAsync: checkout.session.completed -----
