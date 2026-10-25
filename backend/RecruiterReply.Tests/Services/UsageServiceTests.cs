@@ -115,6 +115,7 @@ public class UsageServiceTests
     public async Task GetUsageStatusAsync_ReturnsTierAndPerFeatureUsage()
     {
         var user = BuildUser(PlanTiers.Professional);
+        user.SubscriptionCancelAtPeriodEnd = true;
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _usageRepository
             .Setup(r => r.GetForPeriodAsync(user.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
@@ -123,6 +124,7 @@ public class UsageServiceTests
         var status = await _sut.GetUsageStatusAsync(user.Id);
 
         Assert.Equal(PlanTiers.Professional, status.SubscriptionTier);
+        Assert.True(status.SubscriptionCancelAtPeriodEnd);
         var analyze = status.Usage.Single(u => u.Feature == UsageFeatures.Analyze);
         Assert.Equal(7, analyze.Used);
         Assert.Equal(200, analyze.Limit);
