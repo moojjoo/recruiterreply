@@ -78,6 +78,13 @@ public class BillingPlanResponse
     public long? IntervalCount { get; set; }
 }
 
+public class UpgradeToRecruiterProResponse
+{
+    public string Status { get; set; } = string.Empty;
+    public string Tier { get; set; } = string.Empty;
+    public string? Url { get; set; }
+}
+
 public class PortalSessionResponse
 {
     public string Url { get; set; } = string.Empty;
