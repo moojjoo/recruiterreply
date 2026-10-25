@@ -96,7 +96,13 @@ export const Profile: React.FC = () => {
   const handleUpgradeToRecruiterPro = async () => {
     setIsUpgrading(true);
     try {
-      await billingService.upgradeToRecruiterPro();
+      const response = await billingService.upgradeToRecruiterPro();
+      if (response.data.url) {
+        trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro" });
+        window.location.href = response.data.url;
+        return;
+      }
+
       trackProductEvent("subscription_upgrade_started", {
         from_tier: "professional",
         to_tier: "recruiter_pro",
