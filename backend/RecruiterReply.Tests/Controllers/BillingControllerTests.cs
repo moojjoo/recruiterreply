@@ -59,6 +59,38 @@ public class BillingControllerTests
     }
 
     [Fact]
+    public async Task UpgradeToRecruiterPro_WhenExistingSubscriptionUpdates_ReturnsPending()
+    {
+        _billingService
+            .Setup(s => s.UpgradeToRecruiterProAsync(_userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+
+        var result = await _sut.UpgradeToRecruiterPro(CancellationToken.None);
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var response = Assert.IsType<UpgradeToRecruiterProResponse>(accepted.Value);
+        Assert.Equal("pending", response.Status);
+        Assert.Equal(PlanTiers.RecruiterPro, response.Tier);
+        Assert.Null(response.Url);
+    }
+
+    [Fact]
+    public async Task UpgradeToRecruiterPro_WhenCheckoutIsRequired_ReturnsCheckoutUrl()
+    {
+        _billingService
+            .Setup(s => s.UpgradeToRecruiterProAsync(_userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://checkout.stripe.com/pay/cs_recovery");
+
+        var result = await _sut.UpgradeToRecruiterPro(CancellationToken.None);
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var response = Assert.IsType<UpgradeToRecruiterProResponse>(accepted.Value);
+        Assert.Equal("checkout_required", response.Status);
+        Assert.Equal(PlanTiers.RecruiterPro, response.Tier);
+        Assert.Equal("https://checkout.stripe.com/pay/cs_recovery", response.Url);
+    }
+
+    [Fact]
     public async Task CreatePortalSession_OnSuccess_Returns200WithUrl()
     {
         _billingService.Setup(s => s.CreatePortalSessionAsync(_userId, It.IsAny<CancellationToken>()))
