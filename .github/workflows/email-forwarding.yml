@@ -170,7 +170,7 @@ jobs:
         with:
           terraform_version: '1.14.3'
           terraform_wrapper: false
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: issue-400-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: infra/aws/terraform/email-forwarding
@@ -229,7 +229,7 @@ jobs:
       - name: Verify source run completed the reviewed DNS apply
         id: source
         run: python3 scripts/email-forwarding/acceptance-context.py
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.source.outputs.run_id }}
