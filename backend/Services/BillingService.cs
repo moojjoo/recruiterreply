@@ -37,6 +37,11 @@ public class BillingService : IBillingService
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User not found.");
 
+        if (user.SubscriptionTier != PlanTiers.Free && !string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
+        {
+            throw new InvalidOperationException("An active subscription already exists. Use the supported upgrade or billing-management flow.");
+        }
+
         if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
         {
             var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
@@ -71,6 +76,66 @@ public class BillingService : IBillingService
         }, cancellationToken: cancellationToken);
 
         return session.Url;
+    }
+
+    public async Task UpgradeToRecruiterProAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (user.SubscriptionTier != PlanTiers.Professional)
+        {
+            throw new InvalidOperationException("Only Professional subscriptions can be upgraded to Recruiter Pro.");
+        }
+
+        if (string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
+        {
+            throw new InvalidOperationException("No active subscription was found to upgrade.");
+        }
+
+        var subscriptionService = _stripeClient is null ? new SubscriptionService() : new SubscriptionService(_stripeClient);
+        var subscription = await subscriptionService.GetAsync(user.StripeSubscriptionId, cancellationToken: cancellationToken);
+        var item = subscription.Items?.Data?.FirstOrDefault();
+        if (item is null || string.IsNullOrWhiteSpace(item.Id))
+        {
+            throw new InvalidOperationException("The subscription does not contain an upgradeable item.");
+        }
+
+        if (subscription.Status is not ("active" or "trialing" or "past_due"))
+        {
+            throw new InvalidOperationException("This subscription cannot be upgraded in its current state.");
+        }
+
+        await subscriptionService.UpdateAsync(subscription.Id, new SubscriptionUpdateOptions
+        {
+            Items = [new SubscriptionItemOptions { Id = item.Id, Price = GetPriceId(PlanTiers.RecruiterPro) }],
+            ProrationBehavior = "always_invoice",
+            CancelAtPeriodEnd = false,
+        }, cancellationToken: cancellationToken);
+    }
+
+    public async Task<BillingPlanCatalogResponse> GetPlanCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        var priceService = _stripeClient is null ? new PriceService() : new PriceService(_stripeClient);
+        var plans = new List<BillingPlanResponse>();
+        foreach (var (tier, priceId) in new[]
+        {
+            (PlanTiers.Professional, GetPriceId(PlanTiers.Professional)),
+            (PlanTiers.RecruiterPro, GetPriceId(PlanTiers.RecruiterPro)),
+        })
+        {
+            var price = await priceService.GetAsync(priceId, cancellationToken: cancellationToken);
+            plans.Add(new BillingPlanResponse
+            {
+                Tier = tier,
+                UnitAmount = price.UnitAmount,
+                Currency = price.Currency ?? "usd",
+                Interval = price.Recurring?.Interval,
+                IntervalCount = price.Recurring?.IntervalCount,
+            });
+        }
+
+        return new BillingPlanCatalogResponse { Plans = plans };
     }
 
     public async Task<string> CreatePortalSessionAsync(Guid userId, CancellationToken cancellationToken = default)
