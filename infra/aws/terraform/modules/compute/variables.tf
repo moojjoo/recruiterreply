@@ -67,6 +67,12 @@ variable "backend_secret_arn" {
   default     = null
 }
 
+variable "private_api_origin_signing_secret_arn" {
+  description = "Optional Secrets Manager ARN containing the shared-host API origin signing key."
+  type        = string
+  default     = null
+}
+
 variable "log_group_arns" {
   description = "CloudWatch log groups the Docker awslogs driver may publish to."
   type        = list(string)
