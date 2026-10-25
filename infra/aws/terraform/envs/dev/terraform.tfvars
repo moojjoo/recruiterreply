@@ -16,3 +16,9 @@ allowed_ssh_cidrs = []
 enable_rds             = false
 db_skip_final_snapshot = true
 db_deletion_protection = false
+
+# Existing shared-host runtime resources. Keep these explicit so a normal plan
+# preserves the live BFF and private-origin IAM policies.
+bff_session_table_arn                 = "arn:aws:dynamodb:us-east-1:178522450316:table/recruiterreply-dev-bff-sessions"
+bff_session_kms_key_arn               = "arn:aws:kms:us-east-1:178522450316:key/bb06d97f-8dfb-42a2-b750-f24d9b89d32f"
+private_api_origin_signing_secret_arn = "arn:aws:secretsmanager:us-east-1:178522450316:secret:recruiterreply/test/edge-auth-signing-keys-uuOyxN"

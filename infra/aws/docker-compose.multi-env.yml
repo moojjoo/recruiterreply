@@ -29,6 +29,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Logging__LogLevel__Default: Information
       ASPNETCORE_URLS: http://0.0.0.0:5000
       AWS_REGION: us-east-1
       AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/dev/backend-app-secrets
@@ -74,6 +75,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
+      Logging__LogLevel__Default: Information
       ASPNETCORE_URLS: http://0.0.0.0:5000
       AWS_REGION: us-east-1
       AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/test/backend-app-secrets
@@ -107,6 +109,9 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Logging__LogLevel__Default: Warning
+      Logging__LogLevel__Microsoft_AspNetCore: Warning
+      Logging__LogLevel__Microsoft_EntityFrameworkCore: Warning
       ASPNETCORE_URLS: http://0.0.0.0:5000
       AWS_REGION: us-east-1
       AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/prod/backend-app-secrets

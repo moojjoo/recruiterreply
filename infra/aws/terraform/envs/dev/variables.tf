@@ -159,3 +159,9 @@ variable "bff_session_kms_key_arn" {
   type        = string
   default     = null
 }
+
+variable "private_api_origin_signing_secret_arn" {
+  description = "Optional ARN of the shared Test API origin-signing secret read by the Dev host."
+  type        = string
+  default     = null
+}

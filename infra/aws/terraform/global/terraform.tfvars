@@ -1,5 +1,6 @@
-aws_region = "us-east-1"
-app_name   = "recruiterreply"
+aws_region                           = "us-east-1"
+app_name                             = "recruiterreply"
+cloudwatch_budget_notification_email = "robert.dannelly@dannellysolutions.com"
 
 create_frontend_buckets = true
 frontend_bucket_names = {

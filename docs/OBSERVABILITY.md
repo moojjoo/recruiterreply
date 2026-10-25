@@ -23,6 +23,9 @@ groups until an approved routing design is needed.
 - Browser telemetry is sampled by bounded queueing (20 events) and capped batches;
   reporting failures never affect the user workflow.
 - Production should use Warning/Error as the default application log level.
+- The deployed Compose definition sets Dev/Test to `Information` and Production
+  to `Warning`; Production also suppresses ASP.NET Core and EF Core informational
+  framework events.
 - Terraform creates a low-cardinality unhandled-exception metric filter and
   alarm per environment. Notifications are attached only when the owner supplies
   an approved SNS topic ARN; no recipient is invented in source control.
@@ -30,6 +33,26 @@ groups until an approved routing design is needed.
   These are cost controls, not billing caps. CloudWatch budgets and alarms must
   use an owner-configured notification destination and are not created with a
   hardcoded recipient.
+
+## Cost assumptions
+
+The initial design uses three standard CloudWatch alarms, three backend log
+groups, no CloudWatch Agent, no Container Insights, no tracing collector, and
+no separate browser log groups. Using the current us-east-1 CloudWatch pricing
+published by AWS (standard log ingestion at approximately $0.50/GB and
+standard alarm pricing of approximately $0.10/alarm-month), a conservative
+planning case of 0.25 GB ingested per environment per month is approximately
+$0.38/month for ingestion plus approximately $0.30/month for alarms, before
+any account-level free tier, storage, or query allowance. Actual charges must
+be checked against Cost Explorer because log volume and free-tier eligibility
+vary by account. See [AWS CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/).
+
+AWS Budgets notifications are free for monitoring-only budgets. The required
+$10/month CloudWatch warning budget must use an owner-approved, verified email
+or confirmed SNS subscription; no unverified destination is stored in this
+repository. AWS documents that SNS budget notifications require an accepted
+subscription. See [AWS Budgets pricing](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/)
+and [AWS budget notification guidance](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-best-practices.html).
 
 ## Useful Logs Insights queries
 
@@ -62,3 +85,18 @@ Test and Production remain behind their existing promotion approvals.
 Rollback is a normal application image rollback plus reverting the logging
 configuration. The log groups are retained by Terraform (`skip_destroy = true`)
 so rollback does not erase diagnostic history.
+
+## Live validation evidence
+
+On 2026-10-25, the deployed SHA `281a859e29ed2ca2737869b34b1e53cdfe799cb3`
+was promoted successfully through Dev, Test, and Production. The three
+Terraform-managed backend groups existed with 7/14/30-day retention, each had
+an `UnhandledRequestException` metric filter and alarm, and each Docker stream
+was receiving newline-delimited JSON. Production health traffic produced
+`HttpRequestCompleted` events with W3C trace IDs. Test captured a controlled
+database connection interruption as an Error event without exposing a client
+error payload.
+
+The remaining operator action for full cost acceptance is to configure and
+verify the owner-approved $10/month budget notification destination, then
+record the confirmation here without recording the address or secret value.
