@@ -9,7 +9,7 @@ import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { gmailService } from "../services/api/gmailService";
 import { billingService } from "../services/api/billingService";
 import { GmailStatus, UsageStatus } from "../types/index";
-import { trackSubscriptionCancelled } from "../utils/productAnalytics";
+import { trackProductEvent, trackSubscriptionCancelled } from "../utils/productAnalytics";
 
 const TIER_LABELS: Record<string, string> = {
   free: "Free",
@@ -36,6 +36,7 @@ export const Profile: React.FC = () => {
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const previousSubscriptionTier = useRef<string | undefined>(undefined);
 
   const loadGmailStatus = useCallback(async () => {
@@ -89,6 +90,24 @@ export const Profile: React.FC = () => {
         "error",
       );
       setIsOpeningPortal(false);
+    }
+  };
+
+  const handleUpgradeToRecruiterPro = async () => {
+    setIsUpgrading(true);
+    try {
+      await billingService.upgradeToRecruiterPro();
+      trackProductEvent("subscription_upgrade_started", {
+        from_tier: "professional",
+        to_tier: "recruiter_pro",
+      });
+      showToast("Upgrade started. Your plan will update after Stripe confirms the change.", "success");
+      const response = await billingService.getUsage();
+      setUsageStatus(response.data);
+    } catch {
+      showToast("Failed to upgrade to Recruiter Pro. Please try again.", "error");
+    } finally {
+      setIsUpgrading(false);
     }
   };
 
@@ -187,13 +206,20 @@ export const Profile: React.FC = () => {
                   Upgrade Plan
                 </Button>
               ) : (
-                <Button
-                  variant="secondary"
-                  onClick={handleManageBilling}
-                  isLoading={isOpeningPortal}
-                >
-                  Manage Billing
-                </Button>
+                <>
+                  {usageStatus.subscriptionTier === "professional" && (
+                    <Button onClick={handleUpgradeToRecruiterPro} isLoading={isUpgrading}>
+                      Upgrade to Recruiter Pro
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    onClick={handleManageBilling}
+                    isLoading={isOpeningPortal}
+                  >
+                    Manage Billing
+                  </Button>
+                </>
               )}
             </div>
           </div>

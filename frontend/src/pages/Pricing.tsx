@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { Card } from "../components/common/Card";
@@ -24,42 +24,43 @@ interface Plan {
   highlighted?: boolean;
 }
 
-const plans: Plan[] = [
-  {
-    tier: "free",
-    name: "Free",
-    price: "$0",
-    description: "Try out the core tools before you commit.",
-    features: [
-      "5 message analyses / month",
-      "5 AI-generated replies / month",
-      "2 offer comparisons / month",
-    ],
-    cta: "Get Started",
-  },
-  {
-    tier: "professional",
-    name: "Professional",
-    price: "$19",
-    cadence: "/month",
-    description: "For active job seekers negotiating offers.",
-    features: [
-      "7-day free trial",
-      "200 message analyses / month",
-      "200 AI-generated replies / month",
-      "50 offer comparisons / month",
-      "Gmail recruiter inbox sync",
-    ],
-    cta: "Upgrade to Professional",
-    highlighted: true,
-  },
-];
-
 export const Pricing: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
+  const [currentTier, setCurrentTier] = useState<SubscriptionTier | null>(null);
+  const [recruiterProPrice, setRecruiterProPrice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    billingService.getPlans().then((response) => {
+      if (!active) return;
+      const plan = response.data.plans.find((item) => item.tier === "recruiter_pro");
+      if (!plan?.unitAmount) return;
+      const amount = new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: plan.currency.toUpperCase(),
+        maximumFractionDigits: 2,
+      }).format(plan.unitAmount / 100);
+      const cadence = plan.intervalCount && plan.intervalCount > 1
+        ? `/${plan.intervalCount} ${plan.interval ?? "periods"}`
+        : `/${plan.interval ?? "month"}`;
+      setRecruiterProPrice(`${amount}${cadence}`);
+    }).catch(() => {
+      // Pricing remains usable if the public catalog is temporarily unavailable.
+    });
+
+    if (isAuthenticated) {
+      billingService.getUsage().then((response) => {
+        if (active) setCurrentTier(response.data.subscriptionTier);
+      }).catch(() => {
+        if (active) setCurrentTier(null);
+      });
+    }
+
+    return () => { active = false; };
+  }, [isAuthenticated]);
 
   const handleSelectPlan = async (tier: SubscriptionTier) => {
     if (tier === "free") {
@@ -72,18 +73,76 @@ export const Pricing: React.FC = () => {
       return;
     }
 
+    if (tier === currentTier) return;
+
     setLoadingTier(tier);
     try {
+      if (tier === "recruiter_pro" && currentTier === "professional") {
+        await billingService.upgradeToRecruiterPro();
+        trackProductEvent("subscription_upgrade_started", {
+          from_tier: "professional",
+          to_tier: "recruiter_pro",
+        });
+        showToast("Upgrade started. Your plan will update after Stripe confirms the change.", "success");
+        navigate("/profile");
+        return;
+      }
+
       const response = await billingService.createCheckoutSession(tier);
       trackProductEvent("begin_checkout", {
         plan_tier: tier === "recruiter_pro" ? "recruiter_pro" : "professional",
       });
       redirectTo(response.data.url);
     } catch {
-      showToast("Failed to start checkout. Please try again.", "error");
+      showToast("Failed to start billing. Please try again.", "error");
       setLoadingTier(null);
     }
   };
+
+  const plans: Plan[] = [
+    {
+      tier: "free",
+      name: "Free",
+      price: "$0",
+      description: "Try out the core tools before you commit.",
+      features: [
+        "5 message analyses / month",
+        "5 AI-generated replies / month",
+        "2 offer comparisons / month",
+      ],
+      cta: currentTier === "free" ? "Current plan" : "Get Started",
+    },
+    {
+      tier: "professional",
+      name: "Professional",
+      price: "$19/month",
+      description: "For active job seekers negotiating offers.",
+      features: [
+        "7-day free trial",
+        "200 message analyses / month",
+        "200 AI-generated replies / month",
+        "50 offer comparisons / month",
+        "Gmail recruiter inbox sync",
+      ],
+      cta: currentTier === "professional" ? "Current plan" : "Upgrade to Professional",
+      highlighted: true,
+    },
+    {
+      tier: "recruiter_pro",
+      name: "Recruiter Pro",
+      price: recruiterProPrice ?? "See current price",
+      description: "For candidates who want their recruiter inbox organized and ready for action.",
+      features: [
+        "Unlimited message analyses",
+        "Unlimited AI-generated replies",
+        "Unlimited offer comparisons",
+        "Unlimited recruiter email triage",
+        "Gmail sync, labels, and suggested drafts",
+        "Review every draft before sending",
+      ],
+      cta: currentTier === "recruiter_pro" ? "Current plan" : "Upgrade to Recruiter Pro",
+    },
+  ];
 
   return (
     <MainLayout>
@@ -97,7 +156,7 @@ export const Pricing: React.FC = () => {
         </section>
 
         <section className="pb-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
             {plans.map((plan) => (
               <Card
                 key={plan.tier}
@@ -135,6 +194,7 @@ export const Pricing: React.FC = () => {
                   variant={plan.highlighted ? "primary" : "secondary"}
                   className="w-full"
                   isLoading={loadingTier === plan.tier}
+                  disabled={plan.tier === currentTier}
                   onClick={() => handleSelectPlan(plan.tier)}
                 >
                   {plan.cta}

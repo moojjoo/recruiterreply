@@ -55,6 +55,41 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task CreateCheckoutSessionAsync_WithExistingSubscription_RejectsDuplicateSubscription()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.CreateCheckoutSessionAsync(user.Id, PlanTiers.RecruiterPro));
+    }
+
+    [Fact]
+    public async Task UpgradeToRecruiterProAsync_WithFreeUser_Throws()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.UpgradeToRecruiterProAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task UpgradeToRecruiterProAsync_WithoutSubscription_Throws()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.UpgradeToRecruiterProAsync(user.Id));
+    }
+
+    [Fact]
     public async Task CreateCheckoutSessionAsync_WithUnknownUser_Throws()
     {
         var userId = Guid.NewGuid();
