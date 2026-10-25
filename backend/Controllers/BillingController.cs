@@ -51,8 +51,13 @@ public class BillingController : ControllerBase
     {
         try
         {
-            await _billingService.UpgradeToRecruiterProAsync(User.GetRequiredUserId(), ct);
-            return Accepted(new { status = "pending", tier = PlanTiers.RecruiterPro });
+            var checkoutUrl = await _billingService.UpgradeToRecruiterProAsync(User.GetRequiredUserId(), ct);
+            return Accepted(new UpgradeToRecruiterProResponse
+            {
+                Status = checkoutUrl is null ? "pending" : "checkout_required",
+                Tier = PlanTiers.RecruiterPro,
+                Url = checkoutUrl,
+            });
         }
         catch (InvalidOperationException ex)
         {
