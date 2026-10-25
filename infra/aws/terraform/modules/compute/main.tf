@@ -60,6 +60,22 @@ resource "aws_iam_role_policy" "postgres_backup" {
   })
 }
 
+resource "aws_iam_role_policy" "container_logs" {
+  count = length(var.log_group_arns) > 0 ? 1 : 0
+  name  = "${var.name_prefix}-container-logs"
+  role  = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "PublishApplicationLogs"
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+      Resource = [for arn in var.log_group_arns : "${arn}:*"]
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "bff_runtime" {
   count = var.bff_session_table_arn != null && var.bff_session_kms_key_arn != null && var.backend_secret_arn != null ? 1 : 0
   name  = "${var.name_prefix}-bff-runtime"

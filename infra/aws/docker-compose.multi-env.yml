@@ -57,6 +57,13 @@ services:
       - "127.0.0.1:5001:5000"
     networks:
       - recruiterreply
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-1
+        awslogs-create-group: "false"
+        awslogs-group: /recruiterreply/dev/backend
+        awslogs-stream: backend-dev
 
   backend-test:
     image: ${BACKEND_IMAGE_TEST:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:test-latest}
@@ -83,6 +90,13 @@ services:
       - "127.0.0.1:5002:5000"
     networks:
       - recruiterreply
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-1
+        awslogs-create-group: "false"
+        awslogs-group: /recruiterreply/test/backend
+        awslogs-stream: backend-test
 
   backend-prod:
     image: ${BACKEND_IMAGE_PROD:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:prod-latest}
@@ -104,6 +118,13 @@ services:
       - "127.0.0.1:5003:5000"
     networks:
       - recruiterreply
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-1
+        awslogs-create-group: "false"
+        awslogs-group: /recruiterreply/prod/backend
+        awslogs-stream: backend-prod
 
 networks:
   recruiterreply:

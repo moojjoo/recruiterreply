@@ -66,3 +66,9 @@ variable "backend_secret_arn" {
   type        = string
   default     = null
 }
+
+variable "log_group_arns" {
+  description = "CloudWatch log groups the Docker awslogs driver may publish to."
+  type        = list(string)
+  default     = []
+}

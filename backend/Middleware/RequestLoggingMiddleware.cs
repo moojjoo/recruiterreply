@@ -1,4 +1,5 @@
 namespace RecruiterReply.Middleware;
+using System.Diagnostics;
 
 public class RequestLoggingMiddleware
 {
@@ -13,15 +14,19 @@ public class RequestLoggingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var startedAt = DateTime.UtcNow;
+        var startedAt = Stopwatch.GetTimestamp();
         await _next(context);
-        var elapsedMs = (DateTime.UtcNow - startedAt).TotalMilliseconds;
+        var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+        var level = context.Response.StatusCode >= 500 ? LogLevel.Error
+            : context.Response.StatusCode >= 400 ? LogLevel.Warning : LogLevel.Information;
 
-        _logger.LogInformation(
-            "{Method} {Path} => {StatusCode} in {ElapsedMs}ms",
+        _logger.Log(level,
+            "HTTP request completed eventName={EventName} method={Method} path={Path} statusCode={StatusCode} elapsedMs={ElapsedMs} traceId={TraceId}",
+            "HttpRequestCompleted",
             context.Request.Method.Replace("\r", "").Replace("\n", ""),
             context.Request.Path.ToString().Replace("\r", "").Replace("\n", ""),
             context.Response.StatusCode,
-            Math.Round(elapsedMs, 2));
+            Math.Round(elapsedMs, 2),
+            Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
     }
 }
