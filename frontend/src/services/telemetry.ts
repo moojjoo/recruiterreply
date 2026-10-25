@@ -9,7 +9,11 @@ interface TelemetryEvent {
 }
 
 const MAX_QUEUE = 20;
+const MAX_BATCH = 10;
+const MAX_ATTEMPTS = 2;
+const DEDUPE_WINDOW_MS = 5000;
 const queue: TelemetryEvent[] = [];
+const recentEvents = new Map<string, number>();
 let flushTimer: number | undefined;
 let reporting = false;
 
@@ -37,13 +41,22 @@ function scheduleFlush(): void {
 async function flush(): Promise<void> {
   if (reporting || queue.length === 0 || typeof fetch === "undefined") return;
   reporting = true;
-  const events = queue.splice(0, 10);
+  const events = queue.splice(0, MAX_BATCH);
   try {
-    await Promise.all(events.map(event => fetch(apiUrl(), {
-      method: "POST", credentials: "omit",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(event), keepalive: true,
-    })));
+    await Promise.all(events.map(async event => {
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const response = await fetch(apiUrl(), {
+            method: "POST", credentials: "omit",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(event), keepalive: true,
+          });
+          if (response.ok || response.status < 500 || attempt === MAX_ATTEMPTS) return;
+        } catch {
+          if (attempt === MAX_ATTEMPTS) return;
+        }
+      }
+    }));
   } catch {
     // Diagnostics are best-effort and must never affect the user workflow.
   } finally {
@@ -53,12 +66,20 @@ async function flush(): Promise<void> {
 }
 
 export function reportTelemetry(event: Omit<TelemetryEvent, "route"> & { route?: string }): void {
-  if (typeof window === "undefined" || reporting && queue.length >= MAX_QUEUE) return;
+  if (typeof window === "undefined" || queue.length >= MAX_QUEUE) return;
   if (!/^[a-zA-Z0-9_.:-]{1,80}$/.test(event.eventName)) return;
   const metadata = Object.fromEntries(Object.entries(event.metadata ?? {})
     .filter(([key, value]) => /^[a-zA-Z0-9_.:-]{1,40}$/.test(key) && /^[a-zA-Z0-9_.:-]{1,160}$/.test(value))
     .slice(0, 12));
-  queue.push({ ...event, route: event.route ?? safeRoute(), metadata });
+  const normalized = { ...event, route: event.route ?? safeRoute(), metadata };
+  const dedupeKey = JSON.stringify([normalized.eventName, normalized.severity, normalized.route, metadata]);
+  const now = Date.now();
+  for (const [key, timestamp] of recentEvents) {
+    if (now - timestamp > DEDUPE_WINDOW_MS) recentEvents.delete(key);
+  }
+  if (recentEvents.has(dedupeKey)) return;
+  recentEvents.set(dedupeKey, now);
+  queue.push(normalized);
   while (queue.length > MAX_QUEUE) queue.shift();
   scheduleFlush();
 }
