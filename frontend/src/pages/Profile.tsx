@@ -96,14 +96,20 @@ export const Profile: React.FC = () => {
   const handleUpgradeToRecruiterPro = async () => {
     setIsUpgrading(true);
     try {
-      await billingService.upgradeToRecruiterPro();
+      const upgradeResponse = await billingService.upgradeToRecruiterPro();
+      if (upgradeResponse.data.url) {
+        trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro" });
+        window.location.href = upgradeResponse.data.url;
+        return;
+      }
+
       trackProductEvent("subscription_upgrade_started", {
         from_tier: "professional",
         to_tier: "recruiter_pro",
       });
       showToast("Upgrade started. Your plan will update after Stripe confirms the change.", "success");
-      const response = await billingService.getUsage();
-      setUsageStatus(response.data);
+      const usageResponse = await billingService.getUsage();
+      setUsageStatus(usageResponse.data);
     } catch {
       showToast("Failed to upgrade to Recruiter Pro. Please try again.", "error");
     } finally {

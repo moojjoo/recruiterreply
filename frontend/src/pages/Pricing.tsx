@@ -78,7 +78,13 @@ export const Pricing: React.FC = () => {
     setLoadingTier(tier);
     try {
       if (tier === "recruiter_pro" && currentTier === "professional") {
-        await billingService.upgradeToRecruiterPro();
+        const response = await billingService.upgradeToRecruiterPro();
+        if (response.data.url) {
+          trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro" });
+          redirectTo(response.data.url);
+          return;
+        }
+
         trackProductEvent("subscription_upgrade_started", {
           from_tier: "professional",
           to_tier: "recruiter_pro",

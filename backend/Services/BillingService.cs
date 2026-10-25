@@ -42,43 +42,10 @@ public class BillingService : IBillingService
             throw new InvalidOperationException("An active subscription already exists. Use the supported upgrade or billing-management flow.");
         }
 
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
-        {
-            var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
-            var customer = await customerService.CreateAsync(new CustomerCreateOptions
-            {
-                Email = user.Email,
-                Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString() },
-            }, cancellationToken: cancellationToken);
-
-            user.StripeCustomerId = customer.Id;
-            await _userRepository.UpdateAsync(user, cancellationToken);
-        }
-
-        var frontendBaseUrl = GetFrontendBaseUrl();
-        var sessionService = _stripeClient is null ? new Stripe.Checkout.SessionService() : new Stripe.Checkout.SessionService(_stripeClient);
-        var session = await sessionService.CreateAsync(new Stripe.Checkout.SessionCreateOptions
-        {
-            Mode = "subscription",
-            Customer = user.StripeCustomerId,
-            ClientReferenceId = userId.ToString(),
-            LineItems = new List<Stripe.Checkout.SessionLineItemOptions>
-            {
-                new() { Price = GetPriceId(tier), Quantity = 1 },
-            },
-            SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
-            {
-                TrialPeriodDays = TrialPeriodDays,
-            },
-            SuccessUrl = $"{frontendBaseUrl}/dashboard?checkout=success",
-            CancelUrl = $"{frontendBaseUrl}/pricing?checkout=cancelled",
-            Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), ["tier"] = tier },
-        }, cancellationToken: cancellationToken);
-
-        return session.Url;
+        return await CreateCheckoutSessionForUserAsync(user, tier, cancellationToken);
     }
 
-    public async Task UpgradeToRecruiterProAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<string?> UpgradeToRecruiterProAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User not found.");
@@ -90,7 +57,9 @@ public class BillingService : IBillingService
 
         if (string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
         {
-            throw new InvalidOperationException("No active subscription was found to upgrade.");
+            _logger.LogWarning(
+                "Professional subscription is missing its Stripe subscription reference; starting a Recruiter Pro checkout");
+            return await CreateCheckoutSessionForUserAsync(user, PlanTiers.RecruiterPro, cancellationToken);
         }
 
         var subscriptionService = _stripeClient is null ? new SubscriptionService() : new SubscriptionService(_stripeClient);
@@ -112,6 +81,56 @@ public class BillingService : IBillingService
             ProrationBehavior = "always_invoice",
             CancelAtPeriodEnd = false,
         }, cancellationToken: cancellationToken);
+
+        return null;
+    }
+
+    private async Task<string> CreateCheckoutSessionForUserAsync(
+        RecruiterReply.Entities.UserEntity user,
+        string tier,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        {
+            var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
+            var customer = await customerService.CreateAsync(new CustomerCreateOptions
+            {
+                Email = user.Email,
+                Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString() },
+            }, cancellationToken: cancellationToken);
+
+            user.StripeCustomerId = customer.Id;
+            await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        var frontendBaseUrl = GetFrontendBaseUrl();
+        var sessionService = _stripeClient is null
+            ? new Stripe.Checkout.SessionService()
+            : new Stripe.Checkout.SessionService(_stripeClient);
+        var session = await sessionService.CreateAsync(new Stripe.Checkout.SessionCreateOptions
+        {
+            Mode = "subscription",
+            Customer = user.StripeCustomerId,
+            ClientReferenceId = user.Id.ToString(),
+            LineItems =
+            [
+                new() { Price = GetPriceId(tier), Quantity = 1 },
+            ],
+            SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
+            {
+                TrialPeriodDays = TrialPeriodDays,
+            },
+            SuccessUrl = $"{frontendBaseUrl}/dashboard?checkout=success",
+            CancelUrl = $"{frontendBaseUrl}/pricing?checkout=cancelled",
+            Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString(), ["tier"] = tier },
+        }, cancellationToken: cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(session.Url))
+        {
+            throw new InvalidOperationException("Stripe did not return a checkout URL.");
+        }
+
+        return session.Url;
     }
 
     public async Task<BillingPlanCatalogResponse> GetPlanCatalogAsync(CancellationToken cancellationToken = default)
