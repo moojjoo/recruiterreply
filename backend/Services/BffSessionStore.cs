@@ -72,7 +72,8 @@ public sealed class DynamoDbBffSessionStore : IBffSessionStore
             ConsistentRead = true,
             Key = new Dictionary<string, AttributeValue> { [SessionKeyAttribute] = new() { S = Hash(sessionId) } }
         }, cancellationToken);
-        if (result.Item.Count == 0 || !result.Item.TryGetValue(PayloadAttribute, out var payload)) return null;
+        if (result.Item is null || result.Item.Count == 0
+            || !result.Item.TryGetValue(PayloadAttribute, out var payload)) return null;
         if (payload.B is null) return null;
         using var stream = payload.B;
         return await DecryptAsync(stream.ToArray(), cancellationToken);

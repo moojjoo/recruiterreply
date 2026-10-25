@@ -2,6 +2,7 @@ import React, { useState, memo } from "react";
 import { AxiosError } from "axios";
 import { analysisService, isQuotaExceededError } from "../services/api";
 import { AnalyzeMessageResponse } from "../types/index";
+import { useResultReveal } from "../hooks/useResultReveal";
 
 interface AnalyzerProps {
   onResult: (result: AnalyzeMessageResponse) => void;
@@ -14,6 +15,13 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [errorRevision, setErrorRevision] = useState(0);
+  const errorRef = useResultReveal<HTMLDivElement>(errorRevision);
+
+  const showError = (message: string) => {
+    setError(message);
+    setErrorRevision((previous) => previous + 1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +29,7 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
     setQuotaExceeded(false);
 
     if (!message.trim()) {
-      setError("Please paste a recruiter message");
+      showError("Please paste a recruiter message");
       return;
     }
 
@@ -36,13 +44,13 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
     } catch (err) {
       if (isQuotaExceededError(err)) {
         setQuotaExceeded(true);
-        setError("You've reached your plan's monthly limit for message analyses.");
+        showError("You've reached your plan's monthly limit for message analyses.");
       } else {
         const errorMessage =
           (err instanceof AxiosError ? err.response?.data?.error : undefined) ||
           (err instanceof Error ? err.message : null) ||
           "Failed to analyze message. Please check backend configuration.";
-        setError(errorMessage);
+        showError(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -100,7 +108,7 @@ export const MessageAnalyzer: React.FC<AnalyzerProps> = memo(({ onResult }) => {
       </div>
 
       {error && (
-        <div className="alert alert-error mb-6" role="alert">
+        <div ref={errorRef} tabIndex={-1} className="alert alert-error mb-6 tool-results-heading" role="alert">
           <span>⚠️</span>
           <span>{error}</span>
           {quotaExceeded && (

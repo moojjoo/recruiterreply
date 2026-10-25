@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - run: node --test scripts/email-forwarding/*.test.cjs
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Read-only provider diagnostics (no AWS or DNS changes)
@@ -126,7 +126,7 @@ jobs:
             echo 'No other resources or DNS changes are permitted. Dev/Test are read-only. Production apply requires a separate protected job approval.'
             echo 'Provider verification and final inbox receipt are separate acceptance gates.'
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: issue-400-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -159,7 +159,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Check actual free provider account and alias routing before DNS
@@ -170,7 +170,7 @@ jobs:
         with:
           terraform_version: '1.14.3'
           terraform_wrapper: false
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: issue-400-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: infra/aws/terraform/email-forwarding
@@ -223,13 +223,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Verify source run completed the reviewed DNS apply
         id: source
         run: python3 scripts/email-forwarding/acceptance-context.py
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.source.outputs.run_id }}
@@ -259,7 +259,7 @@ jobs:
           cat receipt-pending.txt >> "$GITHUB_STEP_SUMMARY"
           echo '::error::PENDING MANUAL VERIFICATION: confirm all three correlation IDs in the destination inbox before declaring #400 accepted.'
           exit 1
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: issue-400-receipts-${{ github.run_id }}

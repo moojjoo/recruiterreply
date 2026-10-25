@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
@@ -56,7 +57,9 @@ public sealed class CognitoBffService : ICognitoBffService
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Lax,
-            Path = "/api/auth/cognito",
+            // __Host- cookies must use the root path; otherwise browsers reject
+            // the state cookie before the authorization callback can read it.
+            Path = "/",
             MaxAge = TimeSpan.FromMinutes(5)
         });
 
@@ -83,7 +86,7 @@ public sealed class CognitoBffService : ICognitoBffService
     {
         EnsureConfigured();
         var protectedState = context.Request.Cookies[StateCookie];
-        context.Response.Cookies.Delete(StateCookie, new CookieOptions { Path = "/api/auth/cognito", Secure = true, HttpOnly = true });
+        context.Response.Cookies.Delete(StateCookie, new CookieOptions { Path = "/", Secure = true, HttpOnly = true });
         if (string.IsNullOrWhiteSpace(protectedState) || string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
             throw new InvalidOperationException("Invalid Cognito callback.");
 
@@ -129,7 +132,8 @@ public sealed class CognitoBffService : ICognitoBffService
             ValidateIssuerSigningKey = true, IssuerSigningKeys = configuration.SigningKeys,
             NameClaimType = "sub"
         };
-        var principal = new JwtSecurityTokenHandler().ValidateToken(idToken, validation, out var validated);
+        var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }
+            .ValidateToken(idToken, validation, out var validated);
         if (validated is not JwtSecurityToken jwt || jwt.Payload.GetValueOrDefault("token_use")?.ToString() != "id"
             || principal.FindFirst("nonce")?.Value != nonce)
             throw new SecurityTokenValidationException("Invalid Cognito ID token use or nonce.");
@@ -150,11 +154,15 @@ public sealed class CognitoBffService : ICognitoBffService
         var parameters = new TokenValidationParameters
         {
             ValidateIssuer = true, ValidIssuer = _options.Issuer,
-            ValidateAudience = true, ValidAudience = _options.ResourceIdentifier,
+            // Cognito access tokens for this resource-server flow do not emit
+            // an aud claim. The signed issuer, client_id, token_use, lifetime,
+            // and required API scopes below provide the authorization boundary.
+            ValidateAudience = false,
             ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30),
             ValidateIssuerSigningKey = true, IssuerSigningKeys = configuration.SigningKeys
         };
-        var principal = new JwtSecurityTokenHandler().ValidateToken(accessToken, parameters, out var validated);
+        var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }
+            .ValidateToken(accessToken, parameters, out var validated);
         if (validated is not JwtSecurityToken jwt || jwt.Payload.GetValueOrDefault("token_use")?.ToString() != "access"
             || principal.FindFirst("client_id")?.Value != _options.ClientId)
             throw new SecurityTokenValidationException("Invalid Cognito access token use or client.");
@@ -176,11 +184,18 @@ public sealed class CognitoBffService : ICognitoBffService
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private sealed record OAuthState(string State, string Verifier, string Nonce, DateTimeOffset ExpiresAt);
-    private sealed class CognitoTokenResponse
+    internal sealed class CognitoTokenResponse
     {
+        [JsonPropertyName("access_token")]
         public string AccessToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("refresh_token")]
         public string? RefreshToken { get; set; }
+
+        [JsonPropertyName("id_token")]
         public string IdToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("scope")]
         public string? Scope { get; set; }
     }
 }

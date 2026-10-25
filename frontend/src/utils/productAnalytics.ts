@@ -1,7 +1,7 @@
 /** Privacy-safe GA4 adapter. Event payloads are closed, bounded allowlists. */
 export type ProductEventMap = {
-  sign_up: { method: "password" | "google" };
-  login: { method: "password" | "google" };
+  sign_up: { method: "password" | "google" | "cognito" };
+  login: { method: "password" | "google" | "cognito" };
   analysis_completed: { feature: "analyze" };
   reply_generated: { feature: "generate" };
   offer_compared: { feature: "compare" };

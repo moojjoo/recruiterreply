@@ -58,6 +58,17 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public async Task Register_WhenLegacyAuthDisabled_Returns410()
+    {
+        var controller = CreateControllerWithLegacyAuthDisabled();
+
+        var result = await controller.Register(
+            new AuthRegisterRequest { Email = "new@example.com", Password = "Password123!" }, CancellationToken.None);
+
+        Assert.Equal(410, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
     public async Task Register_WithDuplicateEmail_Returns409()
     {
         await SeedUser("taken@example.com", "Password123!");
@@ -90,6 +101,17 @@ public class AuthControllerTests
         var result = await _sut.Login(new AuthLoginRequest { Email = "", Password = "" }, CancellationToken.None);
 
         Assert.Equal(400, Assert.IsType<BadRequestObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_WhenLegacyAuthDisabled_Returns410()
+    {
+        var controller = CreateControllerWithLegacyAuthDisabled();
+
+        var result = await controller.Login(
+            new AuthLoginRequest { Email = "jane@example.com", Password = "Password123!" }, CancellationToken.None);
+
+        Assert.Equal(410, Assert.IsType<ObjectResult>(result).StatusCode);
     }
 
     [Fact]
@@ -145,6 +167,16 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public void GoogleStart_WhenLegacyAuthDisabled_Returns410()
+    {
+        var controller = CreateControllerWithLegacyAuthDisabled();
+
+        var result = controller.GoogleStart();
+
+        Assert.Equal(410, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
     public void GoogleStart_WhenMisconfigured_Returns400()
     {
         _googleAuthService.Setup(s => s.BuildAuthorizationUrl()).Throws(new InvalidOperationException("not configured"));
@@ -161,6 +193,16 @@ public class AuthControllerTests
 
         var redirect = Assert.IsType<RedirectResult>(result);
         Assert.Contains("error=google_auth_failed", redirect.Url);
+    }
+
+    [Fact]
+    public async Task GoogleCallback_WhenLegacyAuthDisabled_Returns410()
+    {
+        var controller = CreateControllerWithLegacyAuthDisabled();
+
+        var result = await controller.GoogleCallback("unused", CancellationToken.None);
+
+        Assert.Equal(410, Assert.IsType<ObjectResult>(result).StatusCode);
     }
 
     [Fact]
@@ -257,5 +299,23 @@ public class AuthControllerTests
         var result = await _sut.Me(CancellationToken.None);
 
         Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    private AuthController CreateControllerWithLegacyAuthDisabled()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = "a-sufficiently-long-test-signing-key-1234567890",
+            ["Frontend:BaseUrl"] = "https://dev.recruiterreply.com",
+            ["LegacyAuth:Enabled"] = "false",
+        }).Build();
+
+        return new AuthController(
+            _db,
+            _passwordHashService,
+            _jwtTokenService,
+            _googleAuthService.Object,
+            config,
+            NullLogger<AuthController>.Instance);
     }
 }
