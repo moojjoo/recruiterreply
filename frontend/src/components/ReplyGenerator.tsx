@@ -99,7 +99,9 @@ export const ReplyGenerator: React.FC<ReplyGeneratorProps> = ({ onResult }) => {
           {replyTypes.map((type) => (
             <label
               key={type.value}
-              className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-accent-300 hover:bg-accent-50 transition-all"
+              className={`reply-option flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-accent-300 hover:bg-accent-50 transition-all${
+                replyType === type.value ? " reply-option-selected" : ""
+              }${loading ? " reply-option-disabled" : ""}`}
             >
               <input
                 type="radio"
