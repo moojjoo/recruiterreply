@@ -31,6 +31,16 @@ public sealed class PrivateApiOriginAuthMiddleware
             return;
         }
 
+        // Stripe cannot add the private edge-origin signature. The webhook
+        // endpoint has its own provider signature verification in
+        // BillingController/BillingService, so allow only that exact POST
+        // route to reach the application without the private-origin header.
+        if (IsStripeWebhook(context))
+        {
+            await _next(context);
+            return;
+        }
+
         // The shared deployment workflow probes the Test container directly on
         // its loopback-published port. Nginx adds X-Forwarded-For to every
         // externally reachable request, so this exception is host-local only.
@@ -60,6 +70,10 @@ public sealed class PrivateApiOriginAuthMiddleware
     public static bool IsLocalHealthProbe(HttpContext context) =>
         context.Request.Path == "/health" &&
         !context.Request.Headers.ContainsKey("X-Forwarded-For");
+
+    public static bool IsStripeWebhook(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method) &&
+        context.Request.Path == "/api/billing/webhook";
 
     public static bool IsValidSignature(
         string? supplied,
