@@ -268,6 +268,25 @@ jobs:
           DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
         run: node .github/scripts/private-dev-smoke.cjs --boundary-only
 
+  dev-ready-notification:
+    needs: [deploy-dev, verify-dev-seo-http]
+    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success' && needs.verify-dev-seo-http.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish Dev-ready handoff
+        env:
+          DEPLOYED_SHA: ${{ github.sha }}
+        run: |
+          DEPLOYED_AT=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          {
+            echo '## 🎉 Dev is deployed and ready to validate! 🚀'
+            echo
+            echo "✅ Commit: `$DEPLOYED_SHA`"
+            echo "🕒 Completed: $DEPLOYED_AT"
+            echo '⏳ Allow 5–10 minutes for stabilization, then begin manual Dev validation.'
+            echo '🧪 CI deployment and configured smoke checks passed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   reconcile-dev-issues:
     needs: [deploy-dev, verify-dev-seo-http]
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success' && needs.verify-dev-seo-http.result == 'success'
