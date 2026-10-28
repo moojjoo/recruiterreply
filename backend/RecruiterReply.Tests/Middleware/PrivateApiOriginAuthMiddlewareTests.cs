@@ -23,6 +23,26 @@ public class PrivateApiOriginAuthMiddlewareTests
     }
 
     [Fact]
+    public void IsStripeWebhook_OnlyAllowsExactPostRoute()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/billing/webhook";
+
+        Assert.True(PrivateApiOriginAuthMiddleware.IsStripeWebhook(context));
+
+        context.Request.Method = "GET";
+        Assert.False(PrivateApiOriginAuthMiddleware.IsStripeWebhook(context));
+
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/billing/portal-session";
+        Assert.False(PrivateApiOriginAuthMiddleware.IsStripeWebhook(context));
+
+        context.Request.Path = "/billing/webhook";
+        Assert.False(PrivateApiOriginAuthMiddleware.IsStripeWebhook(context));
+    }
+
+    [Fact]
     public void IsValidSignature_AcceptsCurrentMatchingSignature()
     {
         const string secret = "test-only-origin-signing-key-with-32-bytes";

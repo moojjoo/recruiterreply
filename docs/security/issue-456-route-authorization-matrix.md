@@ -18,7 +18,7 @@ remain listed here.
 | `/api/auth/google/callback` | GET | Completes the legacy Google authorization flow. | OAuth provider callback; replace with the BFF callback. |
 | `/api/auth/password-recovery/request` | POST | Starts account recovery. | Neutral response and password-recovery rate limit. |
 | `/api/auth/password-recovery/complete` | POST | Completes account recovery. | One-time credential, expiry, attempt limit, and password validation. |
-| `/api/billing/webhook` | POST | Stripe server-to-server webhook. | Stripe signature verification and replay/provider handling; not browser authentication. |
+| `/api/billing/webhook` | POST | Stripe server-to-server webhook. | Stripe signature verification and replay/provider handling; not browser authentication. When private API origin signing is enabled for Dev/Test, this exact route bypasses the edge-origin header because Stripe cannot supply it; the application Stripe signature check remains mandatory. |
 | `/api/gmail/callback` | GET | Gmail provider callback. | OAuth state/token validation in the Gmail service. |
 | `/api/consent-events` | POST | Consent audit event from the public frontend. | Allowed-origin check and consent-audit rate limit. |
 
