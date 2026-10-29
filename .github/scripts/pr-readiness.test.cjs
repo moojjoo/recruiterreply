@@ -17,7 +17,11 @@ const sha='a'.repeat(40);
 const checks=['verify','test','codeql required gate','analyze (javascript-typescript)','analyze (csharp)'].map(name=>({name,head_sha:sha,status:'completed',conclusion:'success'}));
 const pr={draft:false,head:{sha},labels:[{name:'automation-ready'}],body:'## Implementation evidence\nCommit abc passed verification workflow tests.\n## Acceptance criteria\n- [x] Feature implemented'};
 test('medium code with complete checks is eligible',()=>assert.equal(validateReadiness({pr,checks,changedFiles:[{filename:'frontend/src/App.tsx',status:'modified'}]}).eligible,true));
-test('high-risk code cannot auto-merge even with labels and checks',()=>assert.equal(validateReadiness({pr,checks,changedFiles:[{filename:'infra/aws/terraform/main.tf',status:'modified'}]}).eligible,false));
+test('high-risk code requires current-SHA owner authorization in addition to labels and checks',()=>{
+ const input={pr,checks,changedFiles:[{filename:'infra/aws/terraform/main.tf',status:'modified'}]};
+ assert.equal(validateReadiness(input).eligible,false);
+ assert.equal(validateReadiness({...input,ownerAuthorization:true}).eligible,true);
+});
 test('missing required check blocks medium PR',()=>assert.equal(validateReadiness({pr,checks:checks.slice(1),changedFiles:['frontend/src/App.tsx']}).eligible,false));
 test('GitHub capitalization of CodeQL checks is accepted',()=>assert.equal(validateReadiness({pr,checks:checks.map(c=>c.name.startsWith('analyze')?{...c,name:c.name.replace(/^analyze/,'Analyze')}:c),changedFiles:['frontend/src/App.tsx']}).eligible,true));
 for (const [label, update] of [
