@@ -50,7 +50,7 @@ test('trusted Dependabot metadata does not bypass required checks', () => {
   assert.equal(trusted.eligible, true);
   const result = validateReadiness({pr, changedFiles: files, trustedDependabotUpdate: true});
   assert.equal(result.eligible, false);
-  assert.match(result.reasons.join('; '), /Missing successful current-SHA check/);
+  assert.match(result.reasons.join('; '), /Missing current-SHA check/);
 });
 
 test('frontend-only trusted Dependabot update does not require skipped C# CodeQL', () => {

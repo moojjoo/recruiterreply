@@ -77,8 +77,9 @@ Project 2 has automatic intake and closed-item workflows enabled. New qualifying
 
 ## Owner-approved solo-developer automation (#256)
 
-- `/execute <issue>` and `/execute-dev <issue>` authorize implementation on a feature branch, a ready-for-review PR, CI-gated auto-merge, and deployment to Dev using the existing `main` push workflow.
+- `/execute <issue>` and `/execute-dev <issue>` authorize implementation on a feature branch, a ready-for-review PR, CI-gated auto-merge, and deployment to Dev using the existing `main` push workflow. For a high-risk PR, the trusted integration must also record the exact owner-authenticated `/execute-dev <issue>` command on the linked PR after the final push; authorization is bound to that head SHA and expires after 24 hours.
 - Apply the `execute-dev` PR label to opt in to the existing automation; it checks successful verify, Playwright and CodeQL checks and unresolved review threads. GitHub branch protection remains authoritative.
+- A new push invalidates high-risk authorization. Reissue `/execute-dev <issue>` only after reviewing the final SHA. Use `/revoke-execute-dev <issue>` on the PR to revoke an active authorization. Labels and PR-authored files cannot grant owner authorization.
 - A Copilot reviewer is optional and must not block a solo developer's CI-gated PR merge. A failed or pending check prevents merge.
 - `/execute test` and `/execute prod` require separate owner commands and promote the approved immutable SHA; never automatically promote them.
 - If required GitHub rules/settings cannot be verified through repository permissions, validate them in repository Settings before claiming enforcement.
