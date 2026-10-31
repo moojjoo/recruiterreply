@@ -47,7 +47,7 @@ public class OpportunitiesController : ControllerBase
     public async Task<IActionResult> CreateOpportunity([FromBody] OpportunityEntity request, CancellationToken ct)
     {
         var userId = User.GetRequiredUserId();
-        var now = DateTime.UtcNow;
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
 
         var opportunity = new OpportunityEntity
         {
@@ -106,7 +106,7 @@ public class OpportunitiesController : ControllerBase
         opportunity.LastContactDate = request.LastContactDate;
         opportunity.NextFollowupDate = request.NextFollowupDate;
         opportunity.Notes = request.Notes;
-        opportunity.UpdatedAt = DateTime.UtcNow;
+        opportunity.UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
 
         await _db.SaveChangesAsync(ct);
         return Ok(opportunity);

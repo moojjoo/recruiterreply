@@ -55,7 +55,7 @@ public class RecruiterPipelineService : IRecruiterPipelineService
             From = Truncate(message.From, 500),
             Subject = Truncate(message.Subject, 500),
             ReceivedAt = message.ReceivedAt,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime,
         };
 
         // Replies on an already-tracked thread always go through; only new threads need the pre-filter.
@@ -101,7 +101,7 @@ public class RecruiterPipelineService : IRecruiterPipelineService
             return;
         }
 
-        var now = DateTime.UtcNow;
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         if (thread is null)
         {
             thread = new RecruiterThreadEntity

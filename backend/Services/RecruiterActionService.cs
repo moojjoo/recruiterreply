@@ -137,6 +137,6 @@ public class RecruiterActionService : IRecruiterActionService
             message.RfcMessageId,
             message.References,
             body), cancellationToken);
-        thread.DraftCreatedAt = DateTime.UtcNow;
+        thread.DraftCreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
     }
 }

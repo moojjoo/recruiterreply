@@ -22,23 +22,26 @@ public class GmailOAuthService : IGmailOAuthService
     private readonly IDataProtector _stateProtector;
     private readonly IDataProtector _tokenProtector;
     private readonly ILogger<GmailOAuthService> _logger;
+    private readonly TimeProvider _timeProvider;
 
     public GmailOAuthService(
         IOptions<GmailOptions> options,
         IGmailConnectionRepository connectionRepository,
         IDataProtectionProvider dataProtectionProvider,
-        ILogger<GmailOAuthService> logger)
+        ILogger<GmailOAuthService> logger,
+        TimeProvider? timeProvider = null)
     {
         _options = options.Value;
         _connectionRepository = connectionRepository;
         _stateProtector = dataProtectionProvider.CreateProtector(StateProtectorPurpose);
         _tokenProtector = dataProtectionProvider.CreateProtector(TokenProtectorPurpose);
         _logger = logger;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string BuildAuthorizationUrl(Guid userId)
     {
-        var rawState = $"{userId}|{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        var rawState = $"{userId}|{_timeProvider.GetUtcNow().ToUnixTimeSeconds()}";
         var state = _stateProtector.Protect(rawState);
 
         var request = new GoogleAuthorizationCodeRequestUrl(new Uri("https://accounts.google.com/o/oauth2/v2/auth"))
@@ -73,7 +76,7 @@ public class GmailOAuthService : IGmailOAuthService
             }
 
             var issuedAt = DateTimeOffset.FromUnixTimeSeconds(issuedAtUnixSeconds);
-            if (DateTimeOffset.UtcNow - issuedAt > StateMaxAge)
+            if (_timeProvider.GetUtcNow() - issuedAt > StateMaxAge)
             {
                 _logger.LogWarning("Gmail OAuth state expired for user {UserId}", userId);
                 return null;
@@ -109,7 +112,7 @@ public class GmailOAuthService : IGmailOAuthService
         var profile = await gmailService.Users.GetProfile("me").ExecuteAsync(cancellationToken);
 
         var existing = await _connectionRepository.GetByUserIdAsync(userId, cancellationToken);
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var connection = existing ?? new GmailConnectionEntity
         {
@@ -143,7 +146,7 @@ public class GmailOAuthService : IGmailOAuthService
     public async Task<string> GetValidAccessTokenAsync(GmailConnectionEntity connection, CancellationToken cancellationToken = default)
     {
         // Small buffer so a token that's about to expire mid-request still gets refreshed.
-        if (connection.TokenExpiresAt > DateTime.UtcNow.AddSeconds(60))
+        if (connection.TokenExpiresAt > _timeProvider.GetUtcNow().UtcDateTime.AddSeconds(60))
         {
             return _tokenProtector.Unprotect(connection.AccessTokenEncrypted);
         }
@@ -159,8 +162,9 @@ public class GmailOAuthService : IGmailOAuthService
             connection.RefreshTokenEncrypted = _tokenProtector.Protect(tokenResponse.RefreshToken);
         }
 
-        connection.TokenExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresInSeconds ?? 3600);
-        connection.UpdatedAt = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        connection.TokenExpiresAt = now.AddSeconds(tokenResponse.ExpiresInSeconds ?? 3600);
+        connection.UpdatedAt = now;
         await _connectionRepository.UpdateAsync(connection, cancellationToken);
 
         return tokenResponse.AccessToken;
@@ -184,7 +188,7 @@ public class GmailOAuthService : IGmailOAuthService
         connection.Status = "disconnected";
         connection.AccessTokenEncrypted = string.Empty;
         connection.RefreshTokenEncrypted = string.Empty;
-        connection.UpdatedAt = DateTime.UtcNow;
+        connection.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _connectionRepository.UpdateAsync(connection, cancellationToken);
     }
 

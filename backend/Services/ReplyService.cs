@@ -46,7 +46,7 @@ public class ReplyService : IReplyService
                 Subject = $"reply-{request.ReplyType}",
                 Body = request.RecruiterMessage,
                 CompanyName = "Unknown",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
             };
 
             _dbContext.Messages.Add(message);
@@ -62,8 +62,8 @@ public class ReplyService : IReplyService
                 RedFlags = "[]",
                 AnalysisSummary = "Reply generation request",
                 SuggestedTone = request.ReplyType,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime,
+                UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
             };
 
             _dbContext.MessageAnalyses.Add(analysis);
@@ -100,7 +100,7 @@ public class ReplyService : IReplyService
                 Content = response.Reply,
                 Tone = response.Tone,
                 IsUsed = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
             };
 
             _dbContext.GeneratedReplies.Add(generatedReply);
