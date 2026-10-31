@@ -17,7 +17,7 @@ test('trusted workflow accepts owner commands and serializes asynchronous reeval
   assert.match(workflow, /const prs = targetNumber[\s\S]*: \[\];/);
   assert.doesNotMatch(workflow, /workflow_dispatch:/);
   assert.match(workflow, /pull_request_review:[\s\S]*types: \[submitted, dismissed\]/);
-  assert.match(workflow, /pull_request_review_thread:[\s\S]*types: \[resolved, unresolved\]/);
+  assert.doesNotMatch(workflow, /pull_request_review_thread:/);
 });
 
 test('high-risk authorization is invalidated on changed heads or revocation', () => {
