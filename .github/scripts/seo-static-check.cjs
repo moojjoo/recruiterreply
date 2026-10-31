@@ -5,6 +5,7 @@ const root = 'frontend/';
 const html = fs.readFileSync(root + 'index.html','utf8');
 const sitemap = fs.readFileSync(root + 'public/sitemap.xml','utf8');
 const robots = fs.readFileSync(root + 'public/robots.txt','utf8');
+const indexNowKey = fs.readFileSync(root + 'public/6d51ad9dbfcb4a998ced7f38b7262e73.txt','utf8').trim();
 assert.match(html, /<title>RecruiterReply[^<]*<\/title>/);
 assert.match(html, /<link rel="canonical" href="https:\/\/recruiterreply\.com\/"\s*\/>/);
 assert.match(html, /name="description"/);
@@ -31,4 +32,5 @@ for (const url of urls) {
  assert.ok(!privateRoutes.has(firstSegment),'private route in sitemap');
 }
 assert.match(robots, /Sitemap: https:\/\/recruiterreply\.com\/sitemap\.xml/);
+assert.equal(indexNowKey, '6d51ad9dbfcb4a998ced7f38b7262e73', 'IndexNow proof file must match the public key');
 console.log('SEO static metadata, JSON-LD, sitemap and robots checks passed');

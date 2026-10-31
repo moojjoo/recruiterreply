@@ -44,6 +44,9 @@ jobs:
       - name: Verify static SEO assets
         run: node .github/scripts/seo-static-check.cjs
 
+      - name: Test production search-engine submission safety
+        run: node --test .github/scripts/tests/search-engine-submission.test.mjs
+
       - name: Test issue reconciliation audit
         run: node --test .github/scripts/tests/issue-reconciliation-report.test.cjs
 

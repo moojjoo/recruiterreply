@@ -80,3 +80,63 @@ jobs:
         Disallow: /auth/
 
         Sitemap: https://recruiterreply.com/sitemap.xml
+
+  search-engine-discovery:
+    needs: [resolve-source, promote]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: prod
+    steps:
+      - name: Checkout promoted source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-source.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve previous successful Production SHA
+        id: previous
+        uses: actions/github-script@v9
+        env:
+          CURRENT_SHA: ${{ needs.resolve-source.outputs.sha }}
+        with:
+          script: |
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              ...context.repo, environment: 'prod', per_page: 100
+            });
+            for (const deployment of deployments) {
+              if (deployment.sha === process.env.CURRENT_SHA || !/^[a-f0-9]{40}$/.test(deployment.sha)) continue;
+              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
+                ...context.repo, deployment_id: deployment.id, per_page: 1
+              });
+              if (statuses[0]?.state === 'success') {
+                core.setOutput('sha', deployment.sha);
+                return;
+              }
+            }
+            core.notice('No prior successful Production deployment found; all sitemap URLs will be considered new.');
+
+      - name: Prepare canonical URL change set
+        env:
+          PREVIOUS_SHA: ${{ steps.previous.outputs.sha }}
+          CURRENT_SHA: ${{ needs.resolve-source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          : > "$RUNNER_TEMP/previous-sitemap.xml"
+          printf '%s\n' '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>' > "$RUNNER_TEMP/previous-sitemap.xml"
+          : > "$RUNNER_TEMP/changed-files.txt"
+          if [[ -n "$PREVIOUS_SHA" ]] && git cat-file -e "$PREVIOUS_SHA^{commit}"; then
+            if git cat-file -e "$PREVIOUS_SHA:frontend/public/sitemap.xml"; then
+              git show "$PREVIOUS_SHA:frontend/public/sitemap.xml" > "$RUNNER_TEMP/previous-sitemap.xml"
+            fi
+            git diff --name-only "$PREVIOUS_SHA" "$CURRENT_SHA" > "$RUNNER_TEMP/changed-files.txt"
+          fi
+
+      - name: Submit changed Production URLs after successful deployment
+        env:
+          DEPLOYMENT_ENVIRONMENT: prod
+          CURRENT_SITEMAP: frontend/public/sitemap.xml
+          PREVIOUS_SITEMAP: ${{ runner.temp }}/previous-sitemap.xml
+          CHANGED_FILES: ${{ runner.temp }}/changed-files.txt
+          GOOGLE_SEARCH_CONSOLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SEARCH_CONSOLE_CREDENTIALS_JSON }}
+        run: node .github/scripts/search-engine-submission.mjs
