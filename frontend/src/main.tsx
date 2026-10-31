@@ -12,7 +12,7 @@ const app = (
     <App />
   </React.StrictMode>
 );
-if (window.location.pathname === '/' && root.dataset.prerendered === 'react') {
+if (root.dataset.prerendered === 'react') {
   ReactDOM.hydrateRoot(root, app);
 } else {
   ReactDOM.createRoot(root).render(app);

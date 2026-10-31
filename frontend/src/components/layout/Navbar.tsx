@@ -46,7 +46,7 @@ export const Navbar: React.FC = () => {
             ) : (
               <>
                 <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-700 hover:text-primary-600">Login</a>
-                <Button size="sm" onClick={() => (window.location.href = "/register")}>Sign Up</Button>
+                <a href="/register" className="btn-primary px-3 py-1.5 text-sm">Sign Up</a>
               </>
             )}
           </div>

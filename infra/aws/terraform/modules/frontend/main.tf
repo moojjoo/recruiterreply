@@ -99,22 +99,103 @@ resource "aws_cloudfront_origin_access_control" "this" {
   origin_access_control_origin_type = "s3"
 }
 
-# Dev-only SPA rewrite: resolve client-side routes to index.html before S3 is queried.
-# Preserve real files, SEO prerendered pages, robots.txt, and sitemap.xml.
-resource "aws_cloudfront_function" "dev_spa_rewrite" {
-  for_each = { for key, bucket in aws_s3_bucket.this : key => bucket if key == "dev" }
-  name     = "recruiterreply-dev-spa-rewrite"
+# Production www support requires a certificate that covers both hostnames.
+# Applying this remains a separately approved production infrastructure action.
+data "aws_route53_zone" "prod" {
+  count        = contains(keys(aws_s3_bucket.this), "prod") ? 1 : 0
+  name         = "recruiterreply.com."
+  private_zone = false
+}
+
+resource "aws_acm_certificate" "prod_frontend" {
+  count = contains(keys(aws_s3_bucket.this), "prod") ? 1 : 0
+
+  domain_name               = var.cloudfront_aliases["prod"]
+  subject_alternative_names = [var.prod_www_alias]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "prod_frontend_cert_validation" {
+  for_each = contains(keys(aws_s3_bucket.this), "prod") ? {
+    for option in aws_acm_certificate.prod_frontend[0].domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      record = option.resource_record_value
+      type   = option.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  zone_id         = data.aws_route53_zone.prod[0].zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 60
+  records         = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "prod_frontend" {
+  count = contains(keys(aws_s3_bucket.this), "prod") ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.prod_frontend[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.prod_frontend_cert_validation : record.fqdn]
+}
+
+# Route known SPA paths before S3 is queried and leave unknown paths to the
+# origin error mapping so they become real 404 responses instead of soft 404s.
+resource "aws_cloudfront_function" "spa_router" {
+  for_each = aws_s3_bucket.this
+  name     = "recruiterreply-${each.key}-spa-router"
   runtime  = "cloudfront-js-2.0"
-  comment  = "Rewrite Dev SPA routes to index.html before S3 lookup"
+  comment  = "Route known ${each.key} SPA paths and legacy SEO redirects"
   publish  = true
   code     = <<-JS
     function handler(event) {
       var request = event.request;
       var uri = request.uri;
-      // Leave the homepage and file-like paths (including SEO pages) untouched.
-      if (uri === '/' || uri.substring(uri.lastIndexOf('/') + 1).includes('.')) return request;
-      // Rewrite client-side paths and unknown extensionless paths to the SPA shell.
-      request.uri = '/index.html';
+
+      var redirects = {
+        '/seo-recruiter-replies.html': '/guides/how-to-reply-to-a-recruiter',
+        '/seo-job-offer-comparison.html': '/guides/compare-job-offers',
+        '/seo-salary-negotiation.html': '/guides/salary-negotiation-email'
+      };
+
+      var host = request.headers.host && request.headers.host.value;
+      if (host === '${var.prod_www_alias}') {
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: { location: { value: 'https://${var.cloudfront_aliases["prod"]}' + uri } }
+        };
+      }
+
+      if (redirects[uri]) {
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: { location: { value: 'https://recruiterreply.com' + redirects[uri] } }
+        };
+      }
+
+      var prerendered = [
+        '/pricing', '/policy', '/terms', '/cookies', '/login', '/register',
+        '/forgot-password', '/reset-password', '/404',
+        '/guides/how-to-reply-to-a-recruiter', '/guides/compare-job-offers',
+        '/guides/salary-negotiation-email'
+      ];
+      if (prerendered.indexOf(uri) !== -1) {
+        request.uri = uri + '/index.html';
+        return request;
+      }
+
+      var appRoutes = [
+        '/dashboard', '/analyze', '/reply', '/compare', '/profile',
+        '/opportunities', '/career-profile', '/recruiter-inbox',
+        '/gmail/connected', '/auth/google/callback'
+      ];
+      if (appRoutes.indexOf(uri) !== -1) request.uri = '/index.html';
       return request;
     }
   JS
@@ -164,7 +245,7 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = "index.html"
   price_class         = "PriceClass_All"
   http_version        = "http2"
-  aliases             = [var.cloudfront_aliases[each.key]]
+  aliases             = each.key == "prod" ? [var.cloudfront_aliases[each.key], var.prod_www_alias] : [var.cloudfront_aliases[each.key]]
   web_acl_id          = lookup(var.cloudfront_web_acl_ids, each.key, null)
 
   origin {
@@ -237,10 +318,10 @@ resource "aws_cloudfront_distribution" "this" {
     cached_methods         = ["HEAD", "GET"]
     compress               = true
     dynamic "function_association" {
-      for_each = each.key == "dev" && !(var.enable_private_edge_associations && contains(var.private_edge_association_environments, each.key)) ? [1] : []
+      for_each = !(var.enable_private_edge_associations && contains(var.private_edge_association_environments, each.key)) ? [1] : []
       content {
         event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.dev_spa_rewrite[each.key].arn
+        function_arn = aws_cloudfront_function.spa_router[each.key].arn
       }
     }
     dynamic "function_association" {
@@ -276,11 +357,11 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "custom_error_response" {
-    for_each = each.key == "prod" || !(var.enable_private_edge_associations && contains(var.private_edge_association_environments, each.key)) ? toset([403, 404]) : toset([])
+    for_each = toset([403, 404])
     content {
       error_code            = custom_error_response.value
-      response_code         = 200
-      response_page_path    = "/index.html"
+      response_code         = 404
+      response_page_path    = "/404/index.html"
       error_caching_min_ttl = 10
     }
   }
@@ -292,9 +373,23 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = var.cloudfront_acm_certificate_arns[each.key]
+    acm_certificate_arn      = each.key == "prod" ? aws_acm_certificate_validation.prod_frontend[0].certificate_arn : var.cloudfront_acm_certificate_arns[each.key]
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+resource "aws_route53_record" "prod_www" {
+  for_each = contains(keys(aws_cloudfront_distribution.this), "prod") ? toset(["A", "AAAA"]) : toset([])
+
+  zone_id = data.aws_route53_zone.prod[0].zone_id
+  name    = var.prod_www_alias
+  type    = each.value
+
+  alias {
+    name                   = aws_cloudfront_distribution.this["prod"].domain_name
+    zone_id                = aws_cloudfront_distribution.this["prod"].hosted_zone_id
+    evaluate_target_health = false
   }
 }
 
