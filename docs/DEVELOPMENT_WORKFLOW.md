@@ -23,7 +23,28 @@
 - Pushes to `main` run `verify`, then `build`, then `deploy-dev`.
 - Manual dispatch runs `verify` on any branch, but runs `build` and `deploy-dev` only when dispatched on `main`.
 
+## Feature-log priority and execution queue
+
+GitHub Issues remain the feature log, while the linked **RecruiterReply MVP** GitHub Project (Project 2) is the authoritative active execution queue. The `Next Up` view is filtered to open Todo items and excludes Blocked items. Use the Project's `Priority` and numeric `Execution rank` fields to order eligible work; sort by Priority and then Execution rank in the Project UI. The historical labels remain during migration and for compatibility, but `order:NN` is no longer the primary queue.
+
+Every new feature, bug, security task, or documentation task must include exactly one priority label and a temporary execution-order label before implementation begins:
+
+- `priority:P0` — security exposure, data loss, production/release blocker, or a prerequisite for protecting an environment.
+- `priority:P1` — reliability, operational correctness, supportability, or an important feature whose failure does not immediately create a security or release blocker.
+- `priority:P2` — user experience, analytics, polish, or other non-blocking improvements.
+- `order:NN` — compatibility/history only during the Project migration; lower numbers previously executed first.
+
+Assign the highest applicable priority when an issue spans categories. Set the Project `Priority` field to match the label and assign a unique numeric `Execution rank` after considering dependencies: security and environment-perimeter prerequisites precede dependent authentication and release work; reliability and observability follow their prerequisites; experience and analytics follow the release path. Keep `order:NN` aligned temporarily, but do not renumber the Project queue solely to preserve labels. Closed issues retain their historical labels and are not eligible for `Next Up`.
+
+The issue body must state the priority rationale and list dependencies. Before `/execute` or `/execute-dev`, verify that the issue has the required `priority:*`, `phase:*`, and Project membership with `Priority`, `Execution rank`, and `Status` values. Reconcile the Project fields and compatibility labels whenever dependencies, scope, or completion status changes. Record blocked-by relationships using GitHub issue dependencies when available.
+
+Project 2 has automatic intake and closed-item workflows enabled. New qualifying issues should enter as Todo; closing an issue should move it to Done and remove it from the active view. These workflows must not be weakened. If GitHub automation cannot be configured through the available tooling, document the missing permission and leave the existing workflow unchanged rather than approximating it in repository Actions.
+
 ## Issue template (copy into GitHub)
+
+**Priority:** `P0`, `P1`, or `P2`, with a short rationale based on the feature log.
+
+**Execution order:** Project `Execution rank`, including why this issue precedes or follows its dependencies. Keep a matching `order:NN` label temporarily for compatibility.
 
 **Problem / outcome:** What user problem are we solving?
 
@@ -56,8 +77,9 @@
 
 ## Owner-approved solo-developer automation (#256)
 
-- `/execute <issue>` and `/execute-dev <issue>` authorize implementation on a feature branch, a ready-for-review PR, CI-gated auto-merge, and deployment to Dev using the existing `main` push workflow.
+- `/execute <issue>` and `/execute-dev <issue>` authorize implementation on a feature branch, a ready-for-review PR, CI-gated auto-merge, and deployment to Dev using the existing `main` push workflow. For a high-risk PR, the trusted integration must also record the exact owner-authenticated `/execute-dev <issue>` command on the linked PR after the final push; authorization is bound to that head SHA and expires after 24 hours.
 - Apply the `execute-dev` PR label to opt in to the existing automation; it checks successful verify, Playwright and CodeQL checks and unresolved review threads. GitHub branch protection remains authoritative.
+- A new push invalidates high-risk authorization. Reissue `/execute-dev <issue>` only after reviewing the final SHA. Use `/revoke-execute-dev <issue>` on the PR to revoke an active authorization. Labels and PR-authored files cannot grant owner authorization.
 - A Copilot reviewer is optional and must not block a solo developer's CI-gated PR merge. A failed or pending check prevents merge.
 - `/execute test` and `/execute prod` require separate owner commands and promote the approved immutable SHA; never automatically promote them.
 - If required GitHub rules/settings cannot be verified through repository permissions, validate them in repository Settings before claiming enforcement.

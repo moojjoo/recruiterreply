@@ -35,10 +35,53 @@ public class BillingController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating Stripe checkout session");
             return StatusCode(500, new { error = "An error occurred while starting checkout" });
+        }
+    }
+
+    [HttpPost("upgrade-recruiter-pro")]
+    public async Task<IActionResult> UpgradeToRecruiterPro(CancellationToken ct)
+    {
+        try
+        {
+            var checkoutUrl = await _billingService.UpgradeToRecruiterProAsync(User.GetRequiredUserId(), ct);
+            return Accepted(new UpgradeToRecruiterProResponse
+            {
+                Status = checkoutUrl is null ? "pending" : "checkout_required",
+                Tier = PlanTiers.RecruiterPro,
+                Url = checkoutUrl,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error upgrading subscription to Recruiter Pro");
+            return StatusCode(500, new { error = "An error occurred while upgrading the subscription" });
+        }
+    }
+
+    [HttpGet("plans")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPlans(CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _billingService.GetPlanCatalogAsync(ct));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading public billing plan catalog");
+            return StatusCode(503, new { error = "Billing plans are temporarily unavailable" });
         }
     }
 
@@ -59,6 +102,26 @@ public class BillingController : ControllerBase
         {
             _logger.LogError(ex, "Error creating Stripe billing portal session");
             return StatusCode(500, new { error = "An error occurred while opening the billing portal" });
+        }
+    }
+
+    [HttpPost("cancel-subscription")]
+    public async Task<IActionResult> CancelSubscription(CancellationToken ct)
+    {
+        try
+        {
+            var userId = User.GetRequiredUserId();
+            await _billingService.CancelSubscriptionAsync(userId, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling Stripe subscription");
+            return StatusCode(500, new { error = "An error occurred while cancelling the subscription" });
         }
     }
 

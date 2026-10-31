@@ -335,6 +335,33 @@
     outline: 3px solid #fbbf24;
     outline-offset: 3px;
   }
+
+  /* Reply option cards need an interaction surface that matches dark-theme text. */
+  [data-theme="dark"] .reply-option {
+    background-color: #172235;
+    border-color: #475569;
+  }
+  [data-theme="dark"] .reply-option:hover,
+  [data-theme="dark"] .reply-option:focus-within {
+    background-color: #26364d;
+    border-color: #a78bfa;
+  }
+  [data-theme="dark"] .reply-option.reply-option-selected {
+    background-color: #312e81;
+    border-color: #c4b5fd;
+  }
+  [data-theme="dark"] .reply-option.reply-option-selected:hover,
+  [data-theme="dark"] .reply-option.reply-option-selected:focus-within {
+    background-color: #3730a3;
+  }
+  [data-theme="dark"] .reply-option.reply-option-disabled {
+    background-color: #334155;
+    border-color: #64748b;
+    cursor: not-allowed;
+  }
+  [data-theme="dark"] .reply-option.reply-option-disabled :is(.text-gray-900, .text-gray-600) {
+    color: #cbd5e1;
+  }
 }
 
 /* #231 Copilot review: retain semantic contrast and disabled-state affordance. */
@@ -428,8 +455,7 @@
 /* #252: Restore light navigation surfaces after dark-to-light transitions.
    Explicitly scope both states so previously dark menu panels never remain dark. */
 @layer utilities {
-  [data-theme="light"] nav[aria-label="Primary navigation"],
-  [data-theme="light"] nav[aria-label="Primary navigation"].bg-white\\/80 {
+  [data-theme="light"] nav[aria-label="Primary navigation"] {
     background-color: rgb(255 255 255 / 0.95);
     color: #111827;
     border-bottom-color: #e5e7eb;
@@ -519,4 +545,27 @@
   [data-theme="dark"] .alert-warning { background-color: #451a03; color: #fef3c7; border-left-color: #fcd34d; }
   [data-theme="dark"] .alert-info { background-color: #172554; color: #dbeafe; border-left-color: #93c5fd; }
   .alert button { color: inherit; }
+}
+
+
+/* Issue #440: Results must remain legible in both themes. */
+.tool-results-heading { scroll-margin-top: 6.5rem; }
+.tool-results { scroll-margin-top: 6.5rem; }
+[data-theme="dark"] .tool-results :is(.bg-gradient-to-r, .bg-gradient-to-br, .bg-gradient-to-b, .bg-gradient-to-l) {
+  background-color: #172235;
+  background-image: none;
+  color: #f8fafc;
+}
+[data-theme="dark"] .tool-results :is(
+  .bg-white, .bg-gray-50, .bg-gray-100, .bg-primary-50, .bg-success-50,
+  .bg-accent-50, .bg-blue-50, .bg-green-50, .bg-yellow-50, .bg-red-50
+) {
+  background-color: #172235;
+  color: #f8fafc;
+}
+[data-theme="dark"] .tool-results :is(.text-white, .text-gray-900, .text-gray-800, .text-gray-700, .text-gray-600) {
+  color: #ffffff;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

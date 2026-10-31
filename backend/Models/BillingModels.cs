@@ -64,6 +64,27 @@ public class CheckoutSessionResponse
     public string Url { get; set; } = string.Empty;
 }
 
+public class BillingPlanCatalogResponse
+{
+    public List<BillingPlanResponse> Plans { get; set; } = new();
+}
+
+public class BillingPlanResponse
+{
+    public string Tier { get; set; } = string.Empty;
+    public long? UnitAmount { get; set; }
+    public string Currency { get; set; } = "usd";
+    public string? Interval { get; set; }
+    public long? IntervalCount { get; set; }
+}
+
+public class UpgradeToRecruiterProResponse
+{
+    public string Status { get; set; } = string.Empty;
+    public string Tier { get; set; } = string.Empty;
+    public string? Url { get; set; }
+}
+
 public class PortalSessionResponse
 {
     public string Url { get; set; } = string.Empty;
@@ -81,5 +102,7 @@ public class UsageStatusResponse
     public string SubscriptionTier { get; set; } = string.Empty;
     public string? SubscriptionStatus { get; set; }
     public DateTime? SubscriptionCurrentPeriodEnd { get; set; }
+    public Guid? SubscriptionCancellationEventId { get; set; }
+    public bool SubscriptionCancelAtPeriodEnd { get; set; }
     public List<FeatureUsageStatus> Usage { get; set; } = new();
 }

@@ -1,0 +1,30 @@
+{
+  "variables": {
+    "enable_private_environment_identity": true,
+    "private_environment_identity_environments": ["dev", "test"],
+    "enable_private_edge_runtime_state": true,
+    "private_edge_environments": ["dev", "test"],
+    "enable_private_edge_functions": true,
+    "enable_private_edge_associations": true,
+    "private_environment_ses_from_email": "no-reply@recruiterreply.com",
+    "private_environment_ses_source_arn": "arn:aws:ses:us-east-1:178522450316:identity/recruiterreply.com",
+    "private_environment_cognito_domain_prefixes": {
+      "dev": "recruiterreply-dev-178522450316",
+      "test": "recruiterreply-test-178522450316"
+    },
+    "enable_private_dev_distribution": true,
+    "enable_private_test_distribution": true,
+    "enable_private_test_api_routing": true,
+    "enable_private_dev_api_routing": true
+  },
+  "packages": {
+    "dev": {
+      "function_name": "recruiterreply-dev-private-edge",
+      "sha256_base64": "dfPe7ShuRqNTx/5+XcF5yUzeSipPZICjHieyFUmYVeM="
+    },
+    "test": {
+      "function_name": "recruiterreply-test-private-edge",
+      "sha256_base64": "QyiSoq0PX/TZf30HknBpLZM/ry1Uv9IjMbUFgHbb64o="
+    }
+  }
+}

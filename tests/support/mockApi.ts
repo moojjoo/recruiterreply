@@ -15,6 +15,7 @@ export const defaultRoutes: MockRoutes = {
   'POST /auth/register': { body: fx.authResponse },
   'POST /consent-events': { status: 204 },
   'GET /billing/usage': { body: fx.usage },
+  'GET /billing/plans': { body: fx.billingPlans },
   'POST /analyze-recruiter-message': { body: fx.analysis },
   'POST /generate-reply': { body: fx.reply },
   'POST /compare-offers': { body: fx.comparison },

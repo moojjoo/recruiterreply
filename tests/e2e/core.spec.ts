@@ -28,6 +28,37 @@ test.describe('message analyzer', () => {
 });
 
 test.describe('reply generator', () => {
+  test('keeps reply options readable across theme interaction states', async ({ authedPage: page }) => {
+    await page.goto('/reply');
+
+    const option = page.getByText('Decline Politely').locator('..').locator('..');
+    const description = option.getByText('Politely decline the opportunity');
+
+    await option.hover();
+    await expect(option).toHaveCSS('background-color', 'rgb(245, 243, 255)');
+    await expect(description).toHaveCSS('color', 'oklch(0.446 0.03 256.802)');
+
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+    await page.getByRole('heading', { name: 'Generate Your Reply' }).hover();
+    await expect(option).toHaveCSS('background-color', 'rgb(23, 34, 53)');
+    await option.hover();
+    await expect(option).toHaveCSS('background-color', 'rgb(38, 54, 77)');
+    await expect(description).toHaveCSS('color', 'rgb(203, 213, 225)');
+
+    await page.getByLabel('Decline Politely').check();
+    await page.getByLabel('Decline Politely').blur();
+    await page.getByRole('heading', { name: 'Generate Your Reply' }).hover();
+    await expect(option).toHaveCSS('background-color', 'rgb(49, 46, 129)');
+
+    await page.getByLabel('Decline Politely').focus();
+    await expect(page.getByLabel('Decline Politely')).toBeFocused();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await option.hover();
+    await expect(option).toHaveCSS('background-color', 'rgb(55, 48, 163)');
+    await expect(description).toHaveCSS('color', 'rgb(203, 213, 225)');
+  });
+
   test('renders the generated reply', async ({ authedPage: page }) => {
     await page.goto('/reply');
     await page.getByLabel('Decline Politely').check();

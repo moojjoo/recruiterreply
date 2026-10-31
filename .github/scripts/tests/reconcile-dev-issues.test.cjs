@@ -9,6 +9,11 @@ test('only explicit Dev-Completes markers qualify', () => {
 test('missing completion markers never qualify', () => {
   assert.deepEqual(linkedIssues('Closes #239\nFixes #217'), []);
 });
+test('acceptance checklist fails closed when any item is unchecked', () => {
+  assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One'), true);
+  assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One\n- [ ] Two'), false);
+  assert.equal(acceptanceChecklistComplete('Dev-Completes: #320'), false);
+});
 test('project matches either GitHub display title or bare title', () => {
   assert.equal(findProject([{id:'p',title:'recruiterreply project'}]).id, 'p');
   assert.equal(findProject([{id:'q',title:"@moojjoo's recruiterreply project"}]).id, 'q');
@@ -16,11 +21,6 @@ test('project matches either GitHub display title or bare title', () => {
 test('missing or ambiguous project fails closed', () => {
   assert.throws(() => findProject([]), /exactly one/);
   assert.throws(() => findProject([{title:'recruiterreply project'},{title:"@moojjoo's recruiterreply project"}]), /exactly one/);
-});
-test('acceptance checklist fails closed when any item is unchecked', () => {
-  assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One'), true);
-  assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One\n- [ ] Two'), false);
-  assert.equal(acceptanceChecklistComplete('Dev-Completes: #320'), false);
 });
 test('all required checks must pass on the exact PR head SHA', () => {
   const sha = 'a'.repeat(40);
@@ -30,7 +30,7 @@ test('all required checks must pass on the exact PR head SHA', () => {
   assert.equal(checksPass(complete, 'b'.repeat(40)), false);
 });
 
-function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true} = {}) {
+function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true, approvalLabel = true} = {}) {
   const sha = 'a'.repeat(40), headSha = 'b'.repeat(40);
   let state = 'open';
   const comments = [], updates = [], mutations = [];
@@ -42,7 +42,7 @@ function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Complete
       repos: {listPullRequestsAssociatedWithCommit: associated},
       checks: {listForRef: listChecks},
       issues: {
-        get: async () => ({data: {node_id: 'I_320', state, labels: [{name: 'dev-acceptance-verified'}]}}),
+        get: async () => ({data: {node_id: 'I_320', state, labels: approvalLabel ? [{name: 'dev-acceptance-verified'}] : []}}),
         listComments,
         createComment: async ({body: comment}) => comments.push({body: comment}),
         update: async args => { state = args.state; updates.push(args); }
@@ -88,6 +88,13 @@ test('missing trusted deployment evidence performs no writes', async () => {
   assert.equal(subject.state(), 'open');
   assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
   assert.match(subject.warnings.join(';'), /deployment verification/);
+});
+test('missing controlled approval label performs no writes', async () => {
+  const subject = harness({approvalLabel: false});
+  await runWithEvidence(subject);
+  assert.equal(subject.state(), 'open');
+  assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
+  assert.match(subject.notices.join(';'), /missing acceptance verification label/);
 });
 test('partial PR and missing project item never close an issue', async () => {
   const partial = harness({body: '## Acceptance criteria\n- [x] Complete\n\nRefs #320'});

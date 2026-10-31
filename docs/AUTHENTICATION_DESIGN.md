@@ -46,8 +46,8 @@ these values:
 
 | Environment | `Google:RedirectUri` | `Frontend:BaseUrl` |
 | --- | --- | --- |
-| Dev | `https://api-dev.recruiterreply.com/api/auth/google/callback` | `https://dev.recruiterreply.com` |
-| Test | `https://api-test.recruiterreply.com/api/auth/google/callback` | `https://test.recruiterreply.com` |
+| Dev | `https://dev.recruiterreply.com/api/auth/google/callback` | `https://dev.recruiterreply.com` |
+| Test | `https://test.recruiterreply.com/api/auth/google/callback` | `https://test.recruiterreply.com` |
 | Prod | `https://api.recruiterreply.com/api/auth/google/callback` | `https://recruiterreply.com` |
 
 In Google Cloud Console, register all three exact callback URLs under the OAuth web

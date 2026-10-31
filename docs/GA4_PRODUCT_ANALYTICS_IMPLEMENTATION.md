@@ -16,11 +16,13 @@
 | `offer_compared` | Successful comparison response | `feature: compare` |
 | `pricing_viewed` | Pricing route view | none |
 | `begin_checkout` | Checkout initiated | `plan_tier` from allowlist |
+| `feature_error` | Actionable analyze/generate/compare request failure | bounded `feature`, `error_code` |
+| `subscription_cancelled` | Confirmed server-side transition to free/canceled | bounded `plan_tier` |
 | `purchase` | Not emitted to GA4; see Stripe limitation below | n/a |
 
 Never send user-entered text, resume content, recruiter messages, emails, account identifiers, tokens, URLs with sensitive query strings, Stripe identifiers or generated replies to GA4.
 
-The typed adapter accepts only the parameters shown above. `sign_up`, password/Google `login`, and the three AI events fire after successful application responses. `begin_checkout` fires only after the backend creates a Stripe Checkout session. `pricing_viewed` and sanitized `page_view` events are emitted from the React router. Query strings, fragments, user input, identifiers and payment data are not accepted by the API.
+The typed adapter accepts only the parameters shown above. `sign_up`, password/Google `login`, and the three AI events fire after successful application responses. `begin_checkout` fires only after the backend creates a Stripe Checkout session. `feature_error` uses only bounded error codes, and `subscription_cancelled` uses only a bounded plan tier after a server-confirmed transition. `pricing_viewed` and sanitized `page_view` events are emitted from the React router. Query strings, fragments, user input, identifiers and payment data are not accepted by the API.
 
 `frontend/index.html` configures GA4 with `send_page_view: false`; the router is the sole page-view source. Consecutive duplicate paths are suppressed while a later return to a route remains countable. All events fail closed unless the page is `https://recruiterreply.com` and version-1 analytics consent is affirmative. Dev/Test cannot override that gate.
 
@@ -32,10 +34,10 @@ This document is an implementation checkpoint, **not** finished instrumentation 
 - The user reports configuring GA4 key events: `sign_up`, `analysis_completed`, `reply_generated`, `offer_compared`, and `purchase`. **Not independently verified through GA4 Admin.**
 - The application must emit these names exactly, only after their corresponding verified success condition and affirmative analytics consent on the production hostname.
 - GA4 Admin configuration is external to this repository: this section documents the intended contract; it does not synchronize Google Analytics settings or prove any events have been received.
-- `purchase` must not be emitted merely on checkout redirect. Implement webhook-confirmed, deduplicated, consent-compatible conversion reporting or document why attribution cannot safely be achieved.
+- `purchase` must not be emitted merely on checkout redirect. It remains intentionally absent from GA4 because Stripe webhooks cannot establish browser consent or safely recover browser attribution; Stripe is authoritative for paid revenue.
 
 ## Stripe purchase event: verified implementation constraint
-The existing `BillingService.CreateCheckoutSessionAsync` creates subscriptions with a **7-day trial**. The signed webhook handles `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`; it does **not** currently process `invoice.paid`. A completed checkout is not proof of a paid invoice. **Do not emit GA4 `purchase` from checkout completion or from a `?checkout=success` query parameter.**
+The existing `BillingService.CreateCheckoutSessionAsync` creates subscriptions with a **7-day trial**. The signed webhook handles `invoice.paid`, `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`. A completed checkout is not proof of a paid invoice. **Do not emit GA4 `purchase` from checkout completion or from a `?checkout=success` query parameter.**
 
 A future server-side paid conversion implementation requires:
 1. Process verified `invoice.paid` (or the Stripe API-version-appropriate paid-invoice event) with a persisted unique Stripe invoice/event ID to deduplicate webhook retries; confirm positive paid amount, currency and subscription status.

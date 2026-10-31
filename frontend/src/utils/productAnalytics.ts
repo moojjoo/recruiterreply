@@ -1,12 +1,15 @@
 /** Privacy-safe GA4 adapter. Event payloads are closed, bounded allowlists. */
 export type ProductEventMap = {
-  sign_up: { method: "password" | "google" };
-  login: { method: "password" | "google" };
+  sign_up: { method: "password" | "google" | "cognito" };
+  login: { method: "password" | "google" | "cognito" };
   analysis_completed: { feature: "analyze" };
   reply_generated: { feature: "generate" };
   offer_compared: { feature: "compare" };
   pricing_viewed: undefined;
   begin_checkout: { plan_tier: "professional" | "recruiter_pro" };
+  subscription_upgrade_started: { from_tier: "professional"; to_tier: "recruiter_pro" };
+  feature_error: { feature: "analyze" | "generate" | "compare"; error_code: "quota_exceeded" | "request_failed" };
+  subscription_cancelled: { plan_tier: "professional" | "recruiter_pro" };
   page_view: { page_path: string; page_title: string };
 };
 export type ProductEvent = keyof ProductEventMap;
@@ -47,4 +50,12 @@ export function trackPageView(pathname: string, title: string): void {
   } catch {
     // Analytics must never interrupt navigation.
   }
+}
+
+export function trackSubscriptionCancelled(eventId: string, planTier: "professional" | "recruiter_pro"): void {
+  if (typeof sessionStorage === "undefined" || !eventId) return;
+  const key = `rr-analytics-subscription-cancelled-${eventId}`;
+  if (sessionStorage.getItem(key) === "1") return;
+  sessionStorage.setItem(key, "1");
+  trackProductEvent("subscription_cancelled", { plan_tier: planTier });
 }

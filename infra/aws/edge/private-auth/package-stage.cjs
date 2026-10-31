@@ -10,6 +10,8 @@ const SOURCE_FILES = Object.freeze([
   'deployment-handler.cjs',
   'dynamodb-replay-store.cjs',
   'fetch-jwks.cjs',
+  'fetch-github-jwks.cjs',
+  'github-oidc.cjs',
   'oauth-authorize.cjs',
   'oauth-callback.cjs',
   'oauth-nonce.cjs',
@@ -17,6 +19,7 @@ const SOURCE_FILES = Object.freeze([
   'oauth-replay-guard.cjs',
   'oauth-token-exchange.cjs',
   'oauth-transaction.cjs',
+  'origin-signature.cjs',
   'sealed-cookie.cjs',
   'secrets-manager-key-provider.cjs',
   'session-cookie.cjs',
@@ -34,6 +37,7 @@ const CONFIG_KEYS = Object.freeze([
   'host',
   'issuer',
   'replayTableName',
+  'signApiOriginRequests',
   'signingKeySecretId'
 ]);
 
@@ -53,10 +57,12 @@ function validatePackageConfig(config) {
   }
 
   const keys = Object.keys(environment).sort();
-  if (
-    keys.length !== CONFIG_KEYS.length ||
-    keys.some((key, index) => key !== CONFIG_KEYS[index])
-  ) {
+  const legacyKeys = CONFIG_KEYS;
+  const ciKeys = ['ciAuth', ...CONFIG_KEYS];
+  const matches = [legacyKeys, ciKeys].some(expected =>
+    keys.length === expected.length && keys.every((key, index) => key === expected[index])
+  );
+  if (!matches) {
     throw new Error('Private environment configuration has unknown or missing fields');
   }
 
@@ -109,7 +115,7 @@ function stagePackage({ configPath, outputPath, installDependencies = true }) {
     { encoding: 'utf8', mode: 0o600 }
   );
   fs.writeFileSync(
-    path.join(resolvedOutput, 'index.cjs'),
+    path.join(resolvedOutput, 'index.js'),
     renderEntryModule(),
     { encoding: 'utf8', mode: 0o600 }
   );

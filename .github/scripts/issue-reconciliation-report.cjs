@@ -24,7 +24,6 @@ function blockers({pr, issue, referenceKind = 'final', checks = [], requiredChec
   deployment, projectState = 'member', tokenConfigured = true}) {
   const reasons = [];
   if (referenceKind !== 'final') reasons.push('Missing final Dev-Completes marker');
-  if (!(issue.labels || []).some(label => label.name === 'dev-acceptance-verified')) reasons.push('Missing owner acceptance approval');
   if (!tokenConfigured) reasons.push('PROJECTS_WRITE_TOKEN not configured');
   if (projectState === 'unavailable') reasons.push('Project membership unavailable (token or API access)');
   if (projectState === 'missing') reasons.push('Issue missing from RecruiterReply Project');
@@ -32,6 +31,7 @@ function blockers({pr, issue, referenceKind = 'final', checks = [], requiredChec
   for (const name of requiredChecks) {
     if (!checks.some(check => check.name === name && check.head_sha === pr.head.sha && check.conclusion === 'success')) reasons.push(`Missing passing current-head check: ${name}`);
   }
+  if (!(issue.labels || []).some(label => label.name === 'dev-acceptance-verified')) reasons.push('Missing controlled dev-acceptance-verified approval label');
   if (!acceptanceChecklistComplete(pr.body || '')) reasons.push('Acceptance checklist missing or incomplete');
   return reasons;
 }

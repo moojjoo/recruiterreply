@@ -48,3 +48,33 @@ variable "backup_bucket_arn" {
 variable "backup_environment" {
   type = string
 }
+
+variable "bff_session_table_arn" {
+  description = "Optional BFF session table ARN."
+  type        = string
+  default     = null
+}
+
+variable "bff_session_kms_key_arn" {
+  description = "Optional BFF session KMS key ARN."
+  type        = string
+  default     = null
+}
+
+variable "backend_secret_arn" {
+  description = "Optional backend Secrets Manager ARN."
+  type        = string
+  default     = null
+}
+
+variable "private_api_origin_signing_secret_arn" {
+  description = "Optional Secrets Manager ARN containing the shared-host API origin signing key."
+  type        = string
+  default     = null
+}
+
+variable "log_group_arns" {
+  description = "CloudWatch log groups the Docker awslogs driver may publish to."
+  type        = list(string)
+  default     = []
+}

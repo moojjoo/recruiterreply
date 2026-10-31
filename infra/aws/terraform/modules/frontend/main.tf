@@ -145,7 +145,21 @@ resource "aws_cloudfront_distribution" "this" {
   comment = local.cloudfront_config[each.key].comment
   # Emergency lockdown #356: nonproduction distributions stay disabled until the
   # reviewed edge authentication gate is deployed and validated.
-  enabled             = each.key == "prod" ? true : false
+  enabled = (
+    each.key == "prod" ||
+    (
+      each.key == "dev" &&
+      var.enable_private_dev_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, each.key)
+    ) ||
+    (
+      each.key == "test" &&
+      var.enable_private_test_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, each.key)
+    )
+  )
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_All"
@@ -157,6 +171,63 @@ resource "aws_cloudfront_distribution" "this" {
     domain_name              = local.origin_bucket_domains[each.key]
     origin_id                = "${local.origin_bucket_names[each.key]}-origin"
     origin_access_control_id = aws_cloudfront_origin_access_control.this[each.key].id
+  }
+
+  dynamic "origin" {
+    for_each = (
+      (each.key == "dev" && var.enable_private_dev_api_routing) ||
+      (each.key == "test" && var.enable_private_test_api_routing)
+    ) ? [1] : []
+    content {
+      domain_name = each.key == "dev" ? var.dev_api_origin_domain_name : var.test_api_origin_domain_name
+      origin_id   = "${each.key}-api-origin"
+
+      custom_origin_config {
+        http_port                = 80
+        https_port               = 443
+        origin_protocol_policy   = "https-only"
+        origin_ssl_protocols     = ["TLSv1.2"]
+        origin_read_timeout      = 60
+        origin_keepalive_timeout = 5
+      }
+    }
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = (
+      (each.key == "dev" && var.enable_private_dev_api_routing) ||
+      (each.key == "test" && var.enable_private_test_api_routing)
+    ) ? [1] : []
+    content {
+      path_pattern           = "/api/*"
+      target_origin_id       = "${each.key}-api-origin"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = true
+      cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+      # Use the API origin's Host for TLS and nginx virtual-host routing while
+      # forwarding viewer Authorization, signed origin headers and query data.
+      origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+
+      lambda_function_association {
+        event_type   = "viewer-request"
+        lambda_arn   = lookup(var.private_edge_function_arns, each.key, "")
+        include_body = false
+      }
+
+      lambda_function_association {
+        event_type   = "origin-request"
+        lambda_arn   = lookup(var.private_edge_function_arns, each.key, "")
+        include_body = false
+      }
+
+      lambda_function_association {
+        event_type   = "origin-response"
+        lambda_arn   = lookup(var.private_edge_function_arns, each.key, "")
+        include_body = false
+      }
+    }
   }
 
   default_cache_behavior {
@@ -256,4 +327,28 @@ resource "aws_s3_bucket_policy" "this" {
 
   bucket = local.origin_bucket_names[each.key]
   policy = data.aws_iam_policy_document.cloudfront_read[each.key].json
+}
+
+check "private_test_api_prerequisites" {
+  assert {
+    condition = !var.enable_private_test_api_routing || (
+      var.enable_private_test_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, "test") &&
+      can(regex("^arn:aws:lambda:us-east-1:[0-9]{12}:function:", lookup(var.private_edge_function_arns, "test", "")))
+    )
+    error_message = "Test API routing requires the explicitly enabled Test distribution and its reviewed private edge function association."
+  }
+}
+
+check "private_dev_api_prerequisites" {
+  assert {
+    condition = !var.enable_private_dev_api_routing || (
+      var.enable_private_dev_distribution &&
+      var.enable_private_edge_associations &&
+      contains(var.private_edge_association_environments, "dev") &&
+      can(regex("^arn:aws:lambda:us-east-1:[0-9]{12}:function:", lookup(var.private_edge_function_arns, "dev", "")))
+    )
+    error_message = "Dev API routing requires the explicitly enabled Dev distribution and its reviewed private edge function association."
+  }
 }

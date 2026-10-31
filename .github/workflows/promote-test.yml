@@ -2,6 +2,11 @@ name: Promote to Test
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full SHA of the successful Dev deployment approved for Test
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -11,17 +16,24 @@ permissions:
 
 jobs:
   resolve-source:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       sha: ${{ steps.release.outputs.sha }}
     steps:
       - name: Select latest successful dev deployment
         id: release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         with:
           script: |
             const {owner, repo} = context.repo;
             const environment = 'dev';
+            const expectedSha = process.env.EXPECTED_SHA;
+            if (!/^[a-f0-9]{40}$/.test(expectedSha)) {
+              core.setFailed('expected_sha must be a full lowercase commit SHA.');
+              return;
+            }
             const deployments = await github.paginate(github.rest.repos.listDeployments, {
               owner, repo, environment, per_page: 100
             });
@@ -33,6 +45,10 @@ jobs:
               // Only the latest status is authoritative; never select an older success
               // if the same deployment was subsequently marked failed/inactive.
               if (statuses[0]?.state !== 'success') continue;
+              if (deployment.sha !== expectedSha) {
+                core.setFailed(`Release race: latest successful ${environment} deployment is ${deployment.sha}, but ${expectedSha} was approved. Re-verify before promoting.`);
+                return;
+              }
               core.info(`Selected ${environment} deployment ${deployment.id} SHA ${deployment.sha}`);
               core.setOutput('sha', deployment.sha);
               return;
@@ -41,7 +57,7 @@ jobs:
 
   preflight-backend-image:
     needs: resolve-source
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AWS_ROLE_TO_ASSUME is scoped to the GitHub test environment.
     # This job must use that environment to access its variables and protections.
     environment: test
@@ -82,9 +98,9 @@ jobs:
     with:
       environment: test
       sha: ${{ needs.resolve-source.outputs.sha }}
-      api_base_url: https://api-test.recruiterreply.com/api
+      api_base_url: /api
       frontend_url: https://test.recruiterreply.com
-      api_url: https://api-test.recruiterreply.com
+      api_url: https://test.recruiterreply.com
       robots_txt: |
         User-agent: *
         Disallow: /

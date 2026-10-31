@@ -31,6 +31,26 @@ function validateEnvironment(distributionId, config) {
     'Signing-key secret ID'
   );
   const replayTableName = validateString(config.replayTableName, 'Replay table name');
+  const ciAuth = config.ciAuth;
+  if (ciAuth !== undefined) {
+    if (!ciAuth || typeof ciAuth !== 'object' || Array.isArray(ciAuth)) throw new Error('CI OIDC configuration is invalid');
+    for (const [key, pattern] of [
+      ['issuer', /^https:\/\/token\.actions\.githubusercontent\.com$/],
+      ['audience', /^[A-Za-z0-9._:-]{3,128}$/],
+      ['repository', /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/],
+      ['workflowRef', /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml@refs\/heads\/[A-Za-z0-9_.-]+$/],
+      ['ref', /^refs\/heads\/[A-Za-z0-9_.-]+$/],
+      ['environment', /^dev$/]
+    ]) {
+      if (typeof ciAuth[key] !== 'string' || !pattern.test(ciAuth[key])) throw new Error(`CI OIDC ${key} is invalid`);
+    }
+  }
+  if (typeof config.signApiOriginRequests !== 'boolean') {
+    throw new Error('API origin signing flag is required');
+  }
+  if (config.signApiOriginRequests && !['E2JWU1TLDA6YRS', 'E2IGR9MYMWVQFI'].includes(distributionId)) {
+    throw new Error('API origin signing is approved for Dev and Test distributions only');
+  }
 
   if (host !== expectedHost) throw new Error('Environment host is not approved');
   if (!/^https:\/\/cognito-idp\.us-east-1\.amazonaws\.com\/us-east-1_[A-Za-z0-9]+$/.test(issuer)) {
@@ -64,7 +84,9 @@ function validateEnvironment(distributionId, config) {
     oauth: Object.freeze({ domain, clientId, redirectUri, logoutUri }),
     tokenConfig: Object.freeze({ issuer, clientId }),
     sessionConfig: Object.freeze({ issuer, clientId }),
+    ciAuth: ciAuth ? Object.freeze({...ciAuth}) : null,
     signingKeySecretId,
+    signApiOriginRequests: config.signApiOriginRequests,
     replayTableName
   });
 }
@@ -92,10 +114,12 @@ function createDeploymentHandler(config, dependencies = {}) {
       oauth: environment.oauth,
       tokenConfig: environment.tokenConfig,
       sessionConfig: environment.sessionConfig,
+      ciAuth: environment.ciAuth,
       getSigningKeys: createKeyProvider({
         secretId: environment.signingKeySecretId,
         region: 'us-east-1'
       }),
+      signApiOriginRequests: environment.signApiOriginRequests,
       replayStore: createReplayStore({
         tableName: environment.replayTableName,
         region: 'us-east-1'

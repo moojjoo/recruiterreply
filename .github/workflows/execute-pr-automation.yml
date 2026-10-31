@@ -4,10 +4,21 @@ name: Execute PR Automation
 on:
   pull_request_target:
     types: [opened, ready_for_review, synchronize, reopened, labeled, converted_to_draft]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_thread:
+    types: [resolved, unresolved]
   workflow_run:
     workflows: ["Build and Deploy to Dev", "CodeQL", "Playwright Tests"]
     types: [completed]
-  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+# Check completions often arrive together. Serialize reevaluation so an older event
+# cannot authorize a stale head after a newer synchronize/check event starts.
+concurrency:
+  group: execute-pr-automation-${{ github.repository }}-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -17,25 +28,39 @@ permissions:
 
 jobs:
   execute:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout trusted default-branch automation
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
       - name: Prepare execute-dev PRs and enable protected auto-merge
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           retries: 3
           script: |
             const { owner, repo } = context.repo;
-            const prs = context.payload.pull_request
-              ? [context.payload.pull_request]
-              : (await github.paginate(github.rest.pulls.list, {owner, repo, state: 'open', per_page: 100}));
+            const targetNumber = context.payload.pull_request?.number ||
+              context.payload.workflow_run?.pull_requests?.[0]?.number ||
+              (context.eventName === 'issue_comment' && context.payload.issue?.pull_request ? context.payload.issue.number : null);
+            const prs = targetNumber
+              ? [(await github.rest.pulls.get({owner, repo, pull_number: targetNumber})).data]
+              : [];
+            const {data: repository} = await github.rest.repos.get({owner, repo});
+            const ownerLogin = repository.owner.login;
+            const policy = require('./.github/scripts/pr-readiness.cjs');
+            const statusMarker = '<!-- recruiterreply:execute-dev-status -->';
+            async function reportStatus(number, heading, details) {
+              const body = `${statusMarker}\n## Execute-dev status\n\n**${heading}**\n\n${details}`;
+              const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number:number, per_page:100});
+              const previous = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(statusMarker));
+              if (previous) await github.rest.issues.updateComment({owner, repo, comment_id:previous.id, body});
+              else await github.rest.issues.createComment({owner, repo, issue_number:number, body});
+            }
             for (const pr of prs) {
               if (pr.base.ref !== 'main') continue;
-              const {data: full} = await github.rest.pulls.get({owner, repo, pull_number: pr.number});
+              let {data: full} = await github.rest.pulls.get({owner, repo, pull_number: pr.number});
               if (full.head.repo.full_name !== owner + '/' + repo) continue;
               const managed = /^((feature|fix|bugfix)\/\d+-|execute\/\d+-)/.test(full.head.ref) || /(?:^|\s)\/(?:execute)\s+\d+/.test(full.body || '');
               const labeled = full.labels.some(l => l.name === 'execute-dev');
@@ -44,12 +69,53 @@ jobs:
                 await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['execute-dev']});
                 core.notice('PR #' + full.number + ': applied execute-dev label');
               }
-              const {validateReadiness, classifyRisk} = require('./.github/scripts/pr-readiness.cjs');
-              const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100});
+              const {issueNumberFromPullRequest, ensureIssueLink} = require('./.github/scripts/pr-issue-linking.cjs');
+              const linkedIssue = issueNumberFromPullRequest(full);
+              if (linkedIssue) {
+                const linkedBody = ensureIssueLink(full.body || '', linkedIssue);
+                if (linkedBody !== (full.body || '')) {
+                  await github.rest.pulls.update({owner, repo, pull_number: full.number, body: linkedBody});
+                  full.body = linkedBody;
+                  core.notice('PR #' + full.number + ': added guarded issue link for #' + linkedIssue);
+                }
+              }
+              const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number:full.number, per_page:100});
+              const command = linkedIssue && context.eventName === 'issue_comment'
+                ? policy.parseOwnerCommand(context.payload.comment?.body, linkedIssue)
+                : null;
+              if (command) {
+                if (context.payload.comment?.user?.login !== ownerLogin) {
+                  core.warning(`PR #${full.number}: ignored ${command} from non-owner ${context.payload.comment?.user?.login || 'unknown'}`);
+                  // Do not exit: normal high-risk cleanup and readiness evaluation
+                  // must still run even when an untrusted comment caused the event.
+                } else if (command === 'execute-dev') {
+                  const record = policy.createAuthorizationRecord({
+                    repository:`${owner}/${repo}`, issueNumber:linkedIssue, pullNumber:full.number,
+                    headSha:full.head.sha, actor:ownerLogin, issuedAt:new Date().toISOString()
+                  });
+                  await github.rest.issues.createComment({owner, repo, issue_number:full.number, body:policy.formatAuthorizationComment(record)});
+                  comments.push({user:{login:'github-actions[bot]'}, body:policy.formatAuthorizationComment(record), created_at:record.issuedAt});
+                  core.notice(`PR #${full.number}: recorded owner authorization for ${full.head.sha}`);
+                } else {
+                  core.notice(`PR #${full.number}: owner revoked execute-dev authorization`);
+                }
+              }
+              const authorization = linkedIssue
+                ? policy.validateOwnerAuthorization({comments, repository:`${owner}/${repo}`, issueNumber:linkedIssue, pullNumber:full.number, headSha:full.head.sha, ownerLogin})
+                : {authorized:false, reason:'Missing linked issue'};
+              const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
+              const dependabot = policy.classifyDependabotUpdate(full, changedFiles);
+              const trustedDependabotUpdate = dependabot.eligible;
+              if (!labeled && !managed && !trustedDependabotUpdate) {
+                core.notice('PR #' + full.number + ': not an execute-dev PR or eligible Dependabot update (' + dependabot.reason + ')');
+                continue;
+              }
+              const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100, filter:'latest'});
               const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
               const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
                 repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
-                  id reviewThreads(first:100) { nodes { isResolved isOutdated } }
+                  id autoMergeRequest { enabledAt }
+                  reviewThreads(first:100) { nodes { isResolved isOutdated } }
                 } } }`, {owner, repo, number:pr.number});
               const item = q.repository.pullRequest;
               const dependencyRefs = [...(full.body || '').matchAll(/(?:depends on|blocked by)\\s+#(\\d+)/gi)].map(m => Number(m[1]));
@@ -58,27 +124,75 @@ jobs:
                 const {data: dep} = await github.rest.pulls.get({owner, repo, pull_number:number});
                 if (!dep.merged) dependenciesMerged = false;
               }
-              const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
-              const risk = classifyRisk(changedFiles);
+              const risk = policy.classifyRisk(changedFiles);
               // A label must never lower the risk tier or bypass required checks.
-              // Trusted automation may label only low/medium PRs with a complete evidence checklist.
+              // High-risk labeling additionally requires current-SHA owner authorization.
               const hasEvidence = /^## Implementation evidence\\s*\\n[\\s\\S]*?\\b(?:commit|test|verification|workflow)\\b/im.test(full.body || '');
               const hasCompleteCriteria = /^## Acceptance criteria\\s*\\n(?:[\\s\\S]*?\\n)?\\s*[-*]\\s*\\[[xX]\\]/im.test(full.body || '') && !/^\\s*[-*]\\s*\\[ \\]/m.test(full.body || '');
-              if (risk !== 'high' && hasEvidence && hasCompleteCriteria && !full.labels.some(l => l.name === 'automation-ready')) {
+              if ((trustedDependabotUpdate || ((risk !== 'high' || authorization.authorized) && hasEvidence && hasCompleteCriteria)) && !full.labels.some(l => l.name === 'automation-ready')) {
                 await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['automation-ready']});
                 full.labels.push({name: 'automation-ready'});
               }
-              const result = validateReadiness({
+              // High-risk PRs must never retain a background auto-merge request:
+              // it could outlive authorization or merge after a later blocker clears.
+              // Their only merge path is the expected-SHA protected merge below.
+              if (risk === 'high' && item.autoMergeRequest) {
+                try {
+                  await github.graphql(`mutation($id:ID!) {
+                    disablePullRequestAutoMerge(input:{pullRequestId:$id}) { clientMutationId }
+                  }`, {id:item.id});
+                  item.autoMergeRequest = null;
+                  core.notice(`PR #${full.number}: removed background auto-merge from high-risk PR`);
+                } catch (e) {
+                  await reportStatus(full.number, 'Blocked', `Could not remove an existing auto-merge request from this high-risk PR: ${e.message}. Manual repository-owner intervention is required.`);
+                  continue;
+                }
+              }
+              const result = policy.validateReadiness({
                 pr:full, checks:checkResponse.check_runs, reviews,
-                changedFiles,
-                threads:item.reviewThreads.nodes, dependenciesMerged
+                changedFiles, ownerAuthorization:authorization.authorized,
+                threads:item.reviewThreads.nodes, dependenciesMerged, trustedDependabotUpdate
               });
               if (!result.eligible) {
                 const remediation = require('./.github/scripts/ci-remediation-comment.cjs');
                 if (context.eventName === 'workflow_run' && context.payload.workflow_run?.conclusion === 'failure') {
                   await remediation.report({github, context: {...context, repo: {owner, repo}, payload: {pull_request: full}}, core});
                 }
+                const nextStep = risk === 'high' && !authorization.authorized
+                  ? `${authorization.reason}. The repository owner must comment exactly \`/execute-dev ${linkedIssue || '<issue>'}\` after the final push.`
+                  : result.checkState.pending.length || result.checkState.missing.length
+                    ? 'Waiting for all required checks on the current PR head SHA. The workflow will reevaluate on check completion.'
+                    : 'Resolve the listed blockers and the workflow will reevaluate automatically.';
+                await reportStatus(full.number, 'Blocked', `${result.reasons.map(r => `- ${r}`).join('\n')}\n\n**Next step:** ${nextStep}`);
                 core.notice('PR #' + full.number + ' (' + result.risk + ' risk): blocked: ' + result.reasons.join('; '));
+                continue;
+              }
+              // Close the TOCTOU window: authorization and checks are valid only if
+              // the PR still has the exact head SHA evaluated above.
+              const {data: current} = await github.rest.pulls.get({owner, repo, pull_number:full.number});
+              if (current.head.sha !== full.head.sha) {
+                await reportStatus(full.number, 'Blocked', '- Pull request head changed during readiness evaluation.\n\n**Next step:** Wait for checks and renew owner authorization for the new SHA.');
+                core.warning(`PR #${full.number}: head changed during readiness evaluation; restarting on a future event`);
+                continue;
+              }
+              if (risk === 'high') {
+                // GitHub's auto-merge mutation has no expected-head parameter. For
+                // owner-authorized high-risk changes, use the protected REST merge
+                // endpoint with an expected SHA so a concurrent push fails atomically.
+                // Repository branch protection still rejects unmet reviews/rules.
+                try {
+                  const {data: merge} = await github.rest.pulls.merge({
+                    owner, repo, pull_number:full.number, merge_method:'squash', sha:current.head.sha
+                  });
+                  if (!merge.merged) {
+                    await reportStatus(full.number, 'Waiting on repository protection', `All execute-dev policy checks passed for \`${current.head.sha}\`, but GitHub did not merge it: ${merge.message || 'branch protection or merge queue requirements remain'}. The workflow will retry on review or thread changes.`);
+                    continue;
+                  }
+                  await reportStatus(full.number, 'Merged for Dev deployment', `GitHub accepted the protected SHA-bound merge for \`${current.head.sha}\`. The existing main-push workflow now owns Build and Dev deployment.`);
+                  core.notice(`Merged owner-authorized high-risk PR #${full.number} at expected head ${current.head.sha}`);
+                } catch (e) {
+                  await reportStatus(full.number, 'Waiting on repository protection', `GitHub rejected the protected SHA-bound merge for \`${current.head.sha}\`: ${e.message}. Required reviews, merge queue, and branch protection remain authoritative.`);
+                }
                 continue;
               }
               // GitHub branch protection and required checks still govern the merge.
@@ -86,8 +200,10 @@ jobs:
                 await github.graphql(`mutation($id:ID!) {
                   enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:SQUASH}) { clientMutationId }
                 }`, {id:item.id});
+                await reportStatus(full.number, 'Ready for protected auto-merge', `All required checks passed for current head \`${current.head.sha}\`. GitHub branch protection, reviews, merge queue, and environment rules remain authoritative.`);
                 core.notice('Enabled GitHub protected auto-merge for PR #' + pr.number + ' (' + result.risk + ' risk)');
               } catch (e) {
                 core.warning('Auto-merge unavailable for PR #' + pr.number + ': ' + e.message);
+                await reportStatus(full.number, 'Blocked', `All repository policy checks passed, but GitHub could not enable protected auto-merge: ${e.message}. Repository protection/settings remain authoritative; owner intervention may be required.`);
               }
             }

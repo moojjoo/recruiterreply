@@ -14,6 +14,13 @@ export const usage = {
   usage: [{ feature: 'analysis', used: 1, limit: 5 }],
 };
 
+export const billingPlans = {
+  plans: [
+    { tier: 'professional', unitAmount: 1900, currency: 'usd', interval: 'month', intervalCount: 1 },
+    { tier: 'recruiter_pro', unitAmount: 4900, currency: 'usd', interval: 'month', intervalCount: 1 },
+  ],
+};
+
 export const analysis = {
   compensationMentioned: '$150k-$170k base',
   jobType: 'Full-time, remote',

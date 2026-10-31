@@ -86,6 +86,8 @@ public class UsageService : IUsageService
             SubscriptionTier = user.SubscriptionTier,
             SubscriptionStatus = user.SubscriptionStatus,
             SubscriptionCurrentPeriodEnd = user.SubscriptionCurrentPeriodEnd,
+            SubscriptionCancellationEventId = user.SubscriptionCancellationEventId,
+            SubscriptionCancelAtPeriodEnd = user.SubscriptionCancelAtPeriodEnd,
             Usage = usage,
         };
     }

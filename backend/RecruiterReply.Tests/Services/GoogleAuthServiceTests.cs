@@ -95,7 +95,7 @@ public class GoogleAuthServiceTests
     }
 
     [Theory]
-    [InlineData("https://api-dev.recruiterreply.com/api/auth/google/callback")]
+    [InlineData("https://dev.recruiterreply.com/api/auth/google/callback")]
     [InlineData("https://api-test.recruiterreply.com/api/auth/google/callback")]
     [InlineData("https://api.recruiterreply.com/api/auth/google/callback")]
     public void BuildAuthorizationUrl_UsesEnvironmentSpecificRedirectUri(string redirectUri)

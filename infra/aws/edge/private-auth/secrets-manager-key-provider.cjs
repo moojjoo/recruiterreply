@@ -40,14 +40,21 @@ function parseSigningKeys(response) {
     typeof value.sessionSigningKey !== 'string' ||
     Buffer.byteLength(value.sessionSigningKey) < MINIMUM_SECRET_BYTES ||
     typeof value.transactionSigningKey !== 'string' ||
-    Buffer.byteLength(value.transactionSigningKey) < MINIMUM_SECRET_BYTES
+    Buffer.byteLength(value.transactionSigningKey) < MINIMUM_SECRET_BYTES ||
+    (value.apiOriginSigningKey !== undefined && (
+      typeof value.apiOriginSigningKey !== 'string' ||
+      Buffer.byteLength(value.apiOriginSigningKey) < MINIMUM_SECRET_BYTES
+    ))
   ) {
     throw new Error('Signing-key secret is invalid');
   }
 
   return Object.freeze({
     sessionSigningKey: value.sessionSigningKey,
-    transactionSigningKey: value.transactionSigningKey
+    transactionSigningKey: value.transactionSigningKey,
+    ...(typeof value.apiOriginSigningKey === 'string'
+      ? { apiOriginSigningKey: value.apiOriginSigningKey }
+      : {})
   });
 }
 

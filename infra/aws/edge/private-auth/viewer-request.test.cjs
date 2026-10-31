@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { handler, createViewerRequestHandler } = require('./viewer-request.cjs');
 const { createSessionCookie } = require('./session-cookie.cjs');
+const { createOriginSignature } = require('./origin-signature.cjs');
 
 const DEV_ID = 'E2JWU1TLDA6YRS';
 const TEST_ID = 'E2IGR9MYMWVQFI';
@@ -103,6 +104,84 @@ function cookieHeader(value) {
 
 test('unauthenticated homepage cannot reach the origin', async () => {
   assert.equal(String((await handler(makeEvent('/'))).status), '403');
+});
+
+test('Test API viewer requests preserve their path after the session gate', async () => {
+  const event = makeEvent('/api/health', cookieHeader(`rr_session=${testSession()}`), TEST_ID);
+  const response = await authenticatedHandler(event);
+  assert.equal(response.uri, '/api/health');
+});
+
+test('unauthenticated Dev Cognito BFF start reaches the API origin', async () => {
+  const event = makeEvent('/api/auth/cognito/start', {
+    'x-rr-ci-oidc-token': [{ key: 'X-RR-CI-OIDC-Token', value: 'must-not-forward' }]
+  });
+  const response = await authenticatedHandler(event);
+  assert.equal(response.uri, '/api/auth/cognito/start');
+  assert.equal(response.status, undefined);
+  assert.equal(response.headers['x-rr-ci-oidc-token'], undefined);
+});
+
+test('unauthenticated Test Cognito BFF callback reaches the API origin', async () => {
+  const event = makeEvent('/api/auth/cognito/callback', cookieHeader('rr_oauth_tx=transaction'), TEST_ID);
+  const response = await authenticatedHandler(event);
+  assert.equal(response.uri, '/api/auth/cognito/callback');
+  assert.equal(response.status, undefined);
+  assert.equal(response.headers.cookie[0].value, 'rr_oauth_tx=transaction');
+});
+
+test('unlisted Cognito API paths remain protected by the private edge', async () => {
+  assert.equal(String((await authenticatedHandler(
+    makeEvent('/api/auth/cognito/token', {})
+  )).status), '403');
+});
+
+test('Test API origin requests receive a short-lived request signature', async () => {
+  const secret = 'test-only-origin-signing-key-with-32-bytes';
+  const handlerWithOriginSigning = createViewerRequestHandler({
+    [TEST_ID]: {
+      signApiOriginRequests: true,
+      getSigningKeys: async () => ({ apiOriginSigningKey: secret })
+    }
+  });
+  const event = makeEvent('/api/messages', {}, TEST_ID);
+  event.Records[0].cf.config.eventType = 'origin-request';
+  event.Records[0].cf.request.method = 'POST';
+  event.Records[0].cf.request.querystring = 'mode=reply';
+  const response = await handlerWithOriginSigning(event);
+  const header = response.headers['x-rr-origin-auth'][0].value;
+  const [timestamp, signature] = header.split('.');
+
+  assert.equal(signature, createOriginSignature({
+    method: 'POST', uri: '/api/messages', querystring: 'mode=reply', timestamp, secret
+  }));
+});
+
+test('Dev API origin requests receive a short-lived request signature', async () => {
+  const secret = 'dev-only-origin-signing-key-with-32-bytes';
+  const handlerWithOriginSigning = createViewerRequestHandler({
+    [DEV_ID]: { signApiOriginRequests: true, getSigningKeys: async () => ({ apiOriginSigningKey: secret }) }
+  });
+  const event = makeEvent('/api/messages', {}, DEV_ID);
+  event.Records[0].cf.config.eventType = 'origin-request';
+  const response = await handlerWithOriginSigning(event);
+  assert.match(response.headers['x-rr-origin-auth'][0].value, /^\d+\.[A-Za-z0-9_-]+$/);
+});
+
+test('API viewer requests retain the sealed session cookie for the backend', async () => {
+  const event = makeEvent('/api/health', cookieHeader(`rr_session=${devSession()}`), DEV_ID);
+  const response = await authenticatedHandler(event);
+  assert.ok(response.headers.cookie);
+});
+
+test('Test API origin signer fails closed without its key', async () => {
+  const handlerWithoutKey = createViewerRequestHandler({
+    [TEST_ID]: { signApiOriginRequests: true, getSigningKeys: async () => ({}) }
+  });
+  const event = makeEvent('/api/health', {}, TEST_ID);
+  event.Records[0].cf.config.eventType = 'origin-request';
+
+  assert.equal(String((await handlerWithoutKey(event)).status), '403');
 });
 
 test('unauthenticated JavaScript asset cannot reach the origin', async () => {
@@ -427,10 +506,55 @@ test('duplicate callback parameters fail closed before token exchange', async ()
   const event = makeEvent('/_auth/callback', cookieHeader('rr_oauth_tx=signed-transaction'));
   event.Records[0].cf.request.querystring = 'code=one&code=two&state=state';
 
-  const response = await gateway(event);
+  const originalConsoleError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+
+  let response;
+  try {
+    response = await gateway(event);
+  } finally {
+    console.error = originalConsoleError;
+  }
 
   assert.equal(response.status, '403');
   assert.equal(called, false);
+  assert.deepEqual(logged, [[
+    'PRIVATE_AUTH_CALLBACK_FAILURE',
+    { reason: 'Duplicate callback parameter', errorType: 'Error' }
+  ]]);
+  assert.doesNotMatch(JSON.stringify(logged), /one|two|signed-transaction/);
+});
+
+test('unexpected callback failures are classified without logging sensitive details', async () => {
+  const gateway = createViewerRequestHandler({
+    [DEV_ID]: completeDevEnvironment()
+  }, {
+    async completeOAuthLogin() {
+      const error = new Error('secret-code-and-token');
+      error.name = 'OAuth<Token>Error';
+      throw error;
+    }
+  });
+  const event = makeEvent('/_auth/callback', cookieHeader('rr_oauth_tx=signed-transaction'));
+  event.Records[0].cf.request.querystring = 'code=secret-code&state=secret-state';
+  const originalConsoleError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+
+  let response;
+  try {
+    response = await gateway(event);
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(response.status, '403');
+  assert.deepEqual(logged, [[
+    'PRIVATE_AUTH_CALLBACK_FAILURE',
+    { reason: 'Unclassified callback failure', errorType: 'OAuthTokenError' }
+  ]]);
+  assert.doesNotMatch(JSON.stringify(logged), /secret|signed-transaction/);
 });
 
 test('logout clears local cookies and redirects to the approved Cognito logout URL', async () => {

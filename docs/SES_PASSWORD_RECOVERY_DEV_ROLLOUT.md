@@ -6,6 +6,12 @@ Status: **blocked pending live AWS checks and explicit owner approval**. Do not 
 - `PasswordRecoveryController.RequestRecovery` returns the same neutral HTTP 200 response when email sending is disabled, the user is missing, throttling applies, or SES delivery fails. HTTP 200 **does not** establish email delivery.
 - `SesRecoveryEmailSender` uses AWS SDK SES v2 `SendEmailAsync` with the EC2 role's ambient credentials.
 - The reset code expires after 10 minutes; requests are throttled and credentials are single-use.
+- The multipart SES message contains a branded, mobile-friendly HTML part and a
+  complete plain-text alternative. Both show the same six-digit code and expiry.
+- The code is prominent and selectable without inserting spaces into its value.
+  The email intentionally has no Copy button because major email clients block
+  the JavaScript clipboard API. The reset page accepts normal paste and browser
+  one-time-code autofill; it does not receive or expose the code in a URL.
 - The existing migration must be reviewed before Dev deploy.
 
 ## Dev preflight (read-only)

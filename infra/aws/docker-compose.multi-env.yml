@@ -29,15 +29,27 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Logging__LogLevel__Default: Information
       ASPNETCORE_URLS: http://0.0.0.0:5000
       AWS_REGION: us-east-1
       AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/dev/backend-app-secrets
+      LEGACY_AUTH_ENABLED: "true"
       Jwt__Key: ${JWT_KEY_DEV}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
-      Google__RedirectUri: https://api-dev.recruiterreply.com/api/auth/google/callback
+      # The Dev API is private; send OAuth callbacks through the authenticated
+      # same-origin CloudFront behavior so it can add X-RR-Origin-Auth.
+      Google__RedirectUri: https://dev.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://dev.recruiterreply.com
       Cors__AllowedOrigins__0: https://dev.recruiterreply.com
+      GitHubActionsOidc__Enabled: "true"
+      GitHubActionsOidc__Issuer: https://token.actions.githubusercontent.com
+      GitHubActionsOidc__Audience: recruiterreply-dev-smoke
+      GitHubActionsOidc__Repository: moojjoo/recruiterreply
+      GitHubActionsOidc__WorkflowRef: moojjoo/recruiterreply/.github/workflows/promote.yml@refs/heads/main
+      GitHubActionsOidc__Ref: refs/heads/main
+      GitHubActionsOidc__Environment: dev
+      PrivateApiOriginAuth__Enabled: "true"
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_dev;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     volumes:
@@ -46,6 +58,13 @@ services:
       - "127.0.0.1:5001:5000"
     networks:
       - recruiterreply
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-1
+        awslogs-create-group: "false"
+        awslogs-group: /recruiterreply/dev/backend
+        awslogs-stream: backend-dev
 
   backend-test:
     image: ${BACKEND_IMAGE_TEST:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:test-latest}
@@ -56,21 +75,30 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
+      Logging__LogLevel__Default: Information
       ASPNETCORE_URLS: http://0.0.0.0:5000
       AWS_REGION: us-east-1
       AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/test/backend-app-secrets
       Jwt__Key: ${JWT_KEY_TEST}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
-      Google__RedirectUri: https://api-test.recruiterreply.com/api/auth/google/callback
+      Google__RedirectUri: https://test.recruiterreply.com/api/auth/google/callback
       Frontend__BaseUrl: https://test.recruiterreply.com
       Cors__AllowedOrigins__0: https://test.recruiterreply.com
+      PrivateApiOriginAuth__Enabled: "true"
       Database__AutoMigrate: "true"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=recruiterreply_test;Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERPASS}
     ports:
       - "127.0.0.1:5002:5000"
     networks:
       - recruiterreply
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-1
+        awslogs-create-group: "false"
+        awslogs-group: /recruiterreply/test/backend
+        awslogs-stream: backend-test
 
   backend-prod:
     image: ${BACKEND_IMAGE_PROD:-178522450316.dkr.ecr.us-east-1.amazonaws.com/recruiterreply-backend:prod-latest}
@@ -81,6 +109,9 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Logging__LogLevel__Default: Warning
+      Logging__LogLevel__Microsoft_AspNetCore: Warning
+      Logging__LogLevel__Microsoft_EntityFrameworkCore: Warning
       ASPNETCORE_URLS: http://0.0.0.0:5000
       AWS_REGION: us-east-1
       AWS_SECRETS_MANAGER_SECRET_NAME: recruiterreply/prod/backend-app-secrets
@@ -92,6 +123,13 @@ services:
       - "127.0.0.1:5003:5000"
     networks:
       - recruiterreply
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-1
+        awslogs-create-group: "false"
+        awslogs-group: /recruiterreply/prod/backend
+        awslogs-stream: backend-prod
 
 networks:
   recruiterreply:

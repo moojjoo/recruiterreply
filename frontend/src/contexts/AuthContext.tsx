@@ -3,6 +3,7 @@ import { AxiosError } from "axios";
 import { User } from "../types/index";
 import { authService } from "../services/api/authService";
 import { AuthContext } from "../hooks/useAuth";
+import { clearLegacyAuthState, isCookieAuthEnabled } from "../services/authMode";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -14,17 +15,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem("authToken");
-        if (token) {
-          const response = await authService.getCurrentUser();
-          const currentUser = response.data;
-          setUser(currentUser);
-          localStorage.setItem("userData", JSON.stringify(currentUser));
-        }
+        const hasLegacyToken = !isCookieAuthEnabled() && Boolean(localStorage.getItem("authToken"));
+        const isHostedRecruiterReply =
+          window.location.hostname === "recruiterreply.com" ||
+          window.location.hostname.endsWith(".recruiterreply.com");
+        if (!hasLegacyToken && !isHostedRecruiterReply && !isCookieAuthEnabled()) return;
+
+        const response = await authService.getCurrentUser();
+        const currentUser = response.data;
+        setUser(currentUser);
+        localStorage.setItem("userData", JSON.stringify(currentUser));
       } catch (error) {
         console.error("Auth check failed:", error);
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("userData");
+        clearLegacyAuthState();
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -40,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const response = await authService.login(email, password);
       const payload = response.data;
       setUser(payload.user);
-      localStorage.setItem("authToken", payload.token);
+      if (!isCookieAuthEnabled() && payload.token) localStorage.setItem("authToken", payload.token);
       localStorage.setItem("userData", JSON.stringify(payload.user));
     } catch (error) {
       const message =
@@ -58,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const response = await authService.register(email, password, name);
         const payload = response.data;
         setUser(payload.user);
-        localStorage.setItem("authToken", payload.token);
+        if (!isCookieAuthEnabled() && payload.token) localStorage.setItem("authToken", payload.token);
         localStorage.setItem("userData", JSON.stringify(payload.user));
       } catch (error) {
         const message =
@@ -81,9 +84,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const logout = useCallback(() => {
+    if (isCookieAuthEnabled()) {
+      void authService.logout().catch(() => undefined);
+    }
     setUser(null);
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("userData");
+    clearLegacyAuthState();
   }, []);
 
   return (

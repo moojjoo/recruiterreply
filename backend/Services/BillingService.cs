@@ -3,6 +3,8 @@ using RecruiterReply.Data;
 using RecruiterReply.Models;
 using RecruiterReply.Repositories;
 using Stripe;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace RecruiterReply.Services;
 
@@ -35,40 +37,159 @@ public class BillingService : IBillingService
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User not found.");
 
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        if (user.SubscriptionTier != PlanTiers.Free && !string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
         {
-            var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
-            var customer = await customerService.CreateAsync(new CustomerCreateOptions
-            {
-                Email = user.Email,
-                Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString() },
-            }, cancellationToken: cancellationToken);
-
-            user.StripeCustomerId = customer.Id;
-            await _userRepository.UpdateAsync(user, cancellationToken);
+            throw new InvalidOperationException("An active subscription already exists. Use the supported upgrade or billing-management flow.");
         }
 
+        return await CreateCheckoutSessionForUserAsync(user, tier, cancellationToken);
+    }
+
+    public async Task<string?> UpgradeToRecruiterProAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (user.SubscriptionTier != PlanTiers.Professional)
+        {
+            throw new InvalidOperationException("Only Professional subscriptions can be upgraded to Recruiter Pro.");
+        }
+
+        if (string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
+        {
+            _logger.LogWarning(
+                "Professional subscription is missing its Stripe subscription reference; starting a Recruiter Pro checkout");
+            return await CreateCheckoutSessionForUserAsync(user, PlanTiers.RecruiterPro, cancellationToken);
+        }
+
+        var subscriptionService = _stripeClient is null ? new SubscriptionService() : new SubscriptionService(_stripeClient);
+        var subscription = await subscriptionService.GetAsync(user.StripeSubscriptionId, cancellationToken: cancellationToken);
+        var item = subscription.Items?.Data?.FirstOrDefault();
+        if (item is null || string.IsNullOrWhiteSpace(item.Id))
+        {
+            throw new InvalidOperationException("The subscription does not contain an upgradeable item.");
+        }
+
+        if (subscription.Status is not ("active" or "trialing" or "past_due"))
+        {
+            throw new InvalidOperationException("This subscription cannot be upgraded in its current state.");
+        }
+
+        await subscriptionService.UpdateAsync(subscription.Id, new SubscriptionUpdateOptions
+        {
+            Items = [new SubscriptionItemOptions { Id = item.Id, Price = GetPriceId(PlanTiers.RecruiterPro) }],
+            ProrationBehavior = "always_invoice",
+            CancelAtPeriodEnd = false,
+        }, cancellationToken: cancellationToken);
+
+        return null;
+    }
+
+    private async Task<string> CreateCheckoutSessionForUserAsync(
+        RecruiterReply.Entities.UserEntity user,
+        string tier,
+        CancellationToken cancellationToken)
+    {
+        await EnsureStripeCustomerAsync(user, cancellationToken);
+
         var frontendBaseUrl = GetFrontendBaseUrl();
-        var sessionService = _stripeClient is null ? new Stripe.Checkout.SessionService() : new Stripe.Checkout.SessionService(_stripeClient);
+        var sessionService = _stripeClient is null
+            ? new Stripe.Checkout.SessionService()
+            : new Stripe.Checkout.SessionService(_stripeClient);
         var session = await sessionService.CreateAsync(new Stripe.Checkout.SessionCreateOptions
         {
             Mode = "subscription",
             Customer = user.StripeCustomerId,
-            ClientReferenceId = userId.ToString(),
-            LineItems = new List<Stripe.Checkout.SessionLineItemOptions>
-            {
+            ClientReferenceId = user.Id.ToString(),
+            LineItems =
+            [
                 new() { Price = GetPriceId(tier), Quantity = 1 },
-            },
+            ],
             SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
             {
                 TrialPeriodDays = TrialPeriodDays,
             },
             SuccessUrl = $"{frontendBaseUrl}/dashboard?checkout=success",
             CancelUrl = $"{frontendBaseUrl}/pricing?checkout=cancelled",
-            Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), ["tier"] = tier },
+            Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString(), ["tier"] = tier },
         }, cancellationToken: cancellationToken);
 
+        if (string.IsNullOrWhiteSpace(session.Url))
+        {
+            throw new InvalidOperationException("Stripe did not return a checkout URL.");
+        }
+
         return session.Url;
+    }
+
+    private async Task EnsureStripeCustomerAsync(
+        RecruiterReply.Entities.UserEntity user,
+        CancellationToken cancellationToken)
+    {
+        var customerService = _stripeClient is null ? new CustomerService() : new CustomerService(_stripeClient);
+
+        if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        {
+            try
+            {
+                var existingCustomer = await customerService.GetAsync(
+                    user.StripeCustomerId,
+                    cancellationToken: cancellationToken);
+                if (existingCustomer is not null)
+                {
+                    return;
+                }
+            }
+            catch (StripeException ex) when (IsMissingStripeResource(ex))
+            {
+                _logger.LogWarning(
+                    "Stored Stripe customer is unavailable in the configured Stripe environment; creating a replacement customer");
+            }
+
+            user.StripeCustomerId = null;
+        }
+
+        var customer = await customerService.CreateAsync(new CustomerCreateOptions
+        {
+            Email = user.Email,
+            Metadata = new Dictionary<string, string> { ["userId"] = user.Id.ToString() },
+        }, cancellationToken: cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(customer.Id))
+        {
+            throw new InvalidOperationException("Stripe did not return a customer reference.");
+        }
+
+        user.StripeCustomerId = customer.Id;
+        await _userRepository.UpdateAsync(user, cancellationToken);
+    }
+
+    private static bool IsMissingStripeResource(StripeException exception) =>
+        string.Equals(exception.StripeError?.Code, "resource_missing", StringComparison.OrdinalIgnoreCase)
+        || exception.Message.Contains("No such customer", StringComparison.OrdinalIgnoreCase);
+
+    public async Task<BillingPlanCatalogResponse> GetPlanCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        var priceService = _stripeClient is null ? new PriceService() : new PriceService(_stripeClient);
+        var plans = new List<BillingPlanResponse>();
+        foreach (var (tier, priceId) in new[]
+        {
+            (PlanTiers.Professional, GetPriceId(PlanTiers.Professional)),
+            (PlanTiers.RecruiterPro, GetPriceId(PlanTiers.RecruiterPro)),
+        })
+        {
+            var price = await priceService.GetAsync(priceId, cancellationToken: cancellationToken);
+            plans.Add(new BillingPlanResponse
+            {
+                Tier = tier,
+                UnitAmount = price.UnitAmount,
+                Currency = price.Currency ?? "usd",
+                Interval = price.Recurring?.Interval,
+                IntervalCount = price.Recurring?.IntervalCount,
+            });
+        }
+
+        return new BillingPlanCatalogResponse { Plans = plans };
     }
 
     public async Task<string> CreatePortalSessionAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -89,6 +210,35 @@ public class BillingService : IBillingService
         }, cancellationToken: cancellationToken);
 
         return session.Url;
+    }
+
+    public async Task CancelSubscriptionAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (string.IsNullOrWhiteSpace(user.StripeSubscriptionId))
+        {
+            throw new InvalidOperationException("No active subscription found.");
+        }
+
+        if (user.SubscriptionCancelAtPeriodEnd)
+        {
+            return;
+        }
+
+        var subscriptionService = _stripeClient is null
+            ? new SubscriptionService()
+            : new SubscriptionService(_stripeClient);
+        var subscription = await subscriptionService.UpdateAsync(
+            user.StripeSubscriptionId,
+            new SubscriptionUpdateOptions { CancelAtPeriodEnd = true },
+            cancellationToken: cancellationToken);
+
+        user.SubscriptionStatus = subscription.Status;
+        user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
+        user.SubscriptionCancelAtPeriodEnd = subscription.CancelAtPeriodEnd;
+        await _userRepository.UpdateAsync(user, cancellationToken);
     }
 
     public async Task HandleWebhookAsync(string json, string stripeSignatureHeader, CancellationToken cancellationToken = default)
@@ -180,6 +330,7 @@ public class BillingService : IBillingService
         user.StripeCustomerId = session.CustomerId;
         user.StripeSubscriptionId = session.SubscriptionId;
         user.SubscriptionTier = tier;
+        user.SubscriptionCancellationEventId = null;
 
         if (!string.IsNullOrWhiteSpace(session.SubscriptionId))
         {
@@ -187,6 +338,7 @@ public class BillingService : IBillingService
             var subscription = await subscriptionService.GetAsync(session.SubscriptionId, cancellationToken: cancellationToken);
             user.SubscriptionStatus = subscription.Status;
             user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
+            user.SubscriptionCancelAtPeriodEnd = subscription.CancelAtPeriodEnd;
         }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
@@ -208,12 +360,17 @@ public class BillingService : IBillingService
         user.StripeSubscriptionId = subscription.Id;
         user.SubscriptionStatus = subscription.Status;
         user.SubscriptionCurrentPeriodEnd = GetCurrentPeriodEnd(subscription);
+        user.SubscriptionCancelAtPeriodEnd = subscription.CancelAtPeriodEnd;
 
         var priceId = subscription.Items?.Data?.FirstOrDefault()?.Price?.Id;
         var tier = ResolveTierFromPriceId(priceId);
         if (tier is not null)
         {
             user.SubscriptionTier = tier;
+        }
+        if (subscription.Status is not "canceled" and not "incomplete_expired")
+        {
+            user.SubscriptionCancellationEventId = null;
         }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
@@ -236,12 +393,24 @@ public class BillingService : IBillingService
             return;
         }
 
+        var wasActive = user.SubscriptionTier != PlanTiers.Free || user.SubscriptionStatus != "canceled";
         user.SubscriptionTier = PlanTiers.Free;
         user.SubscriptionStatus = "canceled";
         user.StripeSubscriptionId = null;
         user.SubscriptionCurrentPeriodEnd = null;
+        user.SubscriptionCancelAtPeriodEnd = false;
+        if (wasActive)
+        {
+            user.SubscriptionCancellationEventId = ToOpaqueEventId(stripeEvent.Id);
+        }
 
         await _userRepository.UpdateAsync(user, cancellationToken);
+    }
+
+    private static Guid ToOpaqueEventId(string eventId)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(eventId));
+        return new Guid(bytes[..16]);
     }
 
     private string? ResolveTierFromPriceId(string? priceId)

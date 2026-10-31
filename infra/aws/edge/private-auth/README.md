@@ -1,9 +1,10 @@
 # Issue #356 — CloudFront Cognito Authentication Gateway
 
-## Status: Development only — NOT DEPLOYABLE
+## Status: Dev active behind the private gate; Test remains disabled
 
-This directory contains an in-progress authentication gateway for
-Dev and Test CloudFront distributions.
+This directory contains the authentication gateway for the Dev and Test
+CloudFront distributions. Dev is active behind the reviewed gate. Test remains
+disabled pending a separately authorized rollout and validation.
 
 Production must remain unaffected.
 
@@ -35,17 +36,22 @@ Production must remain unaffected.
 - Login, callback, logout, session validation and SPA rewriting in one
   viewer-request router
 - Origin-response noindex enforcement compatible with the viewer-request gate
+- Dev/Test same-origin `/api/*` CloudFront routing with caching disabled
+- Short-lived HMAC origin signatures from Dev/Test Lambda@Edge and fail-closed backend verification
 - Automated positive and negative security tests
+- Branded, mobile-friendly Cognito MFA email with a prominent selectable code
+  and no misleading in-email clipboard control
 
 ## Not yet implemented
 
-- Reviewed, immutable Dev/Test Cognito identity configuration
+- Reviewed, immutable Test Cognito identity configuration
 - Token refresh and revocation handling
-- Complete MFA end-to-end testing
-- Reviewed package ZIP generation and hash approval
-- Terraform plan review, apply approval and CloudFront rollout
-- Live Dev/Test SPA routing compatibility verification
-- Live negative-path and integration testing
+- Complete Test MFA end-to-end testing
+- Live Test authenticated API and origin-bypass testing
+- Reviewed Test package ZIP generation and hash approval
+- Test Terraform plan review, apply approval and CloudFront rollout
+- Live Test SPA routing compatibility verification
+- Live Test negative-path and integration testing
 
 ## Architecture decisions pending Terraform integration
 
@@ -58,12 +64,19 @@ Production must remain unaffected.
 - Signing keys are retrieved from separate `us-east-1` Secrets Manager secrets.
   Only non-secret resource identifiers may be compiled into an immutable edge
   function version. Lambda@Edge environment variables and layers are not used.
+- Each Dev/Test signing-key secret also contains a top-level `apiOriginSigningKey`
+  value of at least 32 bytes. The matching Lambda@Edge signer uses it for
+  short-lived HMAC signatures over API method, path, query and timestamp; the
+  matching backend reads the same value and rejects unsigned requests. Never put this value in
+  Terraform variables/state, frontend configuration, logs or a package artifact.
 - AWS SDK v3 DynamoDB and Secrets Manager clients must be packaged in the Lambda
   deployment ZIP. No code path may assume that the runtime bundles those clients.
 - The execution role must grant only `secretsmanager:GetSecretValue` for the exact
   environment secret and `dynamodb:PutItem` for the exact environment replay table.
 - SPA rewriting occurs after successful session validation in the Lambda@Edge
-  viewer-request handler. The separate Dev viewer-request CloudFront Function must
+  viewer-request handler, while Test `/api/*` paths are preserved for the API
+  behavior. Its origin-request event signs requests with the Test-only API origin
+  key, which the Test backend verifies. The separate Dev viewer-request CloudFront Function must
   not remain associated when the edge gateway is associated. The Dev/Test
   viewer-response noindex functions must also be removed because CloudFront does
   not allow CloudFront Functions on viewer events alongside a Lambda@Edge
@@ -80,7 +93,8 @@ Production must remain unaffected.
 ## Security restrictions
 
 - Default Lambda@Edge handler remains fail-closed.
-- Dev/Test CloudFront distributions remain disabled.
+- Test remains disabled. Dev may be enabled only when its explicit release gate
+  and the private edge association gate are both true.
 - No AWS deployment or Terraform apply is authorized.
 - No Production configuration changes are authorized.
 - Never package test private keys into Lambda@Edge.
@@ -88,9 +102,43 @@ Production must remain unaffected.
 - Never forward authentication cookies to S3.
 - Never place signing keys in Terraform source, state inputs, Lambda code, or
   Lambda environment variables.
-- API isolation is separately tracked under issue #357.
+- Test API isolation and same-origin routing are tracked under issue #422.
 
 Passing tests do not imply that the gateway is ready for deployment.
+
+## Verification email behavior
+
+Cognito's native email MFA template uses HTML with inline styles and the required
+`{####}` placeholder. The six-digit code is large and selectable on desktop and
+mobile. The email intentionally contains no Copy button: Gmail, Outlook, and most
+other clients block the JavaScript clipboard API, so such a button would be
+misleading. The message remains understandable when a client strips its styling.
+The Cognito authentication session and the email text both use a 10-minute
+validity window.
+
+## CI smoke identity
+
+The Dev package may include an optional `ciAuth` object for the GitHub Actions
+machine identity. It contains only non-secret policy values:
+
+```json
+{
+  "ciAuth": {
+    "issuer": "https://token.actions.githubusercontent.com",
+    "audience": "recruiterreply-dev-smoke",
+    "repository": "moojjoo/recruiterreply",
+    "workflowRef": "moojjoo/recruiterreply/.github/workflows/promote.yml@refs/heads/main",
+    "ref": "refs/heads/main",
+    "environment": "dev"
+  }
+}
+```
+
+The workflow obtains a short-lived token with `id-token: write`; it is never
+stored as a GitHub secret. The edge validates the signature and all listed
+claims, and removes the CI header before any origin request. A missing or
+invalid token never grants access. Cognito authorization-code + MFA remains
+the human login path.
 
 ## Package staging
 
@@ -123,9 +171,11 @@ compiled into reviewed immutable packages:
 2. Populate each secret's `AWSCURRENT` value out of band, stage one package per
    environment using the exact secret ARN, replay-table name, and Cognito identity,
    then review the package contents and hashes.
-3. A later reviewed root integration may create versioned Lambda@Edge functions
-   from those packages and associate viewer-request plus origin-response events.
-   Dev/Test remain disabled until live negative and MFA tests are approved.
+3. A reviewed root integration creates versioned Lambda@Edge functions from
+   those packages and associates viewer-request plus origin-response events.
+   Each environment remains disabled until its live negative and MFA tests are
+   approved. Dev has an additional explicit release gate; Test has no enablement
+   path in this change.
 
 Set `private_environment_identity_environments` and `private_edge_environments`
 to `["dev"]` for a Dev-only rollout. This prevents a Dev authorization from
@@ -136,8 +186,11 @@ implicitly provisioning or associating Test resources. The defaults remain
 incompatible Dev SPA viewer-request and Dev/Test noindex viewer-response
 CloudFront Function associations with the versioned Lambda on viewer-request
 and origin-response. It also removes Dev/Test 403/404-to-200 mappings while
-leaving Production unchanged. The distributions remain disabled even when this
-gate is enabled; enabling them requires a separate reviewed release change.
+leaving Production unchanged. Dev additionally requires
+`enable_private_dev_distribution = true`; Test has a separate explicit
+`enable_private_test_distribution` gate. Dev and Test API behaviors require
+their corresponding `enable_private_*_api_routing` flag. All remain false
+unless separately approved.
 
 ## Search-indexing release gate
 

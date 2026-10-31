@@ -15,6 +15,13 @@ public class RecoveryEmailTemplateTests
         Assert.Contains("https://recruiterreply.com/recover", text);
         Assert.Contains("https://recruiterreply.com/recover", html);
         Assert.Contains("lang=\"en\"", html);
+        Assert.Contains("Verify your email address", text);
+        Assert.Contains("Verify your email address", html);
+        Assert.Contains("YOUR VERIFICATION CODE", text);
+        Assert.Contains("YOUR VERIFICATION CODE", html);
+        Assert.Contains("user-select:all", html);
+        Assert.Contains("RecruiterReply.com — Simplifying your job search.", text);
+        Assert.Contains("RecruiterReply.com &mdash; Simplifying your job search.", html);
         Assert.DoesNotContain("<button", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
     }
@@ -27,6 +34,16 @@ public class RecoveryEmailTemplateTests
         Assert.Contains("&lt;123&amp;456&gt;", html);
         Assert.DoesNotContain("<strong><123&456>", html);
         Assert.Contains("a=1&amp;b=&quot;bad&quot;", html);
+    }
+
+    [Fact]
+    public void DoesNotPutVerificationCodeInRecoveryLink()
+    {
+        var (_, html) = RecoveryEmailTemplate.Render("482916", "https://example.test/reset?token=safe-token");
+
+        Assert.Contains("<strong>482916</strong>", html);
+        Assert.DoesNotMatch("href=\"[^\"]*482916", html);
+        Assert.DoesNotContain("Copy verification code", html, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

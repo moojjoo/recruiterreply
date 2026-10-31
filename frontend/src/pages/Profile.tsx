@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { Card } from "../components/common/Card";
 import { Button } from "../components/common/Button";
+import { Modal } from "../components/common/Modal";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { gmailService } from "../services/api/gmailService";
 import { billingService } from "../services/api/billingService";
 import { GmailStatus, UsageStatus } from "../types/index";
+import { trackProductEvent, trackSubscriptionCancelled } from "../utils/productAnalytics";
 
 const TIER_LABELS: Record<string, string> = {
   free: "Free",
@@ -35,6 +37,10 @@ export const Profile: React.FC = () => {
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const previousSubscriptionTier = useRef<string | undefined>(undefined);
 
   const loadGmailStatus = useCallback(async () => {
     setIsLoadingStatus(true);
@@ -62,6 +68,10 @@ export const Profile: React.FC = () => {
       try {
         const response = await billingService.getUsage();
         setUsageStatus(response.data);
+        if (response.data.subscriptionCancellationEventId && previousSubscriptionTier.current && response.data.subscriptionTier === "free") {
+          trackSubscriptionCancelled(response.data.subscriptionCancellationEventId, previousSubscriptionTier.current === "recruiter_pro" ? "recruiter_pro" : "professional");
+        }
+        previousSubscriptionTier.current = response.data.subscriptionTier;
       } catch {
         showToast("Failed to load billing status.", "error");
       } finally {
@@ -83,6 +93,45 @@ export const Profile: React.FC = () => {
         "error",
       );
       setIsOpeningPortal(false);
+    }
+  };
+
+  const handleUpgradeToRecruiterPro = async () => {
+    setIsUpgrading(true);
+    try {
+      const upgradeResponse = await billingService.upgradeToRecruiterPro();
+      if (upgradeResponse.data.url) {
+        trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro" });
+        window.location.href = upgradeResponse.data.url;
+        return;
+      }
+
+      trackProductEvent("subscription_upgrade_started", {
+        from_tier: "professional",
+        to_tier: "recruiter_pro",
+      });
+      showToast("Upgrade started. Your plan will update after Stripe confirms the change.", "success");
+      const usageResponse = await billingService.getUsage();
+      setUsageStatus(usageResponse.data);
+    } catch {
+      showToast("Failed to upgrade to Recruiter Pro. Please try again.", "error");
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setIsCancelling(true);
+    try {
+      await billingService.cancelSubscription();
+      const response = await billingService.getUsage();
+      setUsageStatus(response.data);
+      setIsCancelModalOpen(false);
+      showToast("Your subscription is scheduled to cancel at the end of the current period.", "success");
+    } catch {
+      showToast("Failed to cancel your subscription. You can also manage it in Stripe Billing.", "error");
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -160,6 +209,16 @@ export const Profile: React.FC = () => {
                     ).toLocaleDateString()}
                   </p>
                 )}
+              {usageStatus.subscriptionCancelAtPeriodEnd &&
+                usageStatus.subscriptionCurrentPeriodEnd && (
+                  <p className="text-sm text-amber-700 mt-1">
+                    Cancellation scheduled — your plan remains active until{" "}
+                    {new Date(
+                      usageStatus.subscriptionCurrentPeriodEnd,
+                    ).toLocaleDateString()}
+                    .
+                  </p>
+                )}
             </div>
 
             <div className="space-y-2">
@@ -175,19 +234,34 @@ export const Profile: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {usageStatus.subscriptionTier === "free" ? (
                 <Button onClick={() => (window.location.href = "/pricing")}>
                   Upgrade Plan
                 </Button>
               ) : (
-                <Button
-                  variant="secondary"
-                  onClick={handleManageBilling}
-                  isLoading={isOpeningPortal}
-                >
-                  Manage Billing
-                </Button>
+                <>
+                  {usageStatus.subscriptionTier === "professional" && (
+                    <Button onClick={handleUpgradeToRecruiterPro} isLoading={isUpgrading}>
+                      Upgrade to Recruiter Pro
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    onClick={handleManageBilling}
+                    isLoading={isOpeningPortal}
+                  >
+                    Manage Billing
+                  </Button>
+                  {!usageStatus.subscriptionCancelAtPeriodEnd && (
+                    <Button
+                      variant="danger"
+                      onClick={() => setIsCancelModalOpen(true)}
+                    >
+                      Cancel subscription
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -195,6 +269,35 @@ export const Profile: React.FC = () => {
           <p className="text-gray-600">Unable to load billing status.</p>
         )}
       </Card>
+
+      <Modal
+        isOpen={isCancelModalOpen}
+        onClose={() => !isCancelling && setIsCancelModalOpen(false)}
+        title="Cancel subscription?"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700">
+            Your subscription will remain active until the end of the current
+            billing period. You will not be charged for the next period.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setIsCancelModalOpen(false)}
+              disabled={isCancelling}
+            >
+              Keep subscription
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleCancelSubscription}
+              isLoading={isCancelling}
+            >
+              Confirm cancellation
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Card elevated className="mt-6">
         <h2 className="text-2xl font-bold mb-4">Gmail Recruiting Agent</h2>
@@ -265,14 +368,31 @@ export const Profile: React.FC = () => {
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-gray-700">
-              Connect your Gmail inbox so RecruiterReply can detect recruiter
-              messages, evaluate them against your requirements, and prepare
-              draft replies for you to review before sending.
-            </p>
-            <Button onClick={handleConnect} isLoading={isConnecting}>
-              Connect Gmail
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="badge badge-info">Coming soon</span>
+              <span className="text-sm font-semibold text-primary-800">
+                A smarter way to stay on top of recruiter outreach
+              </span>
+            </div>
+            <div className="space-y-2">
+              <p className="text-gray-700">
+                Soon, RecruiterReply will work alongside your Gmail inbox to
+                help you spend less time sorting and more time choosing the
+                right opportunities.
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-gray-700">
+                <li>Spot recruiter messages as they arrive.</li>
+                <li>Compare opportunities with what you&apos;re looking for.</li>
+                <li>Prepare thoughtful Gmail drafts for you to review.</li>
+              </ul>
+              <p className="text-sm text-gray-600">
+                You&apos;ll stay in control: nothing will be sent without your
+                review and approval.
+              </p>
+            </div>
+            <Button disabled aria-label="Gmail connection coming soon">
+              Gmail connection coming soon
             </Button>
           </div>
         )}

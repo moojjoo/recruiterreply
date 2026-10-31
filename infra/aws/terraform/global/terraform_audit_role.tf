@@ -26,6 +26,17 @@ resource "aws_iam_role" "terraform_audit" {
   max_session_duration = 3600
 }
 
+# Deliberate allowlist of the deployed, public-client Dev/Test pools. Keep audit
+# reads working even when the opt-in identity modules are disabled in a plan.
+# Pool replacements require reviewing and updating this metadata allowlist.
+locals {
+  terraform_audit_private_user_pool_ids = [
+    "us-east-1_bMcYQWq8U",
+    "us-east-1_OUaaIhK6h",
+  ]
+  terraform_audit_private_environments = ["dev", "test"]
+}
+
 data "aws_iam_policy_document" "terraform_audit" {
   statement {
     sid = "ReadTerraformState"
@@ -37,6 +48,58 @@ data "aws_iam_policy_document" "terraform_audit" {
     resources = [
       "arn:aws:s3:::recruiterreply-terraform-state-${data.aws_caller_identity.current.account_id}",
       "arn:aws:s3:::recruiterreply-terraform-state-${data.aws_caller_identity.current.account_id}/recruiterreply/*",
+    ]
+  }
+  # DescribeUserPoolClient can return client secrets. These exact pools are
+  # reviewed public browser clients (generate_secret=false), not machine clients.
+  statement {
+    sid = "ReadPrivateUserPoolMetadata"
+    actions = [
+      "cognito-idp:DescribeUserPool",
+      "cognito-idp:DescribeUserPoolClient",
+      "cognito-idp:GetUserPoolMfaConfig",
+      "cognito-idp:ListTagsForResource",
+    ]
+    resources = [
+      for id in local.terraform_audit_private_user_pool_ids :
+      "arn:aws:cognito-idp:${var.aws_region}:${data.aws_caller_identity.current.account_id}:userpool/${id}"
+    ]
+  }
+  # AWS does not support resource-level scoping for DescribeUserPoolDomain.
+  statement {
+    sid       = "ReadPrivateUserPoolDomains"
+    actions   = ["cognito-idp:DescribeUserPoolDomain"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
+  }
+  statement {
+    sid = "ReadPrivateEdgeFunctionMetadata"
+    actions = [
+      "lambda:GetFunction",
+      "lambda:GetFunctionCodeSigningConfig",
+      "lambda:ListTags",
+      "lambda:ListVersionsByFunction",
+    ]
+    resources = [
+      for env in local.terraform_audit_private_environments :
+      "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.app_name}-${env}-private-edge"
+    ]
+  }
+  statement {
+    sid = "ReadPrivateReplayTableMetadata"
+    actions = [
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:ListTagsOfResource",
+    ]
+    resources = [
+      for env in local.terraform_audit_private_environments :
+      "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${env}-oauth-replay"
     ]
   }
   statement {

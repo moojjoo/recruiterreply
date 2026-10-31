@@ -158,6 +158,24 @@ test('rejects missing, malformed, and weak signing-key secrets', () => {
   );
 });
 
+test('accepts a separate API origin key and rejects weak origin keys', () => {
+  const keys = parseSigningKeys({
+    SecretString: JSON.stringify({
+      sessionSigningKey: 'session-signing-key-at-least-32-bytes-long',
+      transactionSigningKey: 'transaction-signing-key-at-least-32-bytes',
+      apiOriginSigningKey: 'api-origin-signing-key-at-least-32-bytes'
+    })
+  });
+  assert.equal(keys.apiOriginSigningKey, 'api-origin-signing-key-at-least-32-bytes');
+  assert.throws(() => parseSigningKeys({
+    SecretString: JSON.stringify({
+      sessionSigningKey: 'session-signing-key-at-least-32-bytes-long',
+      transactionSigningKey: 'transaction-signing-key-at-least-32-bytes',
+      apiOriginSigningKey: 'short'
+    })
+  }), /is invalid/);
+});
+
 test('rejects missing configuration before creating a client', () => {
   assert.throws(
     () => createSigningKeyProvider({ secretId: '', client: {}, sdk }),

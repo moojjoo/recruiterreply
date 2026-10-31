@@ -10,4 +10,4 @@ Describe the implementation, commits, tests and verification workflow links. Do 
 Use `Refs #123` for partial implementation. Only the final PR that fully satisfies an issue may include `Dev-Completes: #123`.
 
 ## Closure approval
-The issue must have the separately controlled `dev-acceptance-verified` label before the post-Dev-deployment reconciler can close it. A successful build or merge does not grant approval.
+The trusted post-Dev-deployment reconciler applies `dev-acceptance-verified` only after the final PR checks, deployed SHA, smoke verification and project membership checks pass. A successful build or merge alone does not close the issue.

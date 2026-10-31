@@ -55,6 +55,71 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task CreateCheckoutSessionAsync_WithExistingSubscription_RejectsDuplicateSubscription()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.CreateCheckoutSessionAsync(user.Id, PlanTiers.RecruiterPro));
+    }
+
+    [Fact]
+    public async Task UpgradeToRecruiterProAsync_WithFreeUser_Throws()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.UpgradeToRecruiterProAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task UpgradeToRecruiterProAsync_WithoutSubscription_StartsRecruiterProCheckout()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(
+                HttpMethod.Get,
+                It.IsAny<string>(),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_existing" });
+        stripeClient
+            .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(
+                It.IsAny<HttpMethod>(),
+                It.IsAny<string>(),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Stripe.Checkout.Session
+            {
+                Url = "https://checkout.stripe.com/pay/cs_recovery",
+            });
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        var checkoutUrl = await sut.UpgradeToRecruiterProAsync(user.Id);
+
+        Assert.Equal("https://checkout.stripe.com/pay/cs_recovery", checkoutUrl);
+        stripeClient.Verify(
+            c => c.RequestAsync<Subscription>(
+                It.IsAny<HttpMethod>(),
+                It.IsAny<string>(),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task CreateCheckoutSessionAsync_WithUnknownUser_Throws()
     {
         var userId = Guid.NewGuid();
@@ -150,6 +215,7 @@ public class BillingServiceTests
                   "object": "subscription",
                   "customer": "cus_123",
                   "status": "active",
+                  "cancel_at_period_end": true,
                   "items": {
                     "object": "list",
                     "data": [
@@ -172,6 +238,7 @@ public class BillingServiceTests
 
         Assert.Equal("sub_123", user.StripeSubscriptionId);
         Assert.Equal("active", user.SubscriptionStatus);
+        Assert.True(user.SubscriptionCancelAtPeriodEnd);
         Assert.Equal(PlanTiers.Professional, user.SubscriptionTier);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1893456000).UtcDateTime, user.SubscriptionCurrentPeriodEnd);
         _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
@@ -219,6 +286,7 @@ public class BillingServiceTests
         user.SubscriptionStatus = "active";
         user.StripeSubscriptionId = "sub_123";
         user.SubscriptionCurrentPeriodEnd = DateTime.UtcNow.AddDays(10);
+        user.SubscriptionCancelAtPeriodEnd = true;
         _userRepository.Setup(r => r.GetByStripeCustomerIdAsync("cus_123", It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var payload = """
@@ -247,6 +315,13 @@ public class BillingServiceTests
         Assert.Equal("canceled", user.SubscriptionStatus);
         Assert.Null(user.StripeSubscriptionId);
         Assert.Null(user.SubscriptionCurrentPeriodEnd);
+        Assert.NotNull(user.SubscriptionCancellationEventId);
+        var cancellationEventId = user.SubscriptionCancellationEventId;
+
+        await sut.HandleWebhookAsync(payload, signature);
+
+        Assert.Equal(cancellationEventId, user.SubscriptionCancellationEventId);
+        Assert.False(user.SubscriptionCancelAtPeriodEnd);
     }
 
     // ----- HandleWebhookAsync: checkout.session.completed -----
@@ -358,6 +433,7 @@ public class BillingServiceTests
             {
                 Id = "sub_123",
                 Status = "trialing",
+                CancelAtPeriodEnd = true,
                 Items = new StripeList<SubscriptionItem>
                 {
                     Data = [new SubscriptionItem { CurrentPeriodEnd = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc) }],
@@ -390,6 +466,7 @@ public class BillingServiceTests
 
         Assert.Equal("sub_123", user.StripeSubscriptionId);
         Assert.Equal("trialing", user.SubscriptionStatus);
+        Assert.True(user.SubscriptionCancelAtPeriodEnd);
         Assert.Equal(new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc), user.SubscriptionCurrentPeriodEnd);
         Assert.Equal(PlanTiers.Professional, user.SubscriptionTier);
     }
@@ -418,12 +495,15 @@ public class BillingServiceTests
     }
 
     [Fact]
-    public async Task CreateCheckoutSessionAsync_WithExistingCustomer_DoesNotCreateANewStripeCustomer()
+    public async Task CreateCheckoutSessionAsync_WithExistingCustomer_ValidatesAndReusesCustomer()
     {
         var user = BuildUser(stripeCustomerId: "cus_existing");
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_existing" });
         stripeClient
             .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Stripe.Checkout.Session { Url = "https://checkout.stripe.com/pay/cs_test_456" });
@@ -433,9 +513,38 @@ public class BillingServiceTests
         await sut.CreateCheckoutSessionAsync(user.Id, PlanTiers.RecruiterPro);
 
         stripeClient.Verify(
-            c => c.RequestAsync<Customer>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()),
+            c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        stripeClient.Verify(
+            c => c.RequestAsync<Customer>(HttpMethod.Post, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _userRepository.Verify(r => r.UpdateAsync(It.IsAny<UserEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_WithStaleCustomer_CreatesReplacementAndStartsCheckout()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_stale");
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new StripeException("No such customer: 'cus_stale'"));
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Post, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_replacement" });
+        stripeClient
+            .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Stripe.Checkout.Session { Url = "https://checkout.stripe.com/pay/cs_recovered" });
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        var url = await sut.CreateCheckoutSessionAsync(user.Id, PlanTiers.Professional);
+
+        Assert.Equal("https://checkout.stripe.com/pay/cs_recovered", url);
+        Assert.Equal("cus_replacement", user.StripeCustomerId);
+        _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -454,5 +563,41 @@ public class BillingServiceTests
         var url = await sut.CreatePortalSessionAsync(user.Id);
 
         Assert.Equal("https://billing.stripe.com/session/bps_test_123", url);
+    }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_UpdatesStripeSubscriptionToCancelAtPeriodEnd()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Subscription>(
+                It.IsAny<HttpMethod>(),
+                It.Is<string>(path => path.Contains("sub_existing")),
+                It.IsAny<BaseOptions>(),
+                It.IsAny<RequestOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Subscription
+            {
+                Id = "sub_existing",
+                Status = "active",
+                CancelAtPeriodEnd = true,
+                Items = new StripeList<SubscriptionItem>
+                {
+                    Data = [new SubscriptionItem { CurrentPeriodEnd = new DateTime(2027, 2, 1, 0, 0, 0, DateTimeKind.Utc) }],
+                },
+            });
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        await sut.CancelSubscriptionAsync(user.Id);
+
+        Assert.True(user.SubscriptionCancelAtPeriodEnd);
+        Assert.Equal(new DateTime(2027, 2, 1, 0, 0, 0, DateTimeKind.Utc), user.SubscriptionCurrentPeriodEnd);
+        _userRepository.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

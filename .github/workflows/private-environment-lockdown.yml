@@ -16,9 +16,9 @@ permissions:
 
 jobs:
   lockdown:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Assert Dev/Test remain disabled
         run: |
           node .github/scripts/check-private-environment-lockdown.cjs

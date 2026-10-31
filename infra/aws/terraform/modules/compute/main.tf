@@ -60,6 +60,67 @@ resource "aws_iam_role_policy" "postgres_backup" {
   })
 }
 
+resource "aws_iam_role_policy" "container_logs" {
+  count = length(var.log_group_arns) > 0 ? 1 : 0
+  name  = "${var.name_prefix}-container-logs"
+  role  = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "PublishApplicationLogs"
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+      Resource = [for arn in var.log_group_arns : "${arn}:*"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "private_api_origin_signing" {
+  count = var.private_api_origin_signing_secret_arn != null ? 1 : 0
+  name  = "${var.name_prefix}-private-api-origin-signing"
+  role  = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+      Resource = var.private_api_origin_signing_secret_arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "bff_runtime" {
+  count = var.bff_session_table_arn != null && var.bff_session_kms_key_arn != null && var.backend_secret_arn != null ? 1 : 0
+  name  = "${var.name_prefix}-bff-runtime"
+  role  = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "BffSessionStore"
+        Effect   = "Allow"
+        Action   = ["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem"]
+        Resource = var.bff_session_table_arn
+      },
+      {
+        Sid      = "BffSessionEnvelopeKeys"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = var.bff_session_kms_key_arn
+      },
+      {
+        Sid      = "ReadBackendConfiguration"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+        Resource = var.backend_secret_arn
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2.name

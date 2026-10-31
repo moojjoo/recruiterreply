@@ -2,7 +2,10 @@
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const https = require('node:https');
+const { EventEmitter } = require('node:events');
 const { test } = require('node:test');
+const { validateEnvironment } = require('./deployment-handler.cjs');
 
 const { completeOAuthLogin } = require('./complete-oauth-login.cjs');
 const { createTransactionCookie } = require('./oauth-transaction.cjs');
@@ -23,11 +26,8 @@ const environment = {
   approvedIdentity: { domain, issuer, clientId, redirectUri },
   oauth: {
     domain,
-    approvedDomain: domain,
     clientId,
-    approvedClientId: clientId,
-    redirectUri,
-    approvedRedirectUri: redirectUri
+    redirectUri
   },
   tokenConfig: { issuer, clientId },
   sessionConfig: { issuer, clientId }
@@ -85,8 +85,14 @@ function makeTransaction() {
 function dependencies(token = signedIdToken()) {
   return {
     exchangeCode: async args => {
+      assert.equal(args.approvedDomain, domain);
+      assert.equal(args.approvedClientId, clientId);
+      assert.equal(args.approvedRedirectUri, redirectUri);
       assert.equal(args.code, 'test.authorization-code');
       assert.equal(args.verifier, verifier);
+      assert.equal(args.approvedDomain, domain);
+      assert.equal(args.approvedClientId, clientId);
+      assert.equal(args.approvedRedirectUri, redirectUri);
       return { id_token: token, access_token: 'mock-access-token' };
     },
     retrieveJwks: async (requestedIssuer, options) => {
@@ -125,6 +131,49 @@ test('successful OAuth login creates secure session and clears transaction', asy
   assert.match(result.clearTransactionCookie, /^rr_oauth_tx=;/);
   assert.match(result.clearTransactionCookie, /; Max-Age=0/);
   assert.equal(result.expiresIn, 900);
+});
+
+test('deployment environment completes login through the real token-exchange helper', async () => {
+  const deployedEnvironment = validateEnvironment('E2JWU1TLDA6YRS', {
+    host: 'dev.recruiterreply.com', issuer, clientId, domain,
+    signingKeySecretId: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-keys',
+    replayTableName: 'test-oauth-replay',
+    signApiOriginRequests: false
+  });
+  const originalRequest = https.request;
+  let exchanged = false;
+  https.request = (options, callback) => {
+    assert.equal(options.hostname, domain);
+    assert.equal(options.path, '/oauth2/token');
+    const request = new EventEmitter();
+    request.end = body => {
+      const params = new URLSearchParams(body);
+      assert.equal(params.get('client_id'), clientId);
+      assert.equal(params.get('redirect_uri'), redirectUri);
+      assert.equal(params.get('code_verifier'), verifier);
+      exchanged = true;
+      process.nextTick(() => {
+        const response = new EventEmitter();
+        response.statusCode = 200;
+        callback(response);
+        response.emit('data', Buffer.from(JSON.stringify({
+          id_token: signedIdToken(), access_token: 'mock-access-token'
+        })));
+        response.emit('end');
+      });
+    };
+    return request;
+  };
+  try {
+    const result = await completeOAuthLogin(loginArgs({
+      environment: deployedEnvironment,
+      exchangeCode: undefined
+    }));
+    assert.equal(exchanged, true);
+    assert.match(result.sessionCookie, /^rr_session=/);
+  } finally {
+    https.request = originalRequest;
+  }
 });
 
 test('state mismatch prevents token exchange', async () => {

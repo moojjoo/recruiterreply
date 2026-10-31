@@ -1,10 +1,13 @@
 'use strict';
 
+const { createOriginSignature } = require('./origin-signature.cjs');
 const { createSessionGateway } = require('./session-gateway.cjs');
 const { createAuthorizationRequest } = require('./oauth-authorize.cjs');
 const { createTransactionCookie } = require('./oauth-transaction.cjs');
 const { completeOAuthLogin } = require('./complete-oauth-login.cjs');
 const { clearSessionCookie } = require('./session-cookie.cjs');
+const { fetchGitHubJwks } = require('./fetch-github-jwks.cjs');
+const { getCiToken, validateGitHubActionsToken } = require('./github-oidc.cjs');
 
 // Issue #356: Initial fail-closed Lambda@Edge viewer-request handler.
 // Development scaffold only. Not ready for deployment.
@@ -30,6 +33,10 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
 
     if (!request) {
       return forbidden();
+    }
+
+    if (record.cf.config?.eventType === 'origin-request') {
+      return signApiOriginRequest(request, distributionId, trustedEnvironments);
     }
 
     const environments = {
@@ -63,18 +70,74 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
       return logout(environment, expectedHost);
     }
 
-    if (!(await validateSession(request, distributionId))) {
+    // The BFF owns the Cognito authorization-code flow. These are the only
+    // unauthenticated API paths allowed through the private edge; the API
+    // origin-request Lambda still adds the sealed origin signature later.
+    if (isCognitoBffPublicRoute(request.uri)) {
+      delete request.headers['x-rr-ci-oidc-token'];
+      return request;
+    }
+
+    const ciToken = getCiToken(request);
+    if (ciToken) {
+      if (!(await validateCiToken(ciToken, environment))) return forbidden();
+    } else if (!(await validateSession(request, distributionId))) {
       return isCompleteEnvironment(environment)
         ? redirect('/_auth/login')
         : forbidden();
     }
 
-    // Never forward browser authentication cookies to the S3 origin.
-    delete request.headers.cookie;
-    rewriteSpaRequest(request);
+    // API requests need the sealed session cookie so the backend can establish
+    // the application identity. Static S3 requests must never receive it.
+    if (!request.uri.startsWith('/api/')) delete request.headers.cookie;
+    delete request.headers['x-rr-ci-oidc-token'];
+    if (!request.uri.startsWith('/api/')) rewriteSpaRequest(request);
 
     return request;
   };
+}
+
+function isCognitoBffPublicRoute(uri) {
+  return uri === '/api/auth/cognito/start' || uri === '/api/auth/cognito/callback';
+}
+
+async function validateCiToken(token, environment) {
+  if (!environment?.ciAuth) return false;
+  try {
+    const jwks = await fetchGitHubJwks();
+    validateGitHubActionsToken(token, jwks, environment.ciAuth);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function signApiOriginRequest(request, distributionId, trustedEnvironments, now = Date.now) {
+  if (!['E2JWU1TLDA6YRS', 'E2IGR9MYMWVQFI'].includes(distributionId) || !request.uri.startsWith('/api/')) return request;
+
+  const environment = trustedEnvironments[distributionId];
+  if (!environment?.signApiOriginRequests || typeof environment.getSigningKeys !== 'function') {
+    return forbidden();
+  }
+
+  return environment.getSigningKeys().then(keys => {
+    const secret = keys?.apiOriginSigningKey;
+    if (typeof secret !== 'string' || Buffer.byteLength(secret) < 32) return forbidden();
+    const timestamp = Math.floor(now() / 1000).toString();
+    const signature = createOriginSignature({
+      method: request.method,
+      uri: request.uri,
+      querystring: request.querystring || '',
+      timestamp,
+      secret
+    });
+    request.headers = request.headers || {};
+    request.headers['x-rr-origin-auth'] = [{
+      key: 'X-RR-Origin-Auth',
+      value: `${timestamp}.${signature}`
+    }];
+    return request;
+  }).catch(() => forbidden());
 }
 
 function protectOriginResponse(response, distributionId, trustedEnvironments) {
@@ -185,7 +248,29 @@ async function finishAuthorization(request, environment, completeLogin) {
       result.sessionCookie,
       result.clearTransactionCookie
     ]);
-  } catch {
+  } catch (error) {
+    const allowedErrors = new Set([
+      'Missing authentication cookie',
+      'Invalid callback query',
+      'Duplicate callback parameter',
+      'Invalid OAuth callback parameters',
+      'OAuth state mismatch',
+      'OAuth redirect URI mismatch',
+      'OAuth token exchange failed',
+      'Missing ID token'
+    ]);
+
+    const reason = allowedErrors.has(error?.message)
+      ? error.message
+      : 'Unclassified callback failure';
+
+    console.error('PRIVATE_AUTH_CALLBACK_FAILURE', {
+      reason,
+      errorType: typeof error?.name === 'string'
+        ? error.name.replace(/[^A-Za-z]/g, '').slice(0, 40)
+        : 'Unknown'
+    });
+
     return forbidden();
   }
 }
@@ -286,5 +371,6 @@ module.exports = {
   getSingleCookie,
   parseQueryString,
   protectOriginResponse,
-  rewriteSpaRequest
+  rewriteSpaRequest,
+  signApiOriginRequest
 };

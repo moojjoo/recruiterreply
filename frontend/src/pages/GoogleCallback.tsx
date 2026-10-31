@@ -4,6 +4,7 @@ import { MainLayout } from "../components/layout/MainLayout";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { useToast } from "../hooks/useToast";
 import { trackProductEvent } from "../utils/productAnalytics";
+import { isCookieAuthEnabled } from "../services/authMode";
 
 export const GoogleCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -18,12 +19,20 @@ export const GoogleCallback: React.FC = () => {
 
     hasHandled.current = true;
 
+    if (isCookieAuthEnabled()) {
+      window.location.replace("/login?error=legacy_auth_retired");
+      return;
+    }
+
     const token = searchParams.get("token");
     if (token) {
       localStorage.setItem("authToken", token);
       trackProductEvent("login", { method: "google" });
       showToast("Google login successful.", "success");
-      navigate("/dashboard", { replace: true });
+      // AuthProvider owns the in-memory user state. Reloading after storing the
+      // token lets its normal bootstrap call /auth/me before ProtectedRoute
+      // evaluates the dashboard, avoiding an immediate redirect back to login.
+      window.location.replace("/dashboard");
       return;
     }
 

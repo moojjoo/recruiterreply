@@ -23,6 +23,7 @@ function devConfig(overrides = {}) {
       domain: 'recruiterreply-dev.auth.us-east-1.amazoncognito.com',
       signingKeySecretId: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:dev',
       replayTableName: 'recruiterreply-dev-oauth-replay',
+      signApiOriginRequests: false,
       ...overrides
     }
   };
@@ -70,10 +71,10 @@ test('stages only runtime sources and generated entry files', () => {
   assert.deepEqual(files, [
     ...SOURCE_FILES,
     'deployment-config.cjs',
-    'index.cjs'
+    'index.js'
   ].sort());
   assert.equal(files.some(file => file.endsWith('.test.cjs')), false);
-  assert.match(fs.readFileSync(path.join(outputPath, 'index.cjs'), 'utf8'), /createDeploymentHandler/);
+  assert.match(fs.readFileSync(path.join(outputPath, 'index.js'), 'utf8'), /createDeploymentHandler/);
 });
 
 test('refuses to overwrite an existing output directory', () => {

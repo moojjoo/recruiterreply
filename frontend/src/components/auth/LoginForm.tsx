@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { Input } from "../common/Input";
@@ -6,27 +7,55 @@ import { Button } from "../common/Button";
 import { Card } from "../common/Card";
 import { authService } from "../../services/api/authService";
 import { trackProductEvent } from "../../utils/productAnalytics";
+import { isCookieAuthEnabled } from "../../services/authMode";
 
 export const LoginForm: React.FC = () => {
+  const cookieAuthEnabled = isCookieAuthEnabled();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [formError, setFormError] = useState("");
   const { login } = useAuth();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
+  const googleAuthFailed = searchParams.get("error") === "google_auth_failed";
+  const googleAuthError = "Google sign-in could not be completed. Please try again.";
+
+  useEffect(() => {
+    if (googleAuthFailed) showToast(googleAuthError, "error", 0);
+  }, [googleAuthFailed, showToast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     setLoading(true);
     try {
       await login(email, password);
       trackProductEvent("login", { method: "password" });
       showToast("Logged in successfully!", "success");
       window.location.href = "/dashboard";
-    } catch {
-      showToast("Login failed. Please try again.", "error");
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? `Login failed: ${error.message}`
+          : "Login failed. Please try again.";
+      setFormError(message);
+      showToast(message, "error", 0);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCognitoLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      const response = await authService.cognitoLoginStart();
+      trackProductEvent("login", { method: "cognito" });
+      window.location.href = response.data.authorizationUrl;
+    } catch {
+      showToast("Login is currently unavailable.", "error");
+      setGoogleLoading(false);
     }
   };
 
@@ -41,10 +70,40 @@ export const LoginForm: React.FC = () => {
     }
   };
 
+  if (cookieAuthEnabled) {
+    return (
+      <Card elevated>
+        <h2 className="text-2xl font-bold mb-6">Login</h2>
+        {(formError || googleAuthFailed) && (
+          <p role="status" aria-live="assertive" className="error-text">
+            {formError || googleAuthError}
+          </p>
+        )}
+        <p className="text-gray-600 mb-6">
+          Continue securely through RecruiterReply&apos;s hosted sign-in.
+        </p>
+        <Button
+          type="button"
+          variant="primary"
+          isLoading={googleLoading}
+          className="w-full"
+          onClick={handleCognitoLogin}
+        >
+          Continue with Google
+        </Button>
+      </Card>
+    );
+  }
+
   return (
     <Card elevated>
       <h2 className="text-2xl font-bold mb-6">Login</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {(formError || googleAuthFailed) && (
+          <p role="status" aria-live="assertive" className="error-text">
+            {formError || googleAuthError}
+          </p>
+        )}
         <Input
           type="email"
           label="Email"

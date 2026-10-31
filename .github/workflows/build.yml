@@ -11,6 +11,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
+  deployments: read
 
 # Serialize main builds so overlapping dev deploys don't race on the shared EC2 host.
 concurrency:
@@ -23,10 +24,13 @@ env:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Test private Dev deployment verification
+        run: node --test .github/scripts/tests/private-dev-smoke.test.cjs
 
       - name: Test CI remediation comments
         run: node --test .github/scripts/tests/ci-remediation-comment.test.cjs
@@ -47,10 +51,15 @@ jobs:
         run: node --test .github/scripts/tests/reconcile-dev-issues.test.cjs
 
       - name: Test Docker image retention safety
-        run: python3 -m unittest discover -s tests -p 'test_docker_image_prune.py'
+        run: |
+          python3 -m unittest discover -s tests -p 'test_docker_image_prune.py'
+          node --test .github/scripts/tests/resolve-image-retention-policy.test.cjs
 
       - name: Test Terraform audit maintenance policy
         run: node --test .github/scripts/tests/terraform-readonly-audit.test.cjs
+
+      - name: Test promotion command contract
+        run: node --test .github/scripts/tests/promotion-contract.test.cjs
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -83,7 +92,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: dev
 
     steps:
@@ -239,7 +248,7 @@ jobs:
       environment: dev
       sha: ${{ github.sha }}
       build_run_id: ${{ github.run_id }}
-      api_base_url: https://api-dev.recruiterreply.com/api
+      api_base_url: /api
       frontend_url: https://dev.recruiterreply.com
       api_url: https://api-dev.recruiterreply.com
       robots_txt: |
@@ -249,18 +258,39 @@ jobs:
   verify-dev-seo-http:
     needs: deploy-dev
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Verify live Dev SEO responses
+      - name: Verify live Dev private access boundary
         env:
-          SEO_BASE_URL: https://dev.recruiterreply.com
-        run: node .github/scripts/dev-seo-http-smoke.cjs
+          DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
+          DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
+          DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
+        run: node .github/scripts/private-dev-smoke.cjs --boundary-only
+
+  dev-ready-notification:
+    needs: [deploy-dev, verify-dev-seo-http]
+    if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success' && needs.verify-dev-seo-http.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish Dev-ready handoff
+        env:
+          DEPLOYED_SHA: ${{ github.sha }}
+        run: |
+          DEPLOYED_AT=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          {
+            echo '## 🎉 Dev is deployed and ready to validate! 🚀'
+            echo
+            echo "✅ Commit: `$DEPLOYED_SHA`"
+            echo "🕒 Completed: $DEPLOYED_AT"
+            echo '⏳ Allow 5–10 minutes for stabilization, then begin manual Dev validation.'
+            echo '🧪 CI deployment and configured smoke checks passed.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   reconcile-dev-issues:
     needs: [deploy-dev, verify-dev-seo-http]
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success' && needs.verify-dev-seo-http.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
@@ -274,7 +304,7 @@ jobs:
           persist-credentials: false
 
       - name: Reconcile completed issues
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
           DEV_DEPLOYMENT_VERIFIED: 'true'
@@ -287,7 +317,7 @@ jobs:
   dev-lockdown-status:
     needs: [verify, build, deploy-dev, verify-dev-seo-http]
     if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Report deployment verification status
         env:

@@ -1,0 +1,268 @@
+name: Email forwarding plan and approved apply
+on:
+  pull_request:
+    paths:
+      - 'scripts/email-forwarding/**'
+      - 'infra/aws/terraform/email-forwarding/**'
+      - 'infra/aws/terraform/email-forwarding-iam/**'
+      - '.github/workflows/email-forwarding.yml'
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        description: Email DNS plan, approved apply, provider check, or post-apply acceptance
+        options: [email-plan, email-apply, provider-check, email-acceptance]
+        default: email-plan
+      email_environment:
+        type: choice
+        description: Dev/Test can inspect shared apex DNS; only Production can apply
+        options: [dev, test, prod]
+        default: dev
+      source_run:
+        type: string
+        description: For acceptance only, the run ID of the completed DNS apply
+        required: false
+permissions:
+  contents: read
+jobs:
+  email-checks:
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: node --test scripts/email-forwarding/*.test.cjs
+      - run: python3 -m unittest discover -s scripts/email-forwarding -p 'test_*.py'
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.14.3'
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding fmt -check
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding-iam fmt -check
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding-iam init -backend=false -input=false -lockfile=readonly
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding-iam validate -no-color
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding-iam test -no-color
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding init -backend=false -input=false -lockfile=readonly
+      - run: terraform -chdir=infra/aws/terraform/email-forwarding validate -no-color
+      - name: Verify protected environment configuration before OIDC
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EMAIL_ENVIRONMENT: ${{ inputs.email_environment }}
+          EMAIL_OPERATION: ${{ inputs.operation }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          python3 scripts/email-forwarding/check-environments.py
+  provider-check:
+    needs: email-checks
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'provider-check' && inputs.email_environment == 'prod' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: terraform-email-prod-apply
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Read-only provider diagnostics (no AWS or DNS changes)
+        env:
+          IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
+        run: node scripts/email-forwarding/check-provider.cjs
+  email-plan:
+    needs: email-checks
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'email-plan' || inputs.operation == 'email-apply') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: terraform-email-${{ inputs.email_environment }}-plan
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: issue-400-dns-plan-${{ inputs.email_environment }}
+      cancel-in-progress: false
+    env:
+      EMAIL_ENVIRONMENT: ${{ inputs.email_environment }}
+      TF_IN_AUTOMATION: 'true'
+    defaults:
+      run:
+        working-directory: infra/aws/terraform/email-forwarding
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.14.3'
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: us-east-1
+          allowed-account-ids: '178522450316'
+          role-to-assume: ${{ vars.TERRAFORM_EMAIL_ROLE_ARN }}
+          role-session-name: email-plan-${{ github.run_id }}
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket","route53:GetHostedZone","route53:ListResourceRecordSets","route53:GetChange","ses:GetEmailIdentity"],"Resource":"*"}]}
+      - name: Snapshot public DNS and SES health
+        run: python3 "$GITHUB_WORKSPACE/scripts/email-forwarding/live-check.py" baseline.json
+      - name: Initialize DNS-only state and produce plan
+        run: |
+          terraform init -input=false -lockfile=readonly > init.log 2>&1 || { echo '::error::DNS state initialization failed; raw output withheld'; exit 1; }
+          terraform plan -input=false -lock=false -out=reviewed.tfplan > plan.log 2>&1 || { echo '::error::DNS plan failed; raw output withheld'; exit 1; }
+          terraform show -json reviewed.tfplan > plan.json
+          python3 "$GITHUB_WORKSPACE/scripts/email-forwarding/terraform-gate.py" seal plan.json --binary reviewed.tfplan --manifest manifest.json
+      - name: Publish sanitized review summary
+        run: |
+          {
+            echo '### Issue #400 — DNS-only plan'
+            echo "Commit: $GITHUB_SHA; environment: $EMAIL_ENVIRONMENT"
+            echo 'Allowed: create apex MX (10 mx1.improvmx.com, 20 mx2.improvmx.com); import/update apex TXT preserving Google verification and adding one SES/ImprovMX SPF record.'
+            echo 'No other resources or DNS changes are permitted. Dev/Test are read-only. Production apply requires a separate protected job approval.'
+            echo 'Provider verification and final inbox receipt are separate acceptance gates.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: issue-400-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            infra/aws/terraform/email-forwarding/reviewed.tfplan
+            infra/aws/terraform/email-forwarding/manifest.json
+            infra/aws/terraform/email-forwarding/baseline.json
+          retention-days: 1
+          if-no-files-found: error
+      - name: Remove local plan logs
+        if: always()
+        run: rm -f init.log plan.log plan.json
+  email-apply:
+    needs: email-plan
+    if: inputs.operation == 'email-apply' && inputs.email_environment == 'prod' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: terraform-email-prod-apply
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: issue-400-dns-apply
+      cancel-in-progress: false
+    env:
+      EMAIL_ENVIRONMENT: prod
+      TF_IN_AUTOMATION: 'true'
+    defaults:
+      run:
+        working-directory: infra/aws/terraform/email-forwarding
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check actual free provider account and alias routing before DNS
+        env:
+          IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
+        run: node "$GITHUB_WORKSPACE/scripts/email-forwarding/check-provider.cjs"
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.14.3'
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: issue-400-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: infra/aws/terraform/email-forwarding
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: us-east-1
+          allowed-account-ids: '178522450316'
+          role-to-assume: ${{ vars.TERRAFORM_EMAIL_ROLE_ARN }}
+          role-session-name: email-apply-${{ github.run_id }}
+      - name: Reject stale plans and apply only reviewed binary
+        run: |
+          terraform init -input=false -lockfile=readonly > init.log 2>&1 || { echo '::error::DNS state initialization failed'; exit 1; }
+          terraform plan -input=false -lock-timeout=60s -out=fresh.tfplan > fresh.log 2>&1 || { echo '::error::Fresh DNS plan failed'; exit 1; }
+          terraform show -json fresh.tfplan > fresh.json
+          python3 "$GITHUB_WORKSPACE/scripts/email-forwarding/terraform-gate.py" verify fresh.json --binary reviewed.tfplan --manifest manifest.json
+          terraform apply -input=false -lock-timeout=60s reviewed.tfplan > apply.log 2>&1 || { echo '::error::Reviewed DNS apply failed; inspect with authorized access'; exit 1; }
+      - name: Verify authoritative DNS and existing SES configuration
+        run: python3 "$GITHUB_WORKSPACE/scripts/email-forwarding/live-check.py" baseline.json --compare
+      - name: Verify provider forwarding is ready
+        env:
+          IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
+        run: node "$GITHUB_WORKSPACE/scripts/email-forwarding/check-provider.cjs" --wait-ready
+      - name: Send three bounded acceptance messages
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/scripts/email-forwarding/live-check.py" baseline.json --compare --send-tests | tee receipt-pending.txt
+          cat receipt-pending.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '::error::PENDING MANUAL VERIFICATION: confirm all three correlation IDs in the destination inbox before declaring #400 accepted.'
+          exit 1
+      - name: Remove local plan logs
+        if: always()
+        run: rm -f init.log fresh.log fresh.json apply.log fresh.tfplan
+  email-acceptance:
+    needs: email-checks
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'email-acceptance' && inputs.email_environment == 'prod' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: terraform-email-prod-apply
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    concurrency:
+      group: issue-400-acceptance
+      cancel-in-progress: false
+    env:
+      SOURCE_RUN: ${{ inputs.source_run }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Verify source run completed the reviewed DNS apply
+        id: source
+        run: python3 scripts/email-forwarding/acceptance-context.py
+      - uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          name: ${{ steps.source.outputs.artifact }}
+          path: acceptance-source
+      - name: Verify original artifact binding and public baseline
+        run: python3 scripts/email-forwarding/acceptance-context.py acceptance-source
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: us-east-1
+          allowed-account-ids: '178522450316'
+          role-to-assume: ${{ vars.TERRAFORM_EMAIL_ROLE_ARN }}
+          role-session-name: email-acceptance-${{ github.run_id }}
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["route53:GetHostedZone","route53:ListResourceRecordSets","ses:GetEmailIdentity","ses:SendEmail"],"Resource":"*"}]}
+      - name: Wait for free provider forwarding readiness
+        env:
+          IMPROVMX_API_KEY: ${{ secrets.IMPROVMX_API_KEY }}
+        run: node scripts/email-forwarding/check-provider.cjs --wait-ready
+      - name: Verify authoritative DNS and preserved SES before sending
+        run: python3 scripts/email-forwarding/live-check.py acceptance-source/baseline.json --compare
+      - name: Send three bounded acceptance messages once
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1 || { echo '::error::Do not rerun sends; dispatch a separately approved acceptance run.'; exit 1; }
+          python3 scripts/email-forwarding/live-check.py acceptance-source/baseline.json --compare --send-tests | tee receipt-pending.txt
+          cat receipt-pending.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '::error::PENDING MANUAL VERIFICATION: confirm all three correlation IDs in the destination inbox before declaring #400 accepted.'
+          exit 1
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: issue-400-receipts-${{ github.run_id }}
+          path: receipt-pending.txt
+          retention-days: 1
+          if-no-files-found: ignore

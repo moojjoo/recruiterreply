@@ -1,3 +1,4 @@
+import { useResultReveal } from "../hooks/useResultReveal";
 import { trackProductEvent } from "../utils/productAnalytics";
 import React, { useState, useCallback } from "react";
 import { MessageAnalyzer } from "../components/MessageAnalyzer";
@@ -7,10 +8,12 @@ import { MainLayout } from "../components/layout/MainLayout";
 import { ToolNavigation } from "../components/ToolNavigation";
 
 export const AnalysisPage: React.FC = () => {
+  const [revision, setRevision] = useState(0);
+  const resultHeadingRef = useResultReveal(revision);
   const [result, setResult] = useState<AnalyzeMessageResponse | null>(null);
 
   const handleResult = useCallback((res: AnalyzeMessageResponse) => {
-    setResult(res);
+    setResult(res); setRevision((previous) => previous + 1);
     trackProductEvent("analysis_completed", { feature: "analyze" });
   }, []);
 
@@ -52,7 +55,14 @@ export const AnalysisPage: React.FC = () => {
 
           {/* Results */}
           {result && (
-            <div className="mt-12">
+            <div className="mt-12 tool-results" role="region" aria-label="Generated results">
+              <h2
+                ref={resultHeadingRef}
+                tabIndex={-1}
+                className="sr-only tool-results-heading"
+              >
+                Results
+              </h2>
               <AnalysisResult result={result} loading={false} error={null} />
             </div>
           )}

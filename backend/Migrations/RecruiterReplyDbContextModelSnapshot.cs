@@ -665,6 +665,69 @@ namespace RecruiterReply.Migrations
                     b.ToTable("opportunities", (string)null);
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.OrganizationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("organizations", (string)null);
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.OrganizationMemberEntity", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("OrganizationId", "UserId");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("organization_members", (string)null);
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -940,6 +1003,10 @@ namespace RecruiterReply.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password_hash");
 
+                    b.Property<Guid?>("PersonalOrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("personal_organization_id");
+
                     b.Property<string>("ProfilePictureUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
@@ -963,6 +1030,16 @@ namespace RecruiterReply.Migrations
                     b.Property<DateTime?>("SubscriptionCurrentPeriodEnd")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("subscription_current_period_end");
+
+                    b.Property<Guid?>("SubscriptionCancellationEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subscription_cancellation_event_id");
+
+                    b.Property<bool>("SubscriptionCancelAtPeriodEnd")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("subscription_cancel_at_period_end");
 
                     b.Property<string>("SubscriptionStatus")
                         .HasMaxLength(50)
@@ -993,6 +1070,54 @@ namespace RecruiterReply.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.UserIdentityEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "Subject")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("user_identities", (string)null);
                 });
 
             modelBuilder.Entity("RecruiterReply.Entities.CareerProfileEntity", b =>
@@ -1079,6 +1204,21 @@ namespace RecruiterReply.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RecruiterReply.Entities.OrganizationMemberEntity", b =>
+                {
+                    b.HasOne("RecruiterReply.Entities.OrganizationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RecruiterReply.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("RecruiterReply.Entities.PasswordRecoveryEntity", b =>
                 {
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
@@ -1112,6 +1252,15 @@ namespace RecruiterReply.Migrations
                 });
 
             modelBuilder.Entity("RecruiterReply.Entities.UsageRecordEntity", b =>
+                {
+                    b.HasOne("RecruiterReply.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RecruiterReply.Entities.UserIdentityEntity", b =>
                 {
                     b.HasOne("RecruiterReply.Entities.UserEntity", null)
                         .WithMany()

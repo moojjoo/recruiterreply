@@ -14,10 +14,10 @@ permissions:
 
 jobs:
   verify-edge-tokens:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - run: node --test infra/aws/edge/private-auth/*.test.cjs
