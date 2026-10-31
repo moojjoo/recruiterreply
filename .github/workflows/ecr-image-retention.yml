@@ -1,0 +1,137 @@
+name: ECR Backend Image Retention
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Preview candidates or apply an approved deletion plan
+        required: true
+        type: choice
+        default: preview
+        options:
+          - preview
+          - apply
+      confirmation:
+        description: For apply, enter DELETE-ECR-DEV10-TEST5-PROD4
+        required: false
+        type: string
+      expected_plan_digest:
+        description: For apply, paste the SHA-256 plan_digest from the approved preview
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  deployments: read
+  id-token: write
+
+concurrency:
+  group: ecr-backend-image-retention
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  retain:
+    runs-on: ubuntu-24.04
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate apply confirmation
+        if: inputs.mode == 'apply'
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_PLAN_DIGEST: ${{ inputs.expected_plan_digest }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRMATION" != 'DELETE-ECR-DEV10-TEST5-PROD4' ]]; then
+            echo "::error::Apply requires the exact confirmation DELETE-ECR-DEV10-TEST5-PROD4"
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_PLAN_DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "::error::Apply requires the 64-character plan_digest from the approved preview"
+            exit 1
+          fi
+
+      - name: Resolve successful environment histories
+        id: retention-policy
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const resolvePolicy = require('./.github/scripts/resolve-image-retention-policy.cjs');
+            const policy = await resolvePolicy({github, context, core});
+            core.setOutput('policy_b64', Buffer.from(JSON.stringify(policy)).toString('base64'));
+
+      - name: Resolve AWS auth inputs
+        id: aws-auth
+        env:
+          ROLE_FROM_VARS: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          ROLE_ARN_FROM_VARS: ${{ vars.AWS_ROLE_ARN }}
+          ROLE_ARN_FROM_SECRETS: ${{ secrets.AWS_ROLE_ARN }}
+          KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
+          KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
+          SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
+          TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-${ROLE_ARN_FROM_VARS:-${ROLE_ARN_FROM_SECRETS:-}}}}"
+          ACCESS_KEY="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-}}"
+          SECRET_KEY="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-}}"
+          SESSION_TOKEN="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
+          if [[ -n "$ROLE_TO_ASSUME" ]]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$ACCESS_KEY" && -n "$SECRET_KEY" ]]; then
+            echo "auth_mode=keys" >> "$GITHUB_OUTPUT"
+            echo "aws_access_key_id=$ACCESS_KEY" >> "$GITHUB_OUTPUT"
+            echo "aws_secret_access_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
+            [[ -z "$SESSION_TOKEN" ]] || echo "aws_session_token=$SESSION_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Missing AWS authentication configuration in the dev environment"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC role)
+        if: steps.aws-auth.outputs.auth_mode == 'oidc'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access keys)
+        if: steps.aws-auth.outputs.auth_mode == 'keys'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
+          aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Preview or apply ECR retention
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_PLAN_DIGEST: ${{ inputs.expected_plan_digest }}
+          MODE: ${{ inputs.mode }}
+          RETENTION_POLICY_B64: ${{ steps.retention-policy.outputs.policy_b64 }}
+        run: |
+          set -euo pipefail
+          POLICY=$(mktemp "$RUNNER_TEMP/recruiterreply-ecr-retention.XXXXXX")
+          trap 'rm -f -- "$POLICY"' EXIT
+          printf '%s' "$RETENTION_POLICY_B64" | base64 -d > "$POLICY"
+          ARGS=(--mode "$MODE" --region "$AWS_REGION" --policy-file "$POLICY")
+          if [[ "$MODE" == 'apply' ]]; then
+            ARGS+=(--expected-plan-digest "$EXPECTED_PLAN_DIGEST" --confirmation "$CONFIRMATION")
+          fi
+          node .github/scripts/ecr-image-retention.cjs "${ARGS[@]}" | tee "$RUNNER_TEMP/ecr-retention.log"
+          grep -q "^SUMMARY .*\"mode\":\"$MODE\"" "$RUNNER_TEMP/ecr-retention.log" || {
+            echo "::error::ECR retention did not emit the expected $MODE summary"
+            exit 1
+          }
