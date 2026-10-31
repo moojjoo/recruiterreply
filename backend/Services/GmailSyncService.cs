@@ -78,10 +78,11 @@ public class GmailSyncService : IGmailSyncService
             var newHistoryId = await _apiClient.GetProfileHistoryIdAsync(accessToken, cancellationToken);
 
             connection.HistoryId = newHistoryId;
-            connection.LastSyncedAt = DateTime.UtcNow;
+            var now = TimeProvider.System.GetUtcNow().UtcDateTime;
+            connection.LastSyncedAt = now;
             connection.LastSyncStatus = "ok";
             connection.LastSyncError = null;
-            connection.UpdatedAt = DateTime.UtcNow;
+            connection.UpdatedAt = now;
             await _connectionRepository.UpdateAsync(connection, cancellationToken);
         }
         catch (TokenResponseException ex)
@@ -93,7 +94,7 @@ public class GmailSyncService : IGmailSyncService
             connection.Status = "error";
             connection.LastSyncStatus = "auth_error";
             connection.LastSyncError = ex.Message;
-            connection.UpdatedAt = DateTime.UtcNow;
+            connection.UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
             await _connectionRepository.UpdateAsync(connection, cancellationToken);
         }
         catch (Exception ex)
@@ -102,7 +103,7 @@ public class GmailSyncService : IGmailSyncService
 
             connection.LastSyncStatus = "error";
             connection.LastSyncError = ex.Message;
-            connection.UpdatedAt = DateTime.UtcNow;
+            connection.UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
             await _connectionRepository.UpdateAsync(connection, cancellationToken);
         }
     }

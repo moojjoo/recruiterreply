@@ -32,13 +32,15 @@ public sealed class CognitoBffService : ICognitoBffService
     private readonly IDataProtector _protector;
     private readonly CognitoBffOptions _options;
     private readonly ConfigurationManager<OpenIdConnectConfiguration> _metadata;
+    private readonly TimeProvider _timeProvider;
 
     public CognitoBffService(IHttpClientFactory httpClientFactory, IDataProtectionProvider dataProtection,
-        IOptions<CognitoBffOptions> options)
+        IOptions<CognitoBffOptions> options, TimeProvider? timeProvider = null)
     {
         _httpClientFactory = httpClientFactory;
         _protector = dataProtection.CreateProtector(StatePurpose);
         _options = options.Value;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _metadata = new ConfigurationManager<OpenIdConnectConfiguration>(
             $"{_options.Issuer.TrimEnd('/')}/.well-known/openid-configuration",
             new OpenIdConnectConfigurationRetriever(), new HttpDocumentRetriever { RequireHttps = true });
@@ -50,7 +52,7 @@ public sealed class CognitoBffService : ICognitoBffService
         var state = RandomUrlToken(32);
         var verifier = RandomUrlToken(48);
         var nonce = RandomUrlToken(32);
-        var statePayload = JsonSerializer.Serialize(new OAuthState(state, verifier, nonce, DateTimeOffset.UtcNow.AddMinutes(5)));
+        var statePayload = JsonSerializer.Serialize(new OAuthState(state, verifier, nonce, _timeProvider.GetUtcNow().AddMinutes(5)));
         var protectedState = _protector.Protect(statePayload);
         context.Response.Cookies.Append(StateCookie, protectedState, new CookieOptions
         {
@@ -94,7 +96,7 @@ public sealed class CognitoBffService : ICognitoBffService
         try { saved = JsonSerializer.Deserialize<OAuthState>(_protector.Unprotect(protectedState))!; }
         catch (Exception ex) when (ex is CryptographicException or JsonException or FormatException)
         { throw new InvalidOperationException("Invalid Cognito callback state.", ex); }
-        if (saved is null || saved.ExpiresAt <= DateTimeOffset.UtcNow || !CryptographicOperations.FixedTimeEquals(
+        if (saved is null || saved.ExpiresAt <= _timeProvider.GetUtcNow() || !CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(saved.State), Encoding.UTF8.GetBytes(state)))
             throw new InvalidOperationException("Invalid Cognito callback state.");
 

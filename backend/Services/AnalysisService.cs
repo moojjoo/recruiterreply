@@ -44,7 +44,7 @@ public class AnalysisService : IAnalysisService
                 Subject = request.JobTitle,
                 Body = request.RecruiterMessage,
                 CompanyName = request.CompanyName,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
             };
 
             _dbContext.Messages.Add(message);
@@ -80,8 +80,8 @@ public class AnalysisService : IAnalysisService
                 RedFlags = JsonSerializer.Serialize(response.RedFlags),
                 AnalysisSummary = response.SuggestedResponse,
                 SuggestedTone = "Professional",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime,
+                UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
             };
 
             _dbContext.MessageAnalyses.Add(analysis);

@@ -58,7 +58,7 @@ public class MessagesController : ControllerBase
             SenderName = request.SenderName,
             CompanyName = request.CompanyName,
             ReceivedDate = request.ReceivedDate,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
         };
 
         _db.Messages.Add(message);
