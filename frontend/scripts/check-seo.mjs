@@ -19,8 +19,8 @@ const rootFor = (html) => html.slice(html.indexOf('<div id="root"'), html.indexO
 
 function textWordCount(html) {
   return html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&(?:[a-z]+|#\d+);/gi, ' ')
     .trim().split(/\s+/).filter(Boolean).length;
