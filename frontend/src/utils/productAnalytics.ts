@@ -6,7 +6,7 @@ export type ProductEventMap = {
   reply_generated: { feature: "generate" };
   offer_compared: { feature: "compare" };
   pricing_viewed: undefined;
-  begin_checkout: { plan_tier: "professional" | "recruiter_pro" };
+  begin_checkout: { plan_tier: "professional" | "recruiter_pro"; billing_interval: "month" | "year" };
   subscription_upgrade_started: { from_tier: "professional"; to_tier: "recruiter_pro" };
   feature_error: { feature: "analyze" | "generate" | "compare"; error_code: "quota_exceeded" | "request_failed" };
   subscription_cancelled: { plan_tier: "professional" | "recruiter_pro" };

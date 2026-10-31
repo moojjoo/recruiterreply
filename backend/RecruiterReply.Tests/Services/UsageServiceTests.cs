@@ -38,7 +38,7 @@ public class UsageServiceTests
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _usageRepository
             .Setup(r => r.GetForPeriodAsync(user.Id, UsageFeatures.Analyze, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsageRecordEntity { Count = 4 });
+            .ReturnsAsync(new UsageRecordEntity { Count = 2 });
 
         await _sut.EnsureWithinQuotaAsync(user.Id, UsageFeatures.Analyze);
     }
@@ -50,25 +50,25 @@ public class UsageServiceTests
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _usageRepository
             .Setup(r => r.GetForPeriodAsync(user.Id, UsageFeatures.Analyze, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsageRecordEntity { Count = 5 });
+            .ReturnsAsync(new UsageRecordEntity { Count = 3 });
 
         await Assert.ThrowsAsync<QuotaExceededException>(() => _sut.EnsureWithinQuotaAsync(user.Id, UsageFeatures.Analyze));
     }
 
     [Fact]
-    public async Task EnsureWithinQuotaAsync_OnUnlimitedTier_AlwaysPasses()
+    public async Task EnsureWithinQuotaAsync_OnRecruiterPro_UnderFairUseLimit_Passes()
     {
         var user = BuildUser(PlanTiers.RecruiterPro);
         _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _usageRepository
             .Setup(r => r.GetForPeriodAsync(user.Id, UsageFeatures.Analyze, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsageRecordEntity { Count = 999_999 });
+            .ReturnsAsync(new UsageRecordEntity { Count = 499 });
 
         await _sut.EnsureWithinQuotaAsync(user.Id, UsageFeatures.Analyze);
 
         _usageRepository.Verify(
             r => r.GetForPeriodAsync(user.Id, UsageFeatures.Analyze, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+            Times.Once);
     }
 
     [Fact]

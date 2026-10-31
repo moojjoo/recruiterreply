@@ -28,7 +28,7 @@ public class BillingController : ControllerBase
         try
         {
             var userId = User.GetRequiredUserId();
-            var url = await _billingService.CreateCheckoutSessionAsync(userId, request.Tier, ct);
+            var url = await _billingService.CreateCheckoutSessionAsync(userId, request.Tier, request.Interval, ct);
             return Ok(new CheckoutSessionResponse { Url = url });
         }
         catch (ArgumentException ex)
@@ -47,11 +47,12 @@ public class BillingController : ControllerBase
     }
 
     [HttpPost("upgrade-recruiter-pro")]
-    public async Task<IActionResult> UpgradeToRecruiterPro(CancellationToken ct)
+    public async Task<IActionResult> UpgradeToRecruiterPro([FromBody] UpgradeToRecruiterProRequest? request, CancellationToken ct)
     {
         try
         {
-            var checkoutUrl = await _billingService.UpgradeToRecruiterProAsync(User.GetRequiredUserId(), ct);
+            var checkoutUrl = await _billingService.UpgradeToRecruiterProAsync(
+                User.GetRequiredUserId(), request?.Interval ?? BillingIntervals.Month, ct);
             return Accepted(new UpgradeToRecruiterProResponse
             {
                 Status = checkoutUrl is null ? "pending" : "checkout_required",

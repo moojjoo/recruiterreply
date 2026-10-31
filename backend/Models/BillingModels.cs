@@ -7,6 +7,14 @@ public static class PlanTiers
     public const string RecruiterPro = "recruiter_pro";
 }
 
+public static class BillingIntervals
+{
+    public const string Month = "month";
+    public const string Year = "year";
+
+    public static bool IsSupported(string interval) => interval is Month or Year;
+}
+
 public static class UsageFeatures
 {
     public const string Analyze = "analyze";
@@ -22,9 +30,9 @@ public static class PlanLimits
     {
         [PlanTiers.Free] = new()
         {
-            [UsageFeatures.Analyze] = 5,
-            [UsageFeatures.Reply] = 5,
-            [UsageFeatures.Compare] = 2,
+            [UsageFeatures.Analyze] = 3,
+            [UsageFeatures.Reply] = 3,
+            [UsageFeatures.Compare] = 1,
             [UsageFeatures.AutoTriage] = 0,
         },
         [PlanTiers.Professional] = new()
@@ -36,10 +44,10 @@ public static class PlanLimits
         },
         [PlanTiers.RecruiterPro] = new()
         {
-            [UsageFeatures.Analyze] = null,
-            [UsageFeatures.Reply] = null,
-            [UsageFeatures.Compare] = null,
-            [UsageFeatures.AutoTriage] = null,
+            [UsageFeatures.Analyze] = 500,
+            [UsageFeatures.Reply] = 500,
+            [UsageFeatures.Compare] = 100,
+            [UsageFeatures.AutoTriage] = 5000,
         },
     };
 
@@ -57,6 +65,7 @@ public static class PlanLimits
 public class CheckoutSessionRequest
 {
     public string Tier { get; set; } = string.Empty;
+    public string Interval { get; set; } = BillingIntervals.Month;
 }
 
 public class CheckoutSessionResponse
@@ -72,10 +81,16 @@ public class BillingPlanCatalogResponse
 public class BillingPlanResponse
 {
     public string Tier { get; set; } = string.Empty;
+    public string Interval { get; set; } = BillingIntervals.Month;
     public long? UnitAmount { get; set; }
     public string Currency { get; set; } = "usd";
-    public string? Interval { get; set; }
     public long? IntervalCount { get; set; }
+    public int TrialPeriodDays { get; set; }
+}
+
+public class UpgradeToRecruiterProRequest
+{
+    public string Interval { get; set; } = BillingIntervals.Month;
 }
 
 public class UpgradeToRecruiterProResponse
