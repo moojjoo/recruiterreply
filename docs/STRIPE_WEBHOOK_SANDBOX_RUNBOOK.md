@@ -51,3 +51,38 @@ Updating an existing destination preserves its signing secret. If a destination 
 8. Do not include raw payloads, signing secrets, API keys, customer details, payment data, or full identifiers.
 
 Test and Production promotion remain separately approval-gated. A Dev validation result does not authorize either promotion.
+
+## Account-bound CLI fixtures
+
+Do not run `stripe trigger` directly for release evidence. The CLI can display the logged-in profile even when a separate key was intended, which makes account attribution ambiguous. Use the repository wrapper instead. It reads the selected environment's test key and expected account from AWS Secrets Manager, verifies the account and webhook destination through Stripe's API, and runs the CLI with both an isolated temporary config and `STRIPE_API_KEY`. Temporary state is removed even when validation fails.
+
+Validate configuration without creating an event:
+
+```bash
+node scripts/stripe/trigger-fixture.mjs \
+  --environment dev \
+  --endpoint-id we_REDACTED \
+  --event invoice.paid \
+  --check
+```
+
+Create an allowlisted fixture only after check mode passes:
+
+```bash
+node scripts/stripe/trigger-fixture.mjs \
+  --environment dev \
+  --endpoint-id we_REDACTED \
+  --event invoice.paid \
+  --trigger
+```
+
+For idempotency validation, resend the event through the already verified destination. The wrapper retrieves the event and destination using the same environment key before invoking the CLI:
+
+```bash
+node scripts/stripe/trigger-fixture.mjs \
+  --environment dev \
+  --endpoint-id we_REDACTED \
+  --resend-event evt_REDACTED
+```
+
+Repeat with `--environment test` and the Test endpoint only when Test validation is separately authorized. Production is intentionally unsupported. Wrapper output is limited to environment, event type, truncated event ID, timestamp, and CLI result; raw CLI output and Stripe secrets are suppressed.
