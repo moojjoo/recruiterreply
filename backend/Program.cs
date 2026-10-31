@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Amazon.DynamoDBv2;
 using Amazon.KeyManagementService;
 using System.Diagnostics;
+using RecruiterReply.Serialization;
 
 var envCandidates = new[]
 {
@@ -76,7 +77,11 @@ var legacyAuthEnabled = builder.Configuration.GetValue(
     "LegacyAuth:Enabled", legacyAuthEnabledByDefault);
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeOffsetJsonConverter());
+});
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -108,6 +113,7 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<FrontendTelemetryQueue>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<FrontendTelemetryQueue>());
 builder.Services.Configure<CognitoBffOptions>(builder.Configuration.GetSection("CognitoBff"));
@@ -421,7 +427,7 @@ Func<RecruiterReplyDbContext, CancellationToken, Task<IResult>> healthGmailHandl
 app.MapGet("/health/gmail", healthGmailHandler).RequireAuthorization();
 app.MapGet("/api/health/gmail", healthGmailHandler).RequireAuthorization();
 
-Func<RecruiterReplyDbContext, IDefaultUserService, CancellationToken, Task<IResult>> healthCrudHandler = async (db, defaultUserService, ct) =>
+Func<RecruiterReplyDbContext, IDefaultUserService, TimeProvider, CancellationToken, Task<IResult>> healthCrudHandler = async (db, defaultUserService, timeProvider, ct) =>
 {
     var userId = await defaultUserService.GetOrCreateDefaultUserIdAsync(ct);
     await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -433,7 +439,7 @@ Func<RecruiterReplyDbContext, IDefaultUserService, CancellationToken, Task<IResu
         Subject = "health-check",
         Body = "health-check-body",
         CompanyName = "health-check",
-        CreatedAt = DateTime.UtcNow
+        CreatedAt = timeProvider.GetUtcNow().UtcDateTime
     };
 
     db.Messages.Add(message);

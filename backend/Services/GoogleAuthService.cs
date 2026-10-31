@@ -132,7 +132,7 @@ public class GoogleAuthService : IGoogleAuthService
 
         if (existingUser is null)
         {
-            var now = DateTime.UtcNow;
+            var now = TimeProvider.System.GetUtcNow().UtcDateTime;
             existingUser = new UserEntity
             {
                 Id = Guid.NewGuid(),
@@ -159,8 +159,9 @@ public class GoogleAuthService : IGoogleAuthService
             existingUser.ProfilePictureUrl = picture ?? existingUser.ProfilePictureUrl;
             existingUser.AuthProvider = existingUser.AuthProvider == "email" ? "google" : existingUser.AuthProvider;
             existingUser.ProviderUserId ??= providerUserId;
-            existingUser.LastLogin = DateTime.UtcNow;
-            existingUser.UpdatedAt = DateTime.UtcNow;
+            var now = TimeProvider.System.GetUtcNow().UtcDateTime;
+            existingUser.LastLogin = now;
+            existingUser.UpdatedAt = now;
         }
 
         await _db.SaveChangesAsync(cancellationToken);

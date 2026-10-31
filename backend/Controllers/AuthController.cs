@@ -25,6 +25,7 @@ public class AuthController : ControllerBase
     private readonly IAntiforgery? _antiforgery;
     private readonly ICognitoBffService? _cognitoBff;
     private readonly IBffSessionStore? _bffSessions;
+    private readonly TimeProvider _timeProvider;
 
     public AuthController(
         RecruiterReplyDbContext db,
@@ -35,7 +36,8 @@ public class AuthController : ControllerBase
         ILogger<AuthController> logger,
         IAntiforgery? antiforgery = null,
         ICognitoBffService? cognitoBff = null,
-        IBffSessionStore? bffSessions = null)
+        IBffSessionStore? bffSessions = null,
+        TimeProvider? timeProvider = null)
     {
         _db = db;
         _passwordHashService = passwordHashService;
@@ -46,6 +48,7 @@ public class AuthController : ControllerBase
         _antiforgery = antiforgery;
         _cognitoBff = cognitoBff;
         _bffSessions = bffSessions;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     [HttpPost("register")]
@@ -66,7 +69,7 @@ public class AuthController : ControllerBase
         }
 
         var (firstName, lastName) = SplitName(request.Name);
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var user = new UserEntity
         {
@@ -104,8 +107,9 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "Invalid email or password." });
         }
 
-        user.LastLogin = DateTime.UtcNow;
-        user.UpdatedAt = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        user.LastLogin = now;
+        user.UpdatedAt = now;
         await _db.SaveChangesAsync(ct);
 
         return Ok(CreateAuthResponse(user));
@@ -198,6 +202,7 @@ public class AuthController : ControllerBase
                 ? await _db.Users.FirstOrDefaultAsync(candidate =>
                     candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct)
                 : await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == identity.UserId, ct);
+            var now = _timeProvider.GetUtcNow();
             if (user is null)
             {
                 if (await _db.Users.AnyAsync(candidate => candidate.Email == tokens.Identity.Email, ct))
@@ -207,7 +212,7 @@ public class AuthController : ControllerBase
                     Id = Guid.NewGuid(), Email = tokens.Identity.Email, PasswordHash = string.Empty,
                     FirstName = tokens.Identity.FirstName, LastName = tokens.Identity.LastName,
                     AuthProvider = "cognito", ProviderUserId = tokens.Identity.Subject, IsActive = true,
-                    CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, LastLogin = DateTime.UtcNow
+                    CreatedAt = now.UtcDateTime, UpdatedAt = now.UtcDateTime, LastLogin = now.UtcDateTime
                 };
                 _db.Users.Add(user);
             }
@@ -218,20 +223,19 @@ public class AuthController : ControllerBase
                 {
                     Id = Guid.NewGuid(), UserId = user.Id, Provider = "cognito",
                     Subject = tokens.Identity.Subject, Email = tokens.Identity.Email,
-                    CreatedAt = DateTime.UtcNow, LastUsedAt = DateTime.UtcNow
+                    CreatedAt = now.UtcDateTime, LastUsedAt = now.UtcDateTime
                 };
                 _db.UserIdentities.Add(identity);
             }
             else
             {
                 identity.Email = tokens.Identity.Email;
-                identity.LastUsedAt = DateTime.UtcNow;
+                identity.LastUsedAt = now.UtcDateTime;
             }
-            user.LastLogin = DateTime.UtcNow;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.LastLogin = now.UtcDateTime;
+            user.UpdatedAt = now.UtcDateTime;
             await _db.SaveChangesAsync(ct);
 
-            var now = DateTimeOffset.UtcNow;
             var sessionId = await _bffSessions.CreateAsync(new BffSession(user.Id, tokens.Identity.Subject,
                 _configuration["CognitoBff:Issuer"] ?? string.Empty, _configuration["CognitoBff:ClientId"] ?? string.Empty,
                 tokens.Scope, now, now, now.AddMinutes(30), now.AddHours(8), tokens.AccessToken, tokens.RefreshToken), ct);

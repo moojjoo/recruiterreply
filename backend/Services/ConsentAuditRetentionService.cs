@@ -22,7 +22,7 @@ public sealed class ConsentAuditRetentionService(IServiceScopeFactory scopeFacto
                 }
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<RecruiterReplyDbContext>();
-                await db.ConsentAuditEvents.Where(e => e.CreatedAt < DateTime.UtcNow.AddDays(-days))
+                await db.ConsentAuditEvents.Where(e => e.CreatedAt < TimeProvider.System.GetUtcNow().UtcDateTime.AddDays(-days))
                     .ExecuteDeleteAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }

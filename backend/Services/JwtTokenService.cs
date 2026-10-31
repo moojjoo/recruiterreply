@@ -9,10 +9,12 @@ namespace RecruiterReply.Services;
 public class JwtTokenService : IJwtTokenService
 {
     private readonly IConfiguration _configuration;
+    private readonly TimeProvider _timeProvider;
 
-    public JwtTokenService(IConfiguration configuration)
+    public JwtTokenService(IConfiguration configuration, TimeProvider? timeProvider = null)
     {
         _configuration = configuration;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string GenerateToken(UserEntity user)
@@ -35,7 +37,7 @@ public class JwtTokenService : IJwtTokenService
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(8),
+            expires: _timeProvider.GetUtcNow().UtcDateTime.AddHours(8),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

@@ -25,7 +25,7 @@ public class DefaultUserService : IDefaultUserService
             return existing.Id;
         }
 
-        var now = DateTime.UtcNow;
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var user = new UserEntity
         {
             Id = Guid.NewGuid(),

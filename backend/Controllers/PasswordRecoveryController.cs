@@ -19,8 +19,10 @@ public sealed record RecoveryFinishRequest(string Email, string? Code, string? T
 [EnableRateLimiting("password-recovery")]
 public sealed class PasswordRecoveryController(
     RecruiterReplyDbContext db, IPasswordHashService passwords,
-    IRecoveryEmailSender sender, IConfiguration config, ILogger<PasswordRecoveryController> logger) : ControllerBase
+    IRecoveryEmailSender sender, IConfiguration config, ILogger<PasswordRecoveryController> logger,
+    TimeProvider? timeProvider = null) : ControllerBase
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private static readonly object Neutral = new { message = "If an account exists, recovery instructions will be sent." };
     private static string Hash(string secret) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret)));
@@ -38,7 +40,7 @@ public sealed class PasswordRecoveryController(
         var email = request.Email.Trim().ToLowerInvariant();
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email && u.IsActive, ct);
         if (user is null) return Ok(Neutral);
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (await db.PasswordRecoveries.AnyAsync(r => r.UserId == user.Id &&
             r.CreatedAt > now.AddMinutes(-2), ct))
             return Ok(Neutral);
@@ -100,7 +102,7 @@ public sealed class PasswordRecoveryController(
             .FirstOrDefaultAsync(ct);
         if (user is null) return BadRequest(new { error = "Invalid or expired recovery credentials." });
 
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var active = await db.PasswordRecoveries
             .Where(r => r.UserId == user.Id && r.ConsumedAt == null && r.ExpiresAt > now && r.Attempts < 5)
             .OrderByDescending(r => r.CreatedAt).FirstOrDefaultAsync(ct);

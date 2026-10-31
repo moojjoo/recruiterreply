@@ -54,7 +54,7 @@ public sealed class ConsentAuditController(RecruiterReplyDbContext db) : Control
             Action = request.Action,
             AnalyticsEnabled = request.AnalyticsEnabled,
             PolicyVersion = request.PolicyVersion,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
         });
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException)

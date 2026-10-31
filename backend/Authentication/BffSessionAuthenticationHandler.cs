@@ -18,14 +18,16 @@ public sealed class BffSessionAuthenticationHandler : AuthenticationHandler<Auth
     public const string CookieName = "__Host-rr_session";
     private readonly IBffSessionStore _sessions;
     private readonly RecruiterReplyDbContext _db;
+    private readonly TimeProvider _timeProvider;
 
     public BffSessionAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger, System.Text.Encodings.Web.UrlEncoder encoder, ISystemClock clock,
-        IBffSessionStore sessions, RecruiterReplyDbContext db)
+        IBffSessionStore sessions, RecruiterReplyDbContext db, TimeProvider? timeProvider = null)
         : base(options, logger, encoder, clock)
     {
         _sessions = sessions;
         _db = db;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -36,7 +38,7 @@ public sealed class BffSessionAuthenticationHandler : AuthenticationHandler<Auth
         try
         {
             var session = await _sessions.GetAsync(rawSessionId, Context.RequestAborted);
-            var now = DateTimeOffset.UtcNow;
+            var now = _timeProvider.GetUtcNow();
             if (session is null || session.IdleExpiresAt <= now || session.AbsoluteExpiresAt <= now)
                 return AuthenticateResult.Fail("BFF session expired.");
 
