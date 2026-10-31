@@ -20,7 +20,7 @@
   "packages": {
     "dev": {
       "function_name": "recruiterreply-dev-private-edge",
-      "sha256_base64": "dfPe7ShuRqNTx/5+XcF5yUzeSipPZICjHieyFUmYVeM="
+      "sha256_base64": "ezbxGbJHT3KHjwnTzB4H+OyzD3qv8OSYo8RVD1hj5v0="
     },
     "test": {
       "function_name": "recruiterreply-test-private-edge",
