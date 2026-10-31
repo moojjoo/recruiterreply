@@ -114,6 +114,15 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Resource = "*"
       },
       {
+        Sid    = "EcrRetentionBackend"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchDeleteImage",
+          "ecr:DescribeImages",
+        ]
+        Resource = "arn:aws:ecr:us-east-1:${var.aws_account_id}:repository/recruiterreply-backend"
+      },
+      {
         Sid    = "FrontendArtifactsAndCdn"
         Effect = "Allow"
         Action = [
