@@ -133,6 +133,19 @@ resource "aws_route53_record" "frontend_prod" {
   }
 }
 
+resource "aws_route53_record" "frontend_prod_www" {
+  count   = var.create_frontend_records && (var.prod_cloudfront_domain_name != "" || var.create_cloudfront_distribution) ? 1 : 0
+  zone_id = aws_route53_zone.root.zone_id
+  name    = "www.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = var.prod_cloudfront_domain_name != "" ? var.prod_cloudfront_domain_name : aws_cloudfront_distribution.prod_frontend[0].domain_name
+    zone_id                = var.cloudfront_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # API domains to EC2 public IP/EIP.
 resource "aws_route53_record" "api_dev" {
   zone_id = aws_route53_zone.root.zone_id
@@ -199,12 +212,66 @@ resource "aws_acm_certificate" "prod_frontend" {
   count    = local.create_prod_certificate ? 1 : 0
   provider = aws.use1
 
-  domain_name       = var.domain_name
-  validation_method = "DNS"
+  domain_name               = var.domain_name
+  subject_alternative_names = ["www.${var.domain_name}"]
+  validation_method         = "DNS"
 
   lifecycle {
     create_before_destroy = true
   }
+}
+
+resource "aws_cloudfront_function" "prod_frontend_router" {
+  count   = var.create_cloudfront_distribution ? 1 : 0
+  name    = "recruiterreply-prod-route53-router"
+  runtime = "cloudfront-js-2.0"
+  comment = "Redirect www and route known production SPA paths"
+  publish = true
+  code    = <<-JS
+    function handler(event) {
+      var request = event.request;
+      var host = request.headers.host && request.headers.host.value;
+      if (host === 'www.${var.domain_name}') {
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: { location: { value: 'https://${var.domain_name}' + request.uri } }
+        };
+      }
+
+      var redirects = {
+        '/seo-recruiter-replies.html': '/guides/how-to-reply-to-a-recruiter',
+        '/seo-job-offer-comparison.html': '/guides/compare-job-offers',
+        '/seo-salary-negotiation.html': '/guides/salary-negotiation-email'
+      };
+      if (redirects[request.uri]) {
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: { location: { value: 'https://${var.domain_name}' + redirects[request.uri] } }
+        };
+      }
+
+      var prerendered = [
+        '/pricing', '/policy', '/terms', '/cookies', '/login', '/register',
+        '/forgot-password', '/reset-password', '/404',
+        '/guides/how-to-reply-to-a-recruiter', '/guides/compare-job-offers',
+        '/guides/salary-negotiation-email'
+      ];
+      if (prerendered.indexOf(request.uri) !== -1) {
+        request.uri = request.uri + '/index.html';
+        return request;
+      }
+
+      var appRoutes = [
+        '/dashboard', '/analyze', '/reply', '/compare', '/profile',
+        '/opportunities', '/career-profile', '/recruiter-inbox',
+        '/gmail/connected', '/auth/google/callback'
+      ];
+      if (appRoutes.indexOf(request.uri) !== -1) request.uri = '/index.html';
+      return request;
+    }
+  JS
 }
 
 resource "aws_route53_record" "prod_frontend_cert_validation" {
@@ -239,7 +306,7 @@ resource "aws_cloudfront_distribution" "prod_frontend" {
   is_ipv6_enabled     = true
   comment             = "recruiterreply production frontend"
   default_root_object = "index.html"
-  aliases             = [var.domain_name]
+  aliases             = [var.domain_name, "www.${var.domain_name}"]
 
   origin {
     domain_name              = aws_s3_bucket.prod_frontend[0].bucket_regional_domain_name
@@ -261,19 +328,24 @@ resource "aws_cloudfront_distribution" "prod_frontend" {
         forward = "none"
       }
     }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.prod_frontend_router[0].arn
+    }
   }
 
   custom_error_response {
     error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
+    response_code         = 404
+    response_page_path    = "/404/index.html"
     error_caching_min_ttl = 60
   }
 
   custom_error_response {
     error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
+    response_code         = 404
+    response_page_path    = "/404/index.html"
     error_caching_min_ttl = 60
   }
 
