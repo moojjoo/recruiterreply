@@ -91,9 +91,7 @@ function createViewerRequestHandler(trustedEnvironments = {}, dependencies = {})
     // the application identity. Static S3 requests must never receive it.
     if (!request.uri.startsWith('/api/')) delete request.headers.cookie;
     delete request.headers['x-rr-ci-oidc-token'];
-    if (!request.uri.startsWith('/api/')) rewriteSpaRequest(request);
-
-    return request;
+    return request.uri.startsWith('/api/') ? request : rewriteSpaRequest(request);
   };
 }
 
@@ -338,10 +336,47 @@ function getSingleCookie(request, name) {
 }
 
 function rewriteSpaRequest(request) {
-  const leaf = request.uri.slice(request.uri.lastIndexOf('/') + 1);
-  if (request.uri !== '/' && !leaf.includes('.')) {
+  const redirects = {
+    '/seo-recruiter-replies.html': '/guides/how-to-reply-to-a-recruiter',
+    '/seo-job-offer-comparison.html': '/guides/compare-job-offers',
+    '/seo-salary-negotiation.html': '/guides/salary-negotiation-email'
+  };
+  if (redirects[request.uri]) {
+    return permanentRedirect(redirects[request.uri]);
+  }
+
+  const prerendered = new Set([
+    '/pricing', '/policy', '/terms', '/cookies', '/login', '/register',
+    '/forgot-password', '/reset-password', '/404',
+    '/guides/how-to-reply-to-a-recruiter', '/guides/compare-job-offers',
+    '/guides/salary-negotiation-email'
+  ]);
+  if (prerendered.has(request.uri)) {
+    request.uri = `${request.uri}/index.html`;
+    return request;
+  }
+
+  const appRoutes = new Set([
+    '/dashboard', '/analyze', '/reply', '/compare', '/profile',
+    '/opportunities', '/career-profile', '/recruiter-inbox',
+    '/gmail/connected', '/auth/google/callback'
+  ]);
+  if (appRoutes.has(request.uri)) {
     request.uri = '/index.html';
   }
+  return request;
+}
+
+function permanentRedirect(location) {
+  return {
+    status: '301',
+    statusDescription: 'Moved Permanently',
+    headers: {
+      location: [{ key: 'Location', value: location }],
+      'cache-control': [{ key: 'Cache-Control', value: 'public, max-age=3600' }],
+      'x-robots-tag': [{ key: 'X-Robots-Tag', value: 'noindex, follow' }]
+    }
+  };
 }
 
 function redirect(location, cookies = []) {

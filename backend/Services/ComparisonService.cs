@@ -45,8 +45,8 @@ public class ComparisonService : IComparisonService
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 Title = $"{request.OfferOne.Company} vs {request.OfferTwo.Company}",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime,
+                UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
             };
 
             _dbContext.OfferComparisons.Add(comparison);
@@ -91,8 +91,8 @@ public class ComparisonService : IComparisonService
             CommuteMinutes = offer.CommuteTimeMinutes,
             RemoteFlexibility = offer.WorkArrangement,
             Notes = offer.Notes,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = TimeProvider.System.GetUtcNow().UtcDateTime,
+            UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime
         };
     }
 }

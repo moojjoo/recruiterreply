@@ -29,6 +29,7 @@ public sealed class EdgeSessionAuthenticationHandler : AuthenticationHandler<Aut
     private const int MaxLifetimeSeconds = 900;
     private readonly IConfiguration _configuration;
     private readonly RecruiterReplyDbContext _db;
+    private readonly TimeProvider _timeProvider;
 
     public EdgeSessionAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -36,11 +37,13 @@ public sealed class EdgeSessionAuthenticationHandler : AuthenticationHandler<Aut
         UrlEncoder encoder,
         ISystemClock clock,
         IConfiguration configuration,
-        RecruiterReplyDbContext db)
+        RecruiterReplyDbContext db,
+        TimeProvider? timeProvider = null)
         : base(options, logger, encoder, clock)
     {
         _configuration = configuration;
         _db = db;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -59,7 +62,8 @@ public sealed class EdgeSessionAuthenticationHandler : AuthenticationHandler<Aut
         try
         {
             var payload = ReadPayload(cookie, secret);
-            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var nowInstant = _timeProvider.GetUtcNow();
+            var now = nowInstant.ToUnixTimeSeconds();
             if (payload is null || payload.Iss != expectedIssuer || payload.Aud != expectedClientId
                 || string.IsNullOrWhiteSpace(payload.Sub) || payload.Exp <= now || payload.Iat > now
                 || payload.Exp - payload.Iat > MaxLifetimeSeconds)
@@ -95,9 +99,9 @@ public sealed class EdgeSessionAuthenticationHandler : AuthenticationHandler<Aut
                     AuthProvider = "cognito",
                     ProviderUserId = providerUserId,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
-                    LastLogin = DateTime.UtcNow
+                    CreatedAt = nowInstant.UtcDateTime,
+                    UpdatedAt = nowInstant.UtcDateTime,
+                    LastLogin = nowInstant.UtcDateTime
                 };
                 _db.Users.Add(user);
                 await _db.SaveChangesAsync();

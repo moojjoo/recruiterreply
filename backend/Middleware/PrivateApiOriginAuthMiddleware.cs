@@ -57,7 +57,7 @@ public sealed class PrivateApiOriginAuthMiddleware
             context.Request.Path.Value ?? string.Empty,
             (context.Request.QueryString.Value ?? string.Empty).TrimStart('?'),
             _signingKey,
-            DateTimeOffset.UtcNow))
+            TimeProvider.System.GetUtcNow()))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             context.Response.Headers.CacheControl = "no-store";

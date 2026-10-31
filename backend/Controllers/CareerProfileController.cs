@@ -40,7 +40,7 @@ public class CareerProfileController : ControllerBase
         }
 
         var userId = User.GetRequiredUserId();
-        var now = DateTime.UtcNow;
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var profile = await _repository.GetProfileAsync(userId, ct)
             ?? new CareerProfileEntity { Id = Guid.NewGuid(), UserId = userId, CreatedAt = now };
 

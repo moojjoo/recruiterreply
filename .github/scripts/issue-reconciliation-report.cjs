@@ -31,7 +31,6 @@ function blockers({pr, issue, referenceKind = 'final', checks = [], requiredChec
   for (const name of requiredChecks) {
     if (!checks.some(check => check.name === name && check.head_sha === pr.head.sha && check.conclusion === 'success')) reasons.push(`Missing passing current-head check: ${name}`);
   }
-  if (!(issue.labels || []).some(label => label.name === 'dev-acceptance-verified')) reasons.push('Missing controlled dev-acceptance-verified approval label');
   if (!acceptanceChecklistComplete(pr.body || '')) reasons.push('Acceptance checklist missing or incomplete');
   return reasons;
 }

@@ -19,11 +19,40 @@ function acceptanceChecklistComplete(body = '') {
 function checksPass(checks, headSha, names = requiredChecks) {
   return names.every(name => checks.some(check => check.name === name && check.head_sha === headSha && check.conclusion === 'success'));
 }
+async function findVerifiedDeploymentForIssue({github, owner, repo, issueNumber}) {
+  const prs = await github.paginate(github.rest.pulls.list, {
+    owner, repo, state: 'closed', base: 'main', sort: 'updated', direction: 'desc', per_page: 100
+  });
+  const pr = prs.find(candidate => candidate.merged_at && linkedIssues(candidate.body || '').includes(issueNumber));
+  if (!pr?.merge_commit_sha) return null;
+  const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+    owner, repo, head_sha: pr.merge_commit_sha, per_page: 100
+  });
+  const run = runs.find(candidate => candidate.name === 'Build and Deploy to Dev' &&
+    candidate.head_sha === pr.merge_commit_sha && candidate.conclusion === 'success');
+  return run ? {pr, sha: run.head_sha, runUrl: run.html_url} : null;
+}
 module.exports = async ({github, context, core}) => {
   const {owner, repo} = context.repo;
-  const sha = context.sha;
-  const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-  if (context.ref !== 'refs/heads/main' || !['push', 'workflow_dispatch'].includes(context.eventName)) {
+  let sha = context.sha;
+  let runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+  let merged;
+  if (context.eventName === 'issues') {
+    if (context.payload.action !== 'labeled' || context.payload.label?.name !== eligibleLabel) {
+      core.notice('Not a Dev acceptance label event; skipping reconciliation.');
+      return;
+    }
+    const deployment = await findVerifiedDeploymentForIssue({
+      github, owner, repo, issueNumber: context.payload.issue.number
+    });
+    if (!deployment) {
+      core.notice(`#${context.payload.issue.number}: no verified Dev deployment found; no issues changed.`);
+      return;
+    }
+    sha = deployment.sha;
+    runUrl = deployment.runUrl;
+    merged = [deployment.pr];
+  } else if (context.ref !== 'refs/heads/main' || !['push', 'workflow_dispatch'].includes(context.eventName)) {
     core.notice('Not a main deployment event; skipping reconciliation.');
     return;
   }
@@ -35,9 +64,11 @@ module.exports = async ({github, context, core}) => {
     core.warning('Trusted Dev deployment verification is absent; no issues changed.');
     return;
   }
-  const prs = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit,
-    {owner, repo, commit_sha: sha, per_page: 100});
-  const merged = prs.filter(pr => pr.merged_at && pr.base.ref === 'main' && pr.merge_commit_sha === sha);
+  if (!merged) {
+    const prs = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit,
+      {owner, repo, commit_sha: sha, per_page: 100});
+    merged = prs.filter(pr => pr.merged_at && pr.base.ref === 'main' && pr.merge_commit_sha === sha);
+  }
   if (!merged.length) {
     core.notice('No matching merged PR for deployed SHA; no issues changed.');
     return;
@@ -69,11 +100,6 @@ module.exports = async ({github, context, core}) => {
     for (const issue_number of linkedIssues(pr.body || '')) {
       const {data: issue} = await github.rest.issues.get({owner, repo, issue_number});
       if (issue.pull_request) continue;
-      if (!issue.labels.some(l => l.name === eligibleLabel)) {
-        core.notice(`#${issue_number}: missing acceptance verification label; skipped`);
-        continue;
-      }
-      // A label is explicit human approval, not a substitute for checking the acceptance criteria.
       const items = await github.graphql(`query($id: ID!) {
         node(id: $id) { ... on Issue { projectItems(first: 100) {
           nodes { id project { id } }
@@ -115,4 +141,5 @@ module.exports.linkedIssues = linkedIssues;
 module.exports.findProject = findProject;
 module.exports.acceptanceChecklistComplete = acceptanceChecklistComplete;
 module.exports.checksPass = checksPass;
+module.exports.findVerifiedDeploymentForIssue = findVerifiedDeploymentForIssue;
 module.exports.requiredChecks = requiredChecks;

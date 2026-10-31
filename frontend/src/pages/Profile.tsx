@@ -11,6 +11,7 @@ import { gmailService } from "../services/api/gmailService";
 import { billingService } from "../services/api/billingService";
 import { GmailStatus, UsageStatus } from "../types/index";
 import { trackProductEvent, trackSubscriptionCancelled } from "../utils/productAnalytics";
+import { formatLocalDate, formatLocalDateTime } from "../utils/dateTime";
 
 const TIER_LABELS: Record<string, string> = {
   free: "Free",
@@ -178,7 +179,7 @@ export const Profile: React.FC = () => {
             </label>
             <p className="text-lg text-gray-900">
               {user?.createdAt
-                ? new Date(user.createdAt).toLocaleDateString()
+                ? <time dateTime={user.createdAt}>{formatLocalDate(user.createdAt)}</time>
                 : "N/A"}
             </p>
           </div>
@@ -204,18 +205,18 @@ export const Profile: React.FC = () => {
                 usageStatus.subscriptionCurrentPeriodEnd && (
                   <p className="text-sm text-primary-600 mt-1">
                     Free trial — first charge on{" "}
-                    {new Date(
-                      usageStatus.subscriptionCurrentPeriodEnd,
-                    ).toLocaleDateString()}
+                    <time dateTime={usageStatus.subscriptionCurrentPeriodEnd}>
+                      {formatLocalDate(usageStatus.subscriptionCurrentPeriodEnd)}
+                    </time>
                   </p>
                 )}
               {usageStatus.subscriptionCancelAtPeriodEnd &&
                 usageStatus.subscriptionCurrentPeriodEnd && (
                   <p className="text-sm text-amber-700 mt-1">
                     Cancellation scheduled — your plan remains active until{" "}
-                    {new Date(
-                      usageStatus.subscriptionCurrentPeriodEnd,
-                    ).toLocaleDateString()}
+                    <time dateTime={usageStatus.subscriptionCurrentPeriodEnd}>
+                      {formatLocalDate(usageStatus.subscriptionCurrentPeriodEnd)}
+                    </time>
                     .
                   </p>
                 )}
@@ -320,7 +321,9 @@ export const Profile: React.FC = () => {
               </label>
               <p className="text-lg text-gray-900">
                 {gmailStatus.lastSyncedAt
-                  ? new Date(gmailStatus.lastSyncedAt).toLocaleString()
+                  ? <time dateTime={gmailStatus.lastSyncedAt}>
+                      {formatLocalDateTime(gmailStatus.lastSyncedAt)}
+                    </time>
                   : "Not yet synced"}
               </p>
             </div>

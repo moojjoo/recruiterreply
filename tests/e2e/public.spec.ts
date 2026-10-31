@@ -37,3 +37,26 @@ test('unknown route redirects to 404', async ({ mockedPage: page }) => {
   await expect(page).toHaveURL('/404');
   await expect(page.getByRole('heading', { name: 'Page not found', level: 1 })).toBeVisible();
 });
+
+test('route metadata follows client-side navigation', async ({ mockedPage: page }) => {
+  await page.goto('/');
+  await expect(page).toHaveTitle('RecruiterReply | AI Recruiter Reply & Job Search Assistant');
+
+  await page.getByRole('link', { name: 'Pricing' }).click();
+  await expect(page).toHaveTitle('Pricing | RecruiterReply');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://recruiterreply.com/pricing');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow');
+
+  await page.getByRole('link', { name: 'Recruiter reply guide' }).click();
+  await expect(page).toHaveTitle('How to Reply to a Recruiter Email Professionally');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://recruiterreply.com/guides/how-to-reply-to-a-recruiter');
+});
+
+test('auth metadata is noindex and protected deep links still load the SPA', async ({ mockedPage: page }) => {
+  await page.goto('/register');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
+
+  await page.goto('/dashboard');
+  await expect(page).toHaveURL('/login');
+  await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
+});
