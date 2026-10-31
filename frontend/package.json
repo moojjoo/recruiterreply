@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "test:seo": "node scripts/check-seo.mjs",
-    "test:time": "node --experimental-strip-types --test src/utils/dateTime.test.ts"
+    "test:time": "node --experimental-strip-types --test src/utils/dateTime.test.mjs"
   },
   "dependencies": {
     "axios": "^1.20.0",
