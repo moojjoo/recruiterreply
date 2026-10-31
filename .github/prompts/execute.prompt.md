@@ -34,8 +34,8 @@ When invoked with `/execute` and an issue number, use that issue number. If miss
 The user reviews changes in the deployed **dev environment**, not by manually reviewing PR code. Never require the user to review a PR before deploying to dev if all automated gates and repository protection rules allow merging. Always provide the dev URL and verification status after deployment.
 
 ## 4. Verified issue completion after Dev
-- The post-Dev job reconciles an issue only when the merged PR body includes a dedicated `Dev-Completes: #<issue-number>` line, the PR checklist is complete, current-head checks pass, and the deployed SHA and smoke result are verified.
-- The reconciler applies `dev-acceptance-verified` and closes the issue only after those trusted checks pass. For incomplete features, use `Refs #N` and leave the issue open.
+- The post-Dev job reconciles an issue when the merged PR body includes a dedicated `Dev-Completes: #<issue-number>` line, the PR checklist is complete, current-head checks pass, and the deployed SHA and smoke result are verified. A manual acceptance label is not required for routine Dev completion.
+- `dev-acceptance-verified` remains an optional product-acceptance signal; adding it triggers a trusted retry for an already verified deployment. For incomplete features, use `Refs #N` and leave the issue open.
 - Never use GitHub auto-closing keywords (`Closes`, `Fixes`, `Resolves`) in PR bodies before Dev acceptance: GitHub may close the issue on merge before the Dev deployment succeeds.
 - A project-capable `PROJECTS_WRITE_TOKEN` repository secret must have permission to edit the owner's GitHub Project and repository issues. If missing, report reconciliation as skipped; never claim completion.
 - Report the reconciliation job result separately from the Dev deployment result. Do not claim project Status Done until verified.

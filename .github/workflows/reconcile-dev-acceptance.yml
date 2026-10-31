@@ -1,0 +1,35 @@
+name: Reconcile Dev acceptance label
+
+# A product-acceptance label is an optional retry signal for a previously
+# deployed issue. Routine Dev completion is reconciled directly by build.yml.
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+  checks: read
+
+jobs:
+  reconcile:
+    if: github.event.label.name == 'dev-acceptance-verified'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Reconcile the verified Dev deployment
+        uses: actions/github-script@v9
+        env:
+          PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
+          DEV_DEPLOYMENT_VERIFIED: 'true'
+        with:
+          github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
+          script: |
+            const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
+            await reconcile({github, context, core});
