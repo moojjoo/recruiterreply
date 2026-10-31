@@ -27,12 +27,13 @@ public class BillingService : IBillingService
         _dbContext = dbContext;
     }
 
-    public async Task<string> CreateCheckoutSessionAsync(Guid userId, string tier, CancellationToken cancellationToken = default)
+    public async Task<string> CreateCheckoutSessionAsync(Guid userId, string tier, string interval = BillingIntervals.Month, CancellationToken cancellationToken = default)
     {
         if (tier != PlanTiers.Professional && tier != PlanTiers.RecruiterPro)
         {
             throw new ArgumentException("Invalid subscription tier.");
         }
+        ValidateInterval(interval);
 
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User not found.");
@@ -42,11 +43,12 @@ public class BillingService : IBillingService
             throw new InvalidOperationException("An active subscription already exists. Use the supported upgrade or billing-management flow.");
         }
 
-        return await CreateCheckoutSessionForUserAsync(user, tier, cancellationToken);
+        return await CreateCheckoutSessionForUserAsync(user, tier, interval, cancellationToken);
     }
 
-    public async Task<string?> UpgradeToRecruiterProAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<string?> UpgradeToRecruiterProAsync(Guid userId, string interval = BillingIntervals.Month, CancellationToken cancellationToken = default)
     {
+        ValidateInterval(interval);
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User not found.");
 
@@ -59,7 +61,7 @@ public class BillingService : IBillingService
         {
             _logger.LogWarning(
                 "Professional subscription is missing its Stripe subscription reference; starting a Recruiter Pro checkout");
-            return await CreateCheckoutSessionForUserAsync(user, PlanTiers.RecruiterPro, cancellationToken);
+            return await CreateCheckoutSessionForUserAsync(user, PlanTiers.RecruiterPro, interval, cancellationToken);
         }
 
         var subscriptionService = _stripeClient is null ? new SubscriptionService() : new SubscriptionService(_stripeClient);
@@ -77,7 +79,7 @@ public class BillingService : IBillingService
 
         await subscriptionService.UpdateAsync(subscription.Id, new SubscriptionUpdateOptions
         {
-            Items = [new SubscriptionItemOptions { Id = item.Id, Price = GetPriceId(PlanTiers.RecruiterPro) }],
+            Items = [new SubscriptionItemOptions { Id = item.Id, Price = GetPriceId(PlanTiers.RecruiterPro, interval) }],
             ProrationBehavior = "always_invoice",
             CancelAtPeriodEnd = false,
         }, cancellationToken: cancellationToken);
@@ -88,6 +90,7 @@ public class BillingService : IBillingService
     private async Task<string> CreateCheckoutSessionForUserAsync(
         RecruiterReply.Entities.UserEntity user,
         string tier,
+        string interval,
         CancellationToken cancellationToken)
     {
         await EnsureStripeCustomerAsync(user, cancellationToken);
@@ -99,11 +102,12 @@ public class BillingService : IBillingService
         var session = await sessionService.CreateAsync(new Stripe.Checkout.SessionCreateOptions
         {
             Mode = "subscription",
+            PaymentMethodCollection = "always",
             Customer = user.StripeCustomerId,
             ClientReferenceId = user.Id.ToString(),
             LineItems =
             [
-                new() { Price = GetPriceId(tier), Quantity = 1 },
+                new() { Price = GetPriceId(tier, interval), Quantity = 1 },
             ],
             SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
             {
@@ -172,20 +176,25 @@ public class BillingService : IBillingService
     {
         var priceService = _stripeClient is null ? new PriceService() : new PriceService(_stripeClient);
         var plans = new List<BillingPlanResponse>();
-        foreach (var (tier, priceId) in new[]
+        foreach (var (tier, interval) in new[]
         {
-            (PlanTiers.Professional, GetPriceId(PlanTiers.Professional)),
-            (PlanTiers.RecruiterPro, GetPriceId(PlanTiers.RecruiterPro)),
+            (PlanTiers.Professional, BillingIntervals.Month),
+            (PlanTiers.Professional, BillingIntervals.Year),
+            (PlanTiers.RecruiterPro, BillingIntervals.Month),
+            (PlanTiers.RecruiterPro, BillingIntervals.Year),
         })
         {
+            var priceId = TryGetPriceId(tier, interval);
+            if (priceId is null) continue;
             var price = await priceService.GetAsync(priceId, cancellationToken: cancellationToken);
             plans.Add(new BillingPlanResponse
             {
                 Tier = tier,
+                Interval = interval,
                 UnitAmount = price.UnitAmount,
                 Currency = price.Currency ?? "usd",
-                Interval = price.Recurring?.Interval,
                 IntervalCount = price.Recurring?.IntervalCount,
+                TrialPeriodDays = TrialPeriodDays,
             });
         }
 
@@ -420,29 +429,46 @@ public class BillingService : IBillingService
             return null;
         }
 
-        if (priceId == _configuration["Stripe:PriceId:Professional"])
+        foreach (var tier in new[] { PlanTiers.Professional, PlanTiers.RecruiterPro })
         {
-            return PlanTiers.Professional;
-        }
-
-        if (priceId == _configuration["Stripe:PriceId:RecruiterPro"])
-        {
-            return PlanTiers.RecruiterPro;
+            foreach (var interval in new[] { BillingIntervals.Month, BillingIntervals.Year })
+            {
+                if (priceId == TryGetPriceId(tier, interval))
+                {
+                    return tier;
+                }
+            }
         }
 
         return null;
     }
 
-    private string GetPriceId(string tier)
+    private string GetPriceId(string tier, string interval = BillingIntervals.Month)
     {
-        var key = tier == PlanTiers.RecruiterPro ? "Stripe:PriceId:RecruiterPro" : "Stripe:PriceId:Professional";
-        var priceId = _configuration[key];
-        if (string.IsNullOrWhiteSpace(priceId))
-        {
-            throw new InvalidOperationException($"Stripe price id is not configured for tier '{tier}'.");
-        }
+        return TryGetPriceId(tier, interval)
+            ?? throw new InvalidOperationException($"Stripe price is not configured for tier '{tier}' and interval '{interval}'.");
+    }
 
-        return priceId;
+    private string? TryGetPriceId(string tier, string interval)
+    {
+        var plan = tier == PlanTiers.RecruiterPro ? "RecruiterPro" : "Professional";
+        var key = interval == BillingIntervals.Month
+            ? $"Stripe:PriceId:{plan}"
+            : $"Stripe:PriceId:{plan}:{char.ToUpperInvariant(interval[0])}{interval[1..]}";
+        var priceId = _configuration[key];
+        if (interval == BillingIntervals.Month && string.IsNullOrWhiteSpace(priceId))
+        {
+            priceId = _configuration[$"Stripe:PriceId:{plan}:Monthly"];
+        }
+        return string.IsNullOrWhiteSpace(priceId) ? null : priceId;
+    }
+
+    private static void ValidateInterval(string interval)
+    {
+        if (!BillingIntervals.IsSupported(interval))
+        {
+            throw new ArgumentException("Invalid billing interval.");
+        }
     }
 
     private string GetFrontendBaseUrl()

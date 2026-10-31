@@ -23,6 +23,8 @@ public class BillingServiceTests
             ["Stripe:WebhookSecret"] = WebhookSecret,
             ["Stripe:PriceId:Professional"] = "price_professional_test",
             ["Stripe:PriceId:RecruiterPro"] = "price_recruiterpro_test",
+            ["Stripe:PriceId:Professional:Year"] = "price_professional_annual_test",
+            ["Stripe:PriceId:RecruiterPro:Year"] = "price_recruiterpro_annual_test",
         };
         foreach (var (key, value) in values ?? [])
         {
@@ -52,6 +54,15 @@ public class BillingServiceTests
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             sut.CreateCheckoutSessionAsync(Guid.NewGuid(), "not-a-real-tier"));
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_WithInvalidInterval_Throws()
+    {
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sut.CreateCheckoutSessionAsync(Guid.NewGuid(), PlanTiers.Professional, "week"));
     }
 
     [Fact]
