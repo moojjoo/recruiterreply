@@ -94,7 +94,7 @@ public class UsageService : IUsageService
 
     private static DateTime CurrentPeriodStart()
     {
-        var now = DateTime.UtcNow;
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         return new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
     }
 }

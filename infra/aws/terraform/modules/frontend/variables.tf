@@ -30,6 +30,12 @@ variable "cloudfront_acm_certificate_arns" {
   }
 }
 
+variable "prod_www_alias" {
+  description = "Production www hostname redirected by the production CloudFront distribution to the apex domain."
+  type        = string
+  default     = "www.recruiterreply.com"
+}
+
 variable "cloudfront_web_acl_ids" {
   description = "Optional WAFv2 WebACL ARN per environment."
   type        = map(string)

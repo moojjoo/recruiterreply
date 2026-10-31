@@ -298,7 +298,7 @@ public class BillingService : IBillingService
                  amount_paid, currency, paid_at)
             VALUES
                 ({Guid.NewGuid()}, {invoice.Id}, {stripeEvent.Id}, {invoice.CustomerId},
-                 {invoice.AmountPaid}, {invoice.Currency}, {DateTime.UtcNow})
+                 {invoice.AmountPaid}, {invoice.Currency}, {TimeProvider.System.GetUtcNow().UtcDateTime})
             ON CONFLICT (stripe_invoice_id) DO NOTHING
             """, cancellationToken);
     }

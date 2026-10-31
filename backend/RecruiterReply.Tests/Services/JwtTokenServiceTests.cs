@@ -69,4 +69,24 @@ public class JwtTokenServiceTests
         Assert.Equal("RecruiterReply", jwt.Issuer);
         Assert.Equal("RecruiterReply.Client", jwt.Audiences.Single());
     }
+
+    [Fact]
+    public void GenerateToken_UsesInjectedUtcClockForExpiration()
+    {
+        var now = new DateTimeOffset(2026, 3, 8, 6, 30, 0, TimeSpan.Zero);
+        var config = BuildConfig(new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = "a-sufficiently-long-test-signing-key-1234567890",
+        });
+        var sut = new JwtTokenService(config, new FixedTimeProvider(now));
+
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(sut.GenerateToken(BuildUser()));
+
+        Assert.Equal(now.AddHours(8).UtcDateTime, jwt.ValidTo);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+    }
 }

@@ -19,10 +19,16 @@ assert.match(sitemap, /<urlset\b/);
 const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m=>m[1]);
 assert.ok(urls.length,'sitemap must contain URLs');
 assert.equal(new Set(urls).size,urls.length,'sitemap duplicate URLs');
+const privateRoutes = new Set([
+ 'login', 'register', 'forgot-password', 'reset-password', 'dashboard',
+ 'profile', 'analyze', 'reply', 'compare', 'opportunities', 'career-profile',
+ 'recruiter-inbox'
+]);
 for (const url of urls) {
  const u = new URL(url);
  assert.equal(u.origin,'https://recruiterreply.com');
- assert.ok(!/(login|register|dashboard|profile|analyze|reply|compare|opportunities)/.test(u.pathname),'private route in sitemap');
+ const firstSegment = u.pathname.split('/').filter(Boolean)[0] || '';
+ assert.ok(!privateRoutes.has(firstSegment),'private route in sitemap');
 }
 assert.match(robots, /Sitemap: https:\/\/recruiterreply\.com\/sitemap\.xml/);
 console.log('SEO static metadata, JSON-LD, sitemap and robots checks passed');

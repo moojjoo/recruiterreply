@@ -263,6 +263,28 @@ test('authenticated file-like paths are not rewritten', async () => {
   assert.equal(result.uri, '/assets/index.js');
 });
 
+test('authenticated public routes use their prerendered HTML', async () => {
+  const result = await authenticatedHandler(
+    makeEvent('/pricing', cookieHeader(`rr_session=${devSession()}`))
+  );
+  assert.equal(result.uri, '/pricing/index.html');
+});
+
+test('authenticated unknown routes are left for the origin 404 mapping', async () => {
+  const result = await authenticatedHandler(
+    makeEvent('/does-not-exist', cookieHeader(`rr_session=${devSession()}`))
+  );
+  assert.equal(result.uri, '/does-not-exist');
+});
+
+test('authenticated legacy SEO routes redirect permanently', async () => {
+  const result = await authenticatedHandler(
+    makeEvent('/seo-recruiter-replies.html', cookieHeader(`rr_session=${devSession()}`))
+  );
+  assert.equal(result.status, '301');
+  assert.equal(result.headers.location[0].value, '/guides/how-to-reply-to-a-recruiter');
+});
+
 test('Dev session cannot authorize Test access', async () => {
   assert.equal(String((await authenticatedHandler(
     makeEvent('/dashboard', cookieHeader(`rr_session=${devSession()}`), TEST_ID)

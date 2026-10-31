@@ -5,9 +5,9 @@
 ## Public pages
 
 - [RecruiterReply homepage](https://recruiterreply.com/)
-- [Recruiter reply tools](https://recruiterreply.com/seo-recruiter-replies.html)
-- [Job offer comparison](https://recruiterreply.com/seo-job-offer-comparison.html)
-- [Salary negotiation](https://recruiterreply.com/seo-salary-negotiation.html)
+- [Recruiter reply guide](https://recruiterreply.com/guides/how-to-reply-to-a-recruiter)
+- [Job offer comparison](https://recruiterreply.com/guides/compare-job-offers)
+- [Salary negotiation](https://recruiterreply.com/guides/salary-negotiation-email)
 
 ## Notes
 

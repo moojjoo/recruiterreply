@@ -110,7 +110,7 @@ public class GmailApiClient : IGmailApiClient
 
         var receivedAt = message.InternalDate is { } ms
             ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime
-            : DateTime.UtcNow;
+            : TimeProvider.System.GetUtcNow().UtcDateTime;
 
         return new GmailMessageDetail(
             message.Id,

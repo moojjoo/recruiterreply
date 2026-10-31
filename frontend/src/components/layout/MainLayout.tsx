@@ -37,6 +37,12 @@ const Footer: React.FC = () => {
         <a href="/terms" className="text-primary-800 hover:underline">
           Terms and Conditions
         </a>
+        <span className="mx-2 text-gray-400">|</span>
+        <a href="/guides/how-to-reply-to-a-recruiter" className="text-primary-800 hover:underline">Recruiter reply guide</a>
+        <span className="mx-2 text-gray-400">|</span>
+        <a href="/guides/compare-job-offers" className="text-primary-800 hover:underline">Compare offers</a>
+        <span className="mx-2 text-gray-400">|</span>
+        <a href="/guides/salary-negotiation-email" className="text-primary-800 hover:underline">Salary negotiation</a>
       </div>
     </footer>
   );

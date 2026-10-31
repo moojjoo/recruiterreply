@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const reconcile = require('../reconcile-dev-issues.cjs');
-const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, requiredChecks} = reconcile;
+const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, findVerifiedDeploymentForIssue, requiredChecks} = reconcile;
 
 test('only explicit Dev-Completes markers qualify', () => {
   assert.deepEqual(linkedIssues('Refs #12\nCloses #13\nDev-Completes: #14\nDev-Completes: #14\nDev-Completes: #15'), [14, 15]);
@@ -28,6 +28,18 @@ test('all required checks must pass on the exact PR head SHA', () => {
   assert.equal(checksPass(complete, sha), true);
   assert.equal(checksPass(complete.slice(1), sha), false);
   assert.equal(checksPass(complete, 'b'.repeat(40)), false);
+});
+test('acceptance-label retry resolves the matching verified Dev deployment', async () => {
+  const pulls = Symbol('pulls');
+  const runs = Symbol('runs');
+  const pr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: 'Dev-Completes: #558'};
+  const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: pr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
+  const github = {
+    rest: {pulls: {list: pulls}, actions: {listWorkflowRunsForRepo: runs}},
+    paginate: async endpoint => endpoint === pulls ? [pr] : [run]
+  };
+  const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
+  assert.deepEqual(deployment, {pr, sha: run.head_sha, runUrl: run.html_url});
 });
 
 function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true, approvalLabel = true} = {}) {
@@ -89,12 +101,13 @@ test('missing trusted deployment evidence performs no writes', async () => {
   assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
   assert.match(subject.warnings.join(';'), /deployment verification/);
 });
-test('missing controlled approval label performs no writes', async () => {
+test('Dev completion does not require a manual approval label', async () => {
   const subject = harness({approvalLabel: false});
   await runWithEvidence(subject);
-  assert.equal(subject.state(), 'open');
-  assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
-  assert.match(subject.notices.join(';'), /missing acceptance verification label/);
+  assert.equal(subject.state(), 'closed');
+  assert.equal(subject.updates.length, 1);
+  assert.equal(subject.mutations.length, 1);
+  assert.equal(subject.comments.length, 1);
 });
 test('partial PR and missing project item never close an issue', async () => {
   const partial = harness({body: '## Acceptance criteria\n- [x] Complete\n\nRefs #320'});

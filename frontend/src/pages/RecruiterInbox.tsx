@@ -11,6 +11,7 @@ import {
   RecruiterThread,
   TriageState,
 } from "../types/index";
+import { formatLocalDateTime } from "../utils/dateTime";
 
 const TABS: { state: TriageState; label: string; description: string }[] = [
   {
@@ -170,7 +171,9 @@ const ThreadItem: React.FC<{ thread: RecruiterThread }> = ({ thread }) => {
           </p>
         </div>
         <div className="text-right text-sm text-gray-500">
-          <p>{new Date(thread.lastMessageAt).toLocaleString()}</p>
+          <p>
+            <time dateTime={thread.lastMessageAt}>{formatLocalDateTime(thread.lastMessageAt)}</time>
+          </p>
           <a
             href={`https://mail.google.com/mail/u/0/#all/${thread.gmailThreadId}`}
             target="_blank"
