@@ -22,6 +22,7 @@ import { Terms } from "./pages/Terms";
 import { Pricing } from "./pages/Pricing";
 import { GuidePage } from "./pages/GuidePage";
 import { RouteMetadata } from "./seo/RouteMetadata";
+import { NavigationScrollManager } from "./components/common/NavigationScrollManager";
 
 const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
 const AnalysisPage = lazy(() => import("./pages/AnalysisPage").then((module) => ({ default: module.AnalysisPage })));
@@ -43,6 +44,7 @@ function App({ server = false, initialPath = "/" }: { server?: boolean; initialP
           <ToastProvider>
             <UIProvider>
               <RouteMetadata />
+              <NavigationScrollManager />
               <AnalyticsRouteTracker />
               <Suspense fallback={<div className="container py-16 text-center" role="status">Loading…</div>}>
               <Routes>
