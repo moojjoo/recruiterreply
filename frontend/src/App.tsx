@@ -43,6 +43,7 @@ function App({ server = false, initialPath = "/" }: { server?: boolean; initialP
         <AuthProvider>
           <ToastProvider>
             <UIProvider>
+              <div id="top" aria-hidden="true" />
               <RouteMetadata />
               <NavigationScrollManager />
               <AnalyticsRouteTracker />
