@@ -30,7 +30,7 @@ export const Navbar: React.FC = () => {
             </svg>
           </button>
           <div id="primary-navigation-links" className={`nav-actions ${menuOpen ? "nav-actions-open" : ""}`}>
-            <a href="/pricing" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-700 hover:text-primary-600">Pricing</a>
+            <Link to="/pricing" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-700 hover:text-primary-600">Pricing</Link>
             {isAuthenticated && user ? (
               <>
                 <Link
@@ -45,8 +45,8 @@ export const Navbar: React.FC = () => {
               </>
             ) : (
               <>
-                <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-700 hover:text-primary-600">Login</a>
-                <a href="/register" className="btn-primary px-3 py-1.5 text-sm">Sign Up</a>
+                <Link to="/login" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-700 hover:text-primary-600">Login</Link>
+                <Link to="/register" onClick={() => setMenuOpen(false)} className="btn-primary px-3 py-1.5 text-sm">Sign Up</Link>
               </>
             )}
           </div>
