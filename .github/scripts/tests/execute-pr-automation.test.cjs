@@ -27,6 +27,7 @@ test('Dependabot eligibility is evaluated before unmanaged PRs are skipped', () 
   const skip = workflow.indexOf('!labeled && !managed && !trustedDependabotUpdate');
   assert.ok(classify >= 0 && skip > classify);
   assert.doesNotMatch(workflow, /if \(!labeled && !managed\) continue/);
+  assert.match(workflow, /if \(!labeled && managed\)[\s\S]*labels: \['execute-dev'\]/);
   assert.match(workflow, /Dependabot eligibility=/);
   assert.match(workflow, /readiness=/);
 });
