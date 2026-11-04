@@ -70,6 +70,11 @@ jobs:
               if (full.head.repo.full_name !== owner + '/' + repo) continue;
               const managed = /^((feature|fix|bugfix)\/\d+-|execute\/\d+-)/.test(full.head.ref) || /(?:^|\s)\/(?:execute)\s+\d+/.test(full.body || '');
               const labeled = full.labels.some(l => l.name === 'execute-dev');
+              if (!labeled && managed) {
+                await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['execute-dev']});
+                full.labels.push({name: 'execute-dev'});
+                core.notice('PR #' + full.number + ': applied execute-dev label');
+              }
               const {issueNumberFromPullRequest, ensureIssueLink} = require('./.github/scripts/pr-issue-linking.cjs');
               const linkedIssue = issueNumberFromPullRequest(full);
               if (linkedIssue) {
