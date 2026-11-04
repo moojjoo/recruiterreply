@@ -569,3 +569,8 @@
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
+
+/* Issue #576: hash targets clear the sticky navigation without affecting route-top resets. */
+.hash-target {
+  scroll-margin-top: 6.5rem;
+}
