@@ -102,7 +102,7 @@ export const Profile: React.FC = () => {
     try {
       const upgradeResponse = await billingService.upgradeToRecruiterPro();
       if (upgradeResponse.data.url) {
-        trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro" });
+        trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro", billing_interval: "month" });
         window.location.href = upgradeResponse.data.url;
         return;
       }
@@ -224,13 +224,20 @@ export const Profile: React.FC = () => {
 
             <div className="space-y-2">
               {usageStatus.usage.map((item) => (
-                <div key={item.feature} className="flex justify-between text-sm">
-                  <span className="text-gray-700">
-                    {FEATURE_LABELS[item.feature] ?? item.feature}
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    {item.used} / {item.limit ?? "Unlimited"}
-                  </span>
+                <div key={item.feature} className="text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">
+                      {FEATURE_LABELS[item.feature] ?? item.feature}
+                    </span>
+                    <span className="font-semibold text-gray-900">
+                      {item.used} / {item.limit ?? "Unlimited"}
+                    </span>
+                  </div>
+                  {item.limit !== null && item.used >= item.limit * 0.8 && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      You are nearing this month&apos;s limit. Upgrade or manage your plan to keep your workflow running.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

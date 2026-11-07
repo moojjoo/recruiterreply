@@ -26,7 +26,7 @@ public class BillingControllerTests
     [Fact]
     public async Task CreateCheckoutSession_OnSuccess_Returns200WithUrl()
     {
-        _billingService.Setup(s => s.CreateCheckoutSessionAsync(_userId, PlanTiers.Professional, It.IsAny<CancellationToken>()))
+        _billingService.Setup(s => s.CreateCheckoutSessionAsync(_userId, PlanTiers.Professional, BillingIntervals.Month, It.IsAny<CancellationToken>()))
             .ReturnsAsync("https://checkout.stripe.com/pay/cs_1");
 
         var result = await _sut.CreateCheckoutSession(new CheckoutSessionRequest { Tier = PlanTiers.Professional }, CancellationToken.None);
@@ -39,7 +39,7 @@ public class BillingControllerTests
     [Fact]
     public async Task CreateCheckoutSession_OnArgumentException_Returns400()
     {
-        _billingService.Setup(s => s.CreateCheckoutSessionAsync(_userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _billingService.Setup(s => s.CreateCheckoutSessionAsync(_userId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ArgumentException("bad tier"));
 
         var result = await _sut.CreateCheckoutSession(new CheckoutSessionRequest { Tier = "bogus" }, CancellationToken.None);
@@ -50,7 +50,7 @@ public class BillingControllerTests
     [Fact]
     public async Task CreateCheckoutSession_OnUnhandledException_Returns500()
     {
-        _billingService.Setup(s => s.CreateCheckoutSessionAsync(_userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _billingService.Setup(s => s.CreateCheckoutSessionAsync(_userId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new StripeException("stripe down"));
 
         var result = await _sut.CreateCheckoutSession(new CheckoutSessionRequest { Tier = PlanTiers.Professional }, CancellationToken.None);
@@ -62,10 +62,10 @@ public class BillingControllerTests
     public async Task UpgradeToRecruiterPro_WhenExistingSubscriptionUpdates_ReturnsPending()
     {
         _billingService
-            .Setup(s => s.UpgradeToRecruiterProAsync(_userId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.UpgradeToRecruiterProAsync(_userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string?)null);
 
-        var result = await _sut.UpgradeToRecruiterPro(CancellationToken.None);
+        var result = await _sut.UpgradeToRecruiterPro(null, CancellationToken.None);
 
         var accepted = Assert.IsType<AcceptedResult>(result);
         var response = Assert.IsType<UpgradeToRecruiterProResponse>(accepted.Value);
@@ -78,10 +78,10 @@ public class BillingControllerTests
     public async Task UpgradeToRecruiterPro_WhenCheckoutIsRequired_ReturnsCheckoutUrl()
     {
         _billingService
-            .Setup(s => s.UpgradeToRecruiterProAsync(_userId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.UpgradeToRecruiterProAsync(_userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("https://checkout.stripe.com/pay/cs_recovery");
 
-        var result = await _sut.UpgradeToRecruiterPro(CancellationToken.None);
+        var result = await _sut.UpgradeToRecruiterPro(null, CancellationToken.None);
 
         var accepted = Assert.IsType<AcceptedResult>(result);
         var response = Assert.IsType<UpgradeToRecruiterProResponse>(accepted.Value);

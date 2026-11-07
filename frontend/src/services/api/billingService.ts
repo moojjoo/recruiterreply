@@ -1,17 +1,20 @@
 import apiClient from "./apiClient";
 import { SubscriptionTier, UsageStatus } from "../../types/index";
 
-export const billingService = {
-  createCheckoutSession: (tier: SubscriptionTier) =>
-    apiClient.post<{ url: string }>("/billing/checkout-session", { tier }),
+export type BillingInterval = "month" | "year";
 
-  upgradeToRecruiterPro: () =>
+export const billingService = {
+  createCheckoutSession: (tier: SubscriptionTier, interval: BillingInterval = "month") =>
+    apiClient.post<{ url: string }>("/billing/checkout-session", { tier, interval }),
+
+  upgradeToRecruiterPro: (interval: BillingInterval = "month") =>
     apiClient.post<{ status: "pending" | "checkout_required"; tier: SubscriptionTier; url?: string | null }>(
       "/billing/upgrade-recruiter-pro",
+      { interval },
     ),
 
   getPlans: () =>
-    apiClient.get<{ plans: Array<{ tier: SubscriptionTier; unitAmount: number | null; currency: string; interval?: string; intervalCount?: number | null }> }>("/billing/plans"),
+    apiClient.get<{ plans: Array<{ tier: SubscriptionTier; unitAmount: number | null; currency: string; interval: BillingInterval; intervalCount?: number | null; trialPeriodDays: number }> }>("/billing/plans"),
 
   createPortalSession: () =>
     apiClient.post<{ url: string }>("/billing/portal-session"),

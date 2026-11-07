@@ -6,6 +6,7 @@ import { Button } from "../components/common/Button";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { billingService } from "../services/api/billingService";
+import { BillingInterval } from "../services/api/billingService";
 import { SubscriptionTier } from "../types/index";
 import { trackProductEvent } from "../utils/productAnalytics";
 
@@ -24,29 +25,29 @@ interface Plan {
   highlighted?: boolean;
 }
 
+interface CatalogPlan {
+  tier: SubscriptionTier;
+  interval: BillingInterval;
+  unitAmount: number | null;
+  currency: string;
+  intervalCount?: number | null;
+  trialPeriodDays: number;
+}
+
 export const Pricing: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
   const [currentTier, setCurrentTier] = useState<SubscriptionTier | null>(null);
-  const [recruiterProPrice, setRecruiterProPrice] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogPlan[]>([]);
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>("month");
 
   useEffect(() => {
     let active = true;
     billingService.getPlans().then((response) => {
       if (!active) return;
-      const plan = response.data.plans.find((item) => item.tier === "recruiter_pro");
-      if (!plan?.unitAmount) return;
-      const amount = new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: plan.currency.toUpperCase(),
-        maximumFractionDigits: 2,
-      }).format(plan.unitAmount / 100);
-      const cadence = plan.intervalCount && plan.intervalCount > 1
-        ? `/${plan.intervalCount} ${plan.interval ?? "periods"}`
-        : `/${plan.interval ?? "month"}`;
-      setRecruiterProPrice(`${amount}${cadence}`);
+      setCatalog(response.data.plans);
     }).catch(() => {
       // Pricing remains usable if the public catalog is temporarily unavailable.
     });
@@ -61,6 +62,31 @@ export const Pricing: React.FC = () => {
 
     return () => { active = false; };
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    trackProductEvent("pricing_viewed");
+  }, []);
+
+  const getCatalogPlan = (tier: SubscriptionTier): CatalogPlan | undefined =>
+    catalog.find((item) => item.tier === tier && item.interval === billingInterval);
+
+  const annualAvailable =
+    catalog.some((item) => item.tier === "professional" && item.interval === "year") &&
+    catalog.some((item) => item.tier === "recruiter_pro" && item.interval === "year");
+
+  const formatPrice = (tier: SubscriptionTier): string => {
+    if (tier === "free") return "$0";
+    const plan = getCatalogPlan(tier);
+    if (!plan?.unitAmount) {
+      if (tier === "professional") return billingInterval === "year" ? "$229" : "$24";
+      return billingInterval === "year" ? "$469" : "$49";
+    }
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: plan.currency.toUpperCase(),
+      maximumFractionDigits: 2,
+    }).format(plan.unitAmount / 100);
+  };
 
   const handleSelectPlan = async (tier: SubscriptionTier) => {
     if (tier === "free") {
@@ -78,9 +104,9 @@ export const Pricing: React.FC = () => {
     setLoadingTier(tier);
     try {
       if (tier === "recruiter_pro" && currentTier === "professional") {
-        const response = await billingService.upgradeToRecruiterPro();
+        const response = await billingService.upgradeToRecruiterPro(billingInterval);
         if (response.data.url) {
-          trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro" });
+          trackProductEvent("begin_checkout", { plan_tier: "recruiter_pro", billing_interval: billingInterval });
           redirectTo(response.data.url);
           return;
         }
@@ -94,9 +120,10 @@ export const Pricing: React.FC = () => {
         return;
       }
 
-      const response = await billingService.createCheckoutSession(tier);
+      const response = await billingService.createCheckoutSession(tier, billingInterval);
       trackProductEvent("begin_checkout", {
         plan_tier: tier === "recruiter_pro" ? "recruiter_pro" : "professional",
+        billing_interval: billingInterval,
       });
       redirectTo(response.data.url);
     } catch {
@@ -109,22 +136,23 @@ export const Pricing: React.FC = () => {
     {
       tier: "free",
       name: "Free",
-      price: "$0",
+      price: formatPrice("free"),
       description: "Try out the core tools before you commit.",
       features: [
-        "5 message analyses / month",
-        "5 AI-generated replies / month",
-        "2 offer comparisons / month",
+        "3 message analyses / month",
+        "3 AI-generated replies / month",
+        "1 offer comparison / month",
       ],
       cta: currentTier === "free" ? "Current plan" : "Get Started",
     },
     {
       tier: "professional",
       name: "Professional",
-      price: "$19/month",
+      price: formatPrice("professional"),
+      cadence: billingInterval === "year" ? "/year" : "/month",
       description: "For active job seekers negotiating offers.",
       features: [
-        "7-day free trial",
+        "7-day free trial — no charge today",
         "200 message analyses / month",
         "200 AI-generated replies / month",
         "50 offer comparisons / month",
@@ -136,13 +164,14 @@ export const Pricing: React.FC = () => {
     {
       tier: "recruiter_pro",
       name: "Recruiter Pro",
-      price: recruiterProPrice ?? "See current price",
+      price: formatPrice("recruiter_pro"),
+      cadence: billingInterval === "year" ? "/year" : "/month",
       description: "For candidates who want their recruiter inbox organized and ready for action.",
       features: [
-        "Unlimited message analyses",
-        "Unlimited AI-generated replies",
-        "Unlimited offer comparisons",
-        "Unlimited recruiter email triage",
+        "500 message analyses / month",
+        "500 AI-generated replies / month",
+        "100 offer comparisons / month",
+        "5,000 recruiter emails triaged / month",
         "Gmail sync, labels, and suggested drafts",
         "Review every draft before sending",
       ],
@@ -160,6 +189,23 @@ export const Pricing: React.FC = () => {
             replies, and comparisons.
           </p>
         </section>
+
+        <div className="flex justify-center gap-2 mb-8" role="group" aria-label="Billing interval">
+          <Button
+            variant={billingInterval === "month" ? "primary" : "secondary"}
+            onClick={() => setBillingInterval("month")}
+          >
+            Monthly
+          </Button>
+          {annualAvailable && (
+            <Button
+              variant={billingInterval === "year" ? "primary" : "secondary"}
+              onClick={() => setBillingInterval("year")}
+            >
+              Annual — save 20%
+            </Button>
+          )}
+        </div>
 
         <section className="pb-16">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
@@ -208,6 +254,9 @@ export const Pricing: React.FC = () => {
               </Card>
             ))}
           </div>
+          <p className="text-center text-sm text-gray-600 mt-6">
+            Annual plans are charged upfront. All paid plans include a 7-day trial; your first charge occurs after the trial ends.
+          </p>
         </section>
       </main>
     </MainLayout>
