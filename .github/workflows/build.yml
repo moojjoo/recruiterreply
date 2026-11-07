@@ -13,10 +13,11 @@ permissions:
   contents: read
   deployments: read
 
-# Serialize main builds so overlapping dev deploys don't race on the shared EC2 host.
+# Collapse duplicate/superseded feature-branch and PR verification while keeping
+# main serialized so shared-EC2 Dev deployments cannot race.
 concurrency:
-  group: build-main-${{ github.ref }}
-  cancel-in-progress: false
+  group: build-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   BACKEND_IMAGE_NAME: recruiterreply-backend
