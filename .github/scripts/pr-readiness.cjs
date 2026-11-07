@@ -25,8 +25,64 @@ function classifyRisk(files) {
   return tier;
 }
 
-function requiresManualDependabotReview(pr) {
-  return pr?.user?.login === 'dependabot[bot]';
+const dependabotVersionPattern = /v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?/;
+const dependabotEcosystems = new Map([
+  ['npm_and_yarn', /^frontend\/(?:package(?:-lock)?\.json|npm-shrinkwrap\.json)$/],
+  ['nuget', /^backend\/.*\.(?:csproj|props|targets|lock\.json)$/],
+]);
+
+function parseDependabotVersions(text) {
+  if (typeof text !== 'string') return null;
+  const version = dependabotVersionPattern.source;
+  const match = new RegExp(`\\bfrom\\s+${version}\\s+to\\s+${version}`, 'i').exec(text);
+  if (!match) return null;
+  const from = match.slice(1, 4).map(Number);
+  const to = match.slice(4, 7).map(Number);
+  return {from, to};
+}
+
+function classifyDependabotUpdate(pr, changedFiles = []) {
+  const result = {eligible: false, reason: 'Unclassified Dependabot update'};
+  if (!pr || pr.user?.login !== 'dependabot[bot]') {
+    return {...result, reason: 'Untrusted PR author'};
+  }
+  if (pr.base?.ref !== 'main') return {...result, reason: 'Target branch is not main'};
+  if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) {
+    return {...result, reason: 'PR source repository is not the target repository'};
+  }
+  if (pr.draft) return {...result, reason: 'Dependabot PR is draft'};
+
+  const branchMatch = /^dependabot\/(nuget|npm_and_yarn)\//.exec(pr.head.ref || '');
+  if (!branchMatch) return {...result, reason: 'Unsupported Dependabot ecosystem or branch'};
+  const ecosystem = branchMatch[1];
+  const metadata = `${pr.title || ''}\n${pr.body || ''}`;
+  if (!/\bBumps?\b/i.test(pr.body || '')) return {...result, ecosystem, reason: 'Missing Dependabot update metadata'};
+  const versions = parseDependabotVersions(metadata);
+  if (!versions) return {...result, ecosystem, reason: 'Missing semver update metadata'};
+
+  const [fromMajor, fromMinor, fromPatch] = versions.from;
+  const [toMajor, toMinor, toPatch] = versions.to;
+  let updateType;
+  if (toMajor !== fromMajor) updateType = 'major';
+  else if (toMinor !== fromMinor) updateType = 'minor';
+  else if (toPatch !== fromPatch) updateType = 'patch';
+  else return {...result, ecosystem, reason: 'Version metadata does not describe an update'};
+  if (toMajor < fromMajor || (toMajor === fromMajor && toMinor < fromMinor) ||
+      (toMajor === fromMajor && toMinor === fromMinor && toPatch < fromPatch)) {
+    return {...result, ecosystem, updateType, reason: 'Version update moves backwards'};
+  }
+  if (updateType === 'major') return {...result, ecosystem, updateType, reason: 'Major update requires manual review'};
+
+  const pathPattern = dependabotEcosystems.get(ecosystem);
+  const files = Array.isArray(changedFiles) ? changedFiles : [];
+  if (!files.length || files.some(file => {
+    const filename = typeof file === 'string' ? file : file?.filename;
+    const status = typeof file === 'object' && file ? file.status : undefined;
+    return !filename || !pathPattern.test(filename) || (status && !['added', 'modified'].includes(status));
+  })) {
+    return {...result, ecosystem, updateType, reason: 'Changed files exceed the ecosystem dependency allowlist'};
+  }
+  return {eligible: true, ecosystem, updateType, reason: 'Trusted npm/NuGet patch or minor Dependabot update'};
 }
 
 function requiredCodeQLChecks(changedFiles = []) {
@@ -145,7 +201,7 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   return {eligible: reasons.length === 0, risk, reasons, checkState};
 }
 module.exports = {
-  validateReadiness,classifyRisk,requiresManualDependabotReview,requiredCodeQLChecks,requiredCheckState,
+  validateReadiness,classifyRisk,classifyDependabotUpdate,requiredCodeQLChecks,requiredCheckState,
   parseOwnerCommand,createAuthorizationRecord,formatAuthorizationComment,parseAuthorizationComment,
   validateOwnerAuthorization,authorizationMarker
 };
