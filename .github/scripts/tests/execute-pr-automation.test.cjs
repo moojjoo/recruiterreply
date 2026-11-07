@@ -22,13 +22,16 @@ test('trusted workflow accepts owner commands and serializes asynchronous reeval
 
 
 
-test('Dependabot eligibility is evaluated before unmanaged PRs are skipped', () => {
-  const classify = workflow.indexOf('policy.classifyDependabotUpdate');
-  const skip = workflow.indexOf('!labeled && !managed && !trustedDependabotUpdate');
-  assert.ok(classify >= 0 && skip > classify);
-  assert.doesNotMatch(workflow, /if \(!labeled && !managed\) continue/);
+test('Dependabot is forced to manual review before execute-dev readiness', () => {
+  const manual = workflow.indexOf('policy.requiresManualDependabotReview(full)');
+  const managed = workflow.indexOf('const managed =');
+  const readiness = workflow.indexOf('policy.validateReadiness');
+  assert.ok(manual >= 0 && managed > manual && readiness > managed);
+  assert.match(workflow, /requiresManualDependabotReview\(full\)[\s\S]*disablePullRequestAutoMerge/);
+  assert.match(workflow, /requiresManualDependabotReview\(full\)[\s\S]*removeLabel/);
+  assert.match(workflow, /Dependabot pull requests are never auto-merged/);
+  assert.doesNotMatch(workflow, /policy\.classifyDependabotUpdate/);
   assert.match(workflow, /if \(!labeled && managed\)[\s\S]*labels: \['execute-dev'\]/);
-  assert.match(workflow, /Dependabot eligibility=/);
   assert.match(workflow, /readiness=/);
 });
 

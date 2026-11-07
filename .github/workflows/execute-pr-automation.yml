@@ -68,6 +68,25 @@ jobs:
               if (pr.base.ref !== 'main') continue;
               let {data: full} = await github.rest.pulls.get({owner, repo, pull_number: pr.number});
               if (full.head.repo.full_name !== owner + '/' + repo) continue;
+              if (policy.requiresManualDependabotReview(full)) {
+                const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
+                  repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
+                    id autoMergeRequest { enabledAt }
+                  } }
+                }`, {owner, repo, number:full.number});
+                const item = q.repository.pullRequest;
+                if (item.autoMergeRequest) {
+                  await github.graphql(`mutation($id:ID!) {
+                    disablePullRequestAutoMerge(input:{pullRequestId:$id}) { clientMutationId }
+                  }`, {id:item.id});
+                  core.notice(`PR #${full.number}: removed auto-merge; Dependabot updates require manual review`);
+                }
+                if (full.labels.some(l => l.name === 'automation-ready')) {
+                  await github.rest.issues.removeLabel({owner, repo, issue_number:full.number, name:'automation-ready'});
+                }
+                await reportStatus(full.number, 'Manual review required', 'Dependabot pull requests are never auto-merged. Required checks continue to run, but the repository owner must review and merge this update explicitly.');
+                continue;
+              }
               const managed = /^((feature|fix|bugfix)\/\d+-|execute\/\d+-)/.test(full.head.ref) || /(?:^|\s)\/(?:execute)\s+\d+/.test(full.body || '');
               const labeled = full.labels.some(l => l.name === 'execute-dev');
               if (!labeled && managed) {
@@ -110,11 +129,9 @@ jobs:
                 ? policy.validateOwnerAuthorization({comments, repository:`${owner}/${repo}`, issueNumber:linkedIssue, pullNumber:full.number, headSha:full.head.sha, ownerLogin})
                 : {authorized:false, reason:'Missing linked issue'};
               const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
-              const dependabot = policy.classifyDependabotUpdate(full, changedFiles);
-              const trustedDependabotUpdate = dependabot.eligible;
-              core.notice(`PR #${full.number}: Dependabot eligibility=${trustedDependabotUpdate} (${dependabot.reason})`);
-              if (!labeled && !managed && !trustedDependabotUpdate) {
-                core.notice('PR #' + full.number + ': not an execute-dev PR or eligible Dependabot update (' + dependabot.reason + ')');
+              const trustedDependabotUpdate = false;
+              if (!labeled && !managed) {
+                core.notice('PR #' + full.number + ': not an execute-dev PR');
                 continue;
               }
               const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100, filter:'latest'});
