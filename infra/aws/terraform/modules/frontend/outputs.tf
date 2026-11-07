@@ -21,3 +21,8 @@ output "cloudfront_domain_names" {
     for key, dist in aws_cloudfront_distribution.this : key => dist.domain_name
   }
 }
+
+output "certificate_arns" {
+  description = "ARNs of Terraform-managed frontend ACM certificates."
+  value       = [for certificate in aws_acm_certificate.prod_frontend : certificate.arn]
+}
