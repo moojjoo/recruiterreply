@@ -92,10 +92,11 @@ data "aws_iam_policy_document" "terraform_audit" {
   dynamic "statement" {
     for_each = length(module.bff_sessions) > 0 ? [1] : []
     content {
-      sid       = "ReadManagedBffSessionKeyPolicies"
+      sid = "ReadManagedBffSessionKeyPolicies"
       actions = [
         "kms:GetKeyPolicy",
         "kms:GetKeyRotationStatus",
+        "kms:ListResourceTags",
       ]
       resources = values(module.bff_sessions[0].kms_key_arns)
     }
@@ -118,6 +119,11 @@ data "aws_iam_policy_document" "terraform_audit" {
     resources = [
       "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*",
     ]
+  }
+  statement {
+    sid       = "ReadRegionalCloudWatchMetricFilters"
+    actions   = ["logs:DescribeMetricFilters"]
+    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*"]
   }
   statement {
     sid = "ReadPrivateEdgeFunctionMetadata"
