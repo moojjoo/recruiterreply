@@ -19,18 +19,18 @@ jobs:
       run:
         working-directory: infra/aws/terraform/${{ matrix.root }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Test audit input safeguards
         run: python3 -m unittest discover -s "${{ github.workspace }}/.github/scripts/tests" -p 'test_terraform_audit_inputs.py'
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: '1.14.3'
       - name: Validate formatting
         run: terraform fmt -check -recursive
       - name: Authenticate read-only AWS audit role
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
         with:
           aws-region: us-east-1
           role-to-assume: ${{ vars.TERRAFORM_AUDIT_ROLE_ARN }}
