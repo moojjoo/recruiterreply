@@ -31,16 +31,23 @@ service_aliases = {
 }
 denied_actions = set()
 action_pattern = re.compile(
-    r"(?i)\\b((?:cloudwatch\\s+logs|cognito(?:[-\\s]+identity)?(?:[-\\s]+provider|[-\\s]+idp)|[a-z][a-z0-9-]*))"
-    r"\\s*:\\s*([A-Za-z][A-Za-z0-9*]*)\\b"
+    r"(?i)\b((?:cloudwatch\s+logs|cognito(?:[-\s]+identity)?(?:[-\s]+provider|[-\s]+idp)|[a-z][a-z0-9-]*))"
+    r"\s*:\s*([A-Za-z][A-Za-z0-9*]*)\b"
+)
+compact_action_pattern = re.compile(
+    r"(?i)(?:not authorized to perform|unauthorized to perform)\s*:\s*"
+    r"([a-z][a-z0-9-]*)\s*:\s*([A-Za-z][A-Za-z0-9*]*)\b"
 )
 for line in log.splitlines():
-    if not re.search(r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)", line):
+    if not re.search(r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied|statuscode\s*:\s*403)", line):
         continue
     for service, operation in action_pattern.findall(line):
-        normalized_service = service_aliases.get(re.sub(r"\\s+", " ", service.strip().lower()), service.strip().lower())
+        normalized_service = service_aliases.get(re.sub(r"\s+", " ", service.strip().lower()), service.strip().lower())
         if normalized_service in known_services:
             denied_actions.add(f"{normalized_service}:{operation}")
+    for service, operation in compact_action_pattern.findall(line):
+        if service.lower() in known_services:
+            denied_actions.add(f"{service.lower()}:{operation}")
 for action in sorted(denied_actions):
     print("::error::AWS action denied: " + action)
 if "AWS access denied" in matches and not denied_actions:
