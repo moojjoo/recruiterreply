@@ -32,7 +32,14 @@ async function findVerifiedDeploymentForIssue({github, owner, repo, issueNumber}
     candidate.head_sha === pr.merge_commit_sha && candidate.conclusion === 'success');
   return run ? {pr, sha: run.head_sha, runUrl: run.html_url} : null;
 }
-module.exports = async ({github, context, core}) => {
+function createAuthenticatedClient(github, token) {
+  if (!token) return github;
+  const Client = github.constructor;
+  if (typeof Client !== 'function') throw new Error('Unable to create the Project write client');
+  return new Client({auth: token});
+}
+
+module.exports = async ({github, writeGithub = github, context, core}) => {
   const {owner, repo} = context.repo;
   let sha = context.sha;
   let runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
@@ -73,7 +80,7 @@ module.exports = async ({github, context, core}) => {
     core.notice('No matching merged PR for deployed SHA; no issues changed.');
     return;
   }
-  const result = await github.graphql(`query {
+  const result = await writeGithub.graphql(`query {
     user(login: "moojjoo") {
       projectsV2(first: 100) {
         nodes { id title fields(first: 100) { nodes {
@@ -100,7 +107,7 @@ module.exports = async ({github, context, core}) => {
     for (const issue_number of linkedIssues(pr.body || '')) {
       const {data: issue} = await github.rest.issues.get({owner, repo, issue_number});
       if (issue.pull_request) continue;
-      const items = await github.graphql(`query($id: ID!) {
+      const items = await writeGithub.graphql(`query($id: ID!) {
         node(id: $id) { ... on Issue { projectItems(first: 100) {
           nodes { id project { id } }
         } } }
@@ -121,7 +128,7 @@ module.exports = async ({github, context, core}) => {
         core.warning(`#${issue_number}: already closed without reconciliation evidence; manual review needed`);
         continue;
       }
-      await github.graphql(`mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+      await writeGithub.graphql(`mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
         updateProjectV2ItemFieldValue(input: {
           projectId: $project, itemId: $item, fieldId: $field,
           value: {singleSelectOptionId: $option}
@@ -129,10 +136,10 @@ module.exports = async ({github, context, core}) => {
       }`, {project: target.id, item: item.id, field: field.id, option: done.id});
       // Comment first so a closure failure can be retried without losing the audit trail.
       if (!comments.some(c => c.body?.includes(marker))) {
-        await github.rest.issues.createComment({owner, repo, issue_number, body:
+        await writeGithub.rest.issues.createComment({owner, repo, issue_number, body:
           `${marker}\nDev acceptance verified. PR #${pr.number}; deployed SHA \`${sha}\`; workflow ${runUrl}.\nProject Status: Done.`});
       }
-      await github.rest.issues.update({owner, repo, issue_number, state: 'closed', state_reason: 'completed'});
+      await writeGithub.rest.issues.update({owner, repo, issue_number, state: 'closed', state_reason: 'completed'});
       core.notice(`#${issue_number}: closed and marked Done`);
     }
   }
@@ -142,4 +149,5 @@ module.exports.findProject = findProject;
 module.exports.acceptanceChecklistComplete = acceptanceChecklistComplete;
 module.exports.checksPass = checksPass;
 module.exports.findVerifiedDeploymentForIssue = findVerifiedDeploymentForIssue;
+module.exports.createAuthenticatedClient = createAuthenticatedClient;
 module.exports.requiredChecks = requiredChecks;
