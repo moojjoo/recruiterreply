@@ -49,10 +49,11 @@ jobs:
             let latestSuccessfulSha = null;
             let targetDeployment = null;
             for (const deployment of deployments) {
-              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
-                ...context.repo, deployment_id: deployment.id, per_page: 1
+              const statuses = await github.paginate(github.rest.repos.listDeploymentStatuses, {
+                ...context.repo, deployment_id: deployment.id, per_page: 100
               });
-              if (statuses[0]?.state !== 'success') continue;
+              const hadSuccessfulStatus = statuses.some(status => status.state === 'success');
+              if (!hadSuccessfulStatus) continue;
               if (latestSuccessfulSha === null) latestSuccessfulSha = deployment.sha;
               if (deployment.sha === targetSha && targetDeployment === null) {
                 targetDeployment = deployment;

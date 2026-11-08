@@ -15,6 +15,8 @@ test('rollback requires an explicit SHA confirmation', () => {
   assert.match(rollback, /confirmation !== `ROLLBACK:\$\{targetSha\}`/);
   assert.match(rollback, /has no successful Production deployment/);
   assert.match(rollback, /is already the latest successful Production release/);
+  assert.match(rollback, /listDeploymentStatuses[\s\S]*per_page: 100/);
+  assert.match(rollback, /statuses\.some\(status => status\.state === 'success'\)/);
 });
 
 test('rollback reuses the guarded application deployment path without database work', () => {
