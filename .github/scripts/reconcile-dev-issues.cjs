@@ -25,9 +25,10 @@ async function findVerifiedDeploymentForIssue({github, owner, repo, issueNumber}
   });
   const pr = prs.find(candidate => candidate.merged_at && linkedIssues(candidate.body || '').includes(issueNumber));
   if (!pr?.merge_commit_sha) return null;
-  const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+  const {data: workflowRuns} = await github.rest.actions.listWorkflowRunsForRepo({
     owner, repo, per_page: 100
   });
+  const runs = workflowRuns.workflow_runs || [];
   const run = runs.find(candidate => candidate.name === 'Build and Deploy to Dev' &&
     candidate.head_sha === pr.merge_commit_sha && candidate.conclusion === 'success');
   return run ? {pr, sha: run.head_sha, runUrl: run.html_url} : null;
