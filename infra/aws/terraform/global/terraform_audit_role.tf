@@ -161,6 +161,7 @@ data "aws_iam_policy_document" "terraform_audit" {
   statement {
     sid = "ReadBffSessionTableMetadata"
     actions = [
+      "dynamodb:DescribeContinuousBackups",
       "dynamodb:DescribeTable",
     ]
     resources = [
@@ -171,6 +172,7 @@ data "aws_iam_policy_document" "terraform_audit" {
   statement {
     sid = "ReadBudgetMetadata"
     actions = [
+      "budgets:ListTagsForResource",
       "budgets:ViewBudget",
     ]
     resources = [
