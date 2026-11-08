@@ -20,7 +20,7 @@ test('eligible patch update is trusted', () => {
     eligible: true,
     ecosystem: 'npm_and_yarn',
     updateType: 'patch',
-    reason: 'Trusted patch/minor Dependabot update',
+    reason: 'Trusted npm/NuGet patch or minor Dependabot update',
   });
 });
 
@@ -63,4 +63,19 @@ test('frontend-only trusted Dependabot update does not require skipped C# CodeQL
   ];
   const result = validateReadiness({pr, checks, changedFiles: files, trustedDependabotUpdate: true});
   assert.equal(result.eligible, true);
+});
+
+test('GitHub Actions and Terraform updates always require manual review', () => {
+  for (const [ecosystem, file] of [
+    ['github_actions', '.github/workflows/build.yml'],
+    ['terraform', 'infra/aws/terraform/global/versions.tf'],
+  ]) {
+    const pr = {
+      ...base,
+      head: {...base.head, ref: `dependabot/${ecosystem}/weekly-update`},
+      title: 'Bump dependency from 1.2.3 to 1.2.4',
+      body: 'Bumps dependency from 1.2.3 to 1.2.4.',
+    };
+    assert.equal(classifyDependabotUpdate(pr, [{filename: file, status: 'modified'}]).eligible, false);
+  }
 });

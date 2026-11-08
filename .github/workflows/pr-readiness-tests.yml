@@ -4,6 +4,10 @@ on:
     paths:
       - '.github/scripts/pr-readiness.cjs'
       - '.github/scripts/pr-readiness.test.cjs'
+      - '.github/scripts/tests/dependabot-automerge.test.cjs'
+      - '.github/scripts/tests/execute-pr-automation.test.cjs'
+      - '.github/scripts/tests/dependabot-config.test.cjs'
+      - '.github/dependabot.yml'
       - '.github/workflows/execute-pr-automation.yml'
       - '.github/workflows/pr-readiness-tests.yml'
   push:
@@ -19,4 +23,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: node --test .github/scripts/pr-readiness.test.cjs
+      - run: |
+          node --test .github/scripts/pr-readiness.test.cjs
+          node --test .github/scripts/tests/dependabot-automerge.test.cjs
+          node --test .github/scripts/tests/execute-pr-automation.test.cjs
+          node --test .github/scripts/tests/dependabot-config.test.cjs

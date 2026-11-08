@@ -15,6 +15,7 @@ SPEC = importlib.util.spec_from_file_location(
 )
 AUDIT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AUDIT)
+REVIEWED_MANIFEST = Path(__file__).resolve().parents[2] / "config" / "terraform-audit-global.json"
 
 
 class AuditInputsTests(unittest.TestCase):
@@ -37,6 +38,10 @@ class AuditInputsTests(unittest.TestCase):
 
     def prepare(self):
         return AUDIT.prepare(self.manifest, self.output, self.metadata, self.download, self.package_paths)
+
+    def test_reviewed_manifest_preserves_bff_session_infrastructure(self):
+        manifest = json.loads(REVIEWED_MANIFEST.read_text())
+        self.assertIs(manifest["variables"].get("create_bff_session_infrastructure"), True)
 
     def test_verified_packages_produce_private_local_inputs_without_urls(self):
         destination = self.prepare()
