@@ -234,7 +234,7 @@ jobs:
 
           echo "Frontend artifact check passed: assets=$ASSET_COUNT"
 
-          FRONTEND_DIGEST=$(find frontend/dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          FRONTEND_DIGEST=$(cd frontend/dist && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
           [[ "$FRONTEND_DIGEST" =~ ^[a-f0-9]{64}$ ]] || {
             echo "::error::Unable to create deterministic frontend digest"
             exit 1

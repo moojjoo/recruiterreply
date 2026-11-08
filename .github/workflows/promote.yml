@@ -243,7 +243,7 @@ jobs:
             promoted-dist/frontend-build-manifest.json >/dev/null
 
           RECORDED_FRONTEND_DIGEST=$(jq -r '.frontend_digest' promoted-dist/frontend-build-manifest.json)
-          ACTUAL_FRONTEND_DIGEST=$(find promoted-dist -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          ACTUAL_FRONTEND_DIGEST=$(cd promoted-dist && find . -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
           test "$RECORDED_FRONTEND_DIGEST" = "sha256:$ACTUAL_FRONTEND_DIGEST"
           echo "Build provenance manifests verified for $SHA"
 
@@ -252,7 +252,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f promoted-dist/index.html
-          DIGEST=$(find promoted-dist -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          DIGEST=$(cd promoted-dist && find . -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
           [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || exit 1
           echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
 
