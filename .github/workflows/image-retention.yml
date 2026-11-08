@@ -74,45 +74,16 @@ jobs:
           ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           ROLE_ARN_FROM_VARS: ${{ vars.AWS_ROLE_ARN }}
           ROLE_ARN_FROM_SECRETS: ${{ secrets.AWS_ROLE_ARN }}
-          KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
-          KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
-          SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
-          TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           set -euo pipefail
           ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-${ROLE_ARN_FROM_VARS:-${ROLE_ARN_FROM_SECRETS:-}}}}"
-          ACCESS_KEY="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-}}"
-          SECRET_KEY="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-}}"
-          SESSION_TOKEN="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
-          if [[ -n "$ROLE_TO_ASSUME" ]]; then
-            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
-            echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
-          elif [[ -n "$ACCESS_KEY" && -n "$SECRET_KEY" ]]; then
-            echo "auth_mode=keys" >> "$GITHUB_OUTPUT"
-            echo "aws_access_key_id=$ACCESS_KEY" >> "$GITHUB_OUTPUT"
-            echo "aws_secret_access_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
-            [[ -z "$SESSION_TOKEN" ]] || echo "aws_session_token=$SESSION_TOKEN" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::Missing AWS authentication configuration in the dev environment"
-            exit 1
-          fi
+          [[ -n "$ROLE_TO_ASSUME" ]] || { echo "::error::Missing AWS_ROLE_TO_ASSUME or AWS_ROLE_ARN"; exit 1; }
+          echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC role)
-        if: steps.aws-auth.outputs.auth_mode == 'oidc'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Configure AWS credentials (access keys)
-        if: steps.aws-auth.outputs.auth_mode == 'keys'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
-          aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
-          aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Run locked image retention operation
