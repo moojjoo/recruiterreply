@@ -1,6 +1,8 @@
 """Static regression tests for the shared-EC2 deployment safety contract."""
 import pathlib
 import re
+import shutil
+import subprocess
 import unittest
 
 
@@ -42,6 +44,27 @@ class SharedEc2SafetyTests(unittest.TestCase):
         self.assertIn("config --services", PREFLIGHT)
         self.assertIn("grep -Fxq \"$TARGET_SERVICE\"", PREFLIGHT)
         self.assertIn("grep -Fxq postgres", PREFLIGHT)
+
+    def test_preflight_load_comparison_is_gawk_compatible(self):
+        self.assertNotIn('awk -v load=', PREFLIGHT)
+        self.assertIn('awk -v measured_load_per_cpu=', PREFLIGHT)
+        self.assertIn('measured_load_per_cpu < limit', PREFLIGHT)
+
+        gawk = shutil.which("gawk")
+        if gawk is None:
+            self.skipTest("gawk is not installed")
+
+        command = [
+            gawk,
+            "-v",
+            "measured_load_per_cpu=0.1000",
+            "-v",
+            "limit=0.9000",
+            "BEGIN { exit !(measured_load_per_cpu < limit) }",
+        ]
+        self.assertEqual(subprocess.run(command, check=False).returncode, 0)
+        command[2] = "measured_load_per_cpu=0.9500"
+        self.assertNotEqual(subprocess.run(command, check=False).returncode, 0)
 
     def test_runbook_defines_observability_and_split_decision_thresholds(self):
         for term in ("CPU", "memory", "disk", "EBS", "database", "latency", "restart", "lock"):

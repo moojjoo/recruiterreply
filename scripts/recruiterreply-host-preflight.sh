@@ -38,7 +38,7 @@ available_memory_kb="$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo)"
 (( available_memory_kb >= MIN_AVAILABLE_MEMORY_MB * 1024 )) || fail "available memory is below ${MIN_AVAILABLE_MEMORY_MB} MiB"
 
 load_per_cpu="$(awk -v cpus="$(getconf _NPROCESSORS_ONLN)" '{ if (cpus < 1) cpus = 1; printf "%.4f", $1 / cpus }' /proc/loadavg)"
-awk -v load="$load_per_cpu" -v limit="$MAX_LOAD_PER_CPU" 'BEGIN { exit !(load < limit) }' || \
+awk -v measured_load_per_cpu="$load_per_cpu" -v limit="$MAX_LOAD_PER_CPU" 'BEGIN { exit !(measured_load_per_cpu < limit) }' || \
   fail "one-minute load per CPU ${load_per_cpu} is at or above ${MAX_LOAD_PER_CPU}"
 
 # Compose config is read-only. The exact target service is checked so a caller
