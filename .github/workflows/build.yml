@@ -296,6 +296,8 @@ jobs:
     # Do not attempt public HTTPS probes or claim deployment acceptance.
     if: ${{ vars.DEV_AUTHENTICATED_SMOKE_READY == 'true' }}
     uses: ./.github/workflows/promote.yml
+    permissions:
+      deployments: write
     with:
       environment: dev
       sha: ${{ github.sha }}

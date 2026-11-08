@@ -74,6 +74,8 @@ jobs:
   rollback:
     needs: validate-target
     uses: ./.github/workflows/promote.yml
+    permissions:
+      deployments: write
     with:
       environment: prod
       sha: ${{ needs.validate-target.outputs.target_sha }}

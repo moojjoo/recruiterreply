@@ -40,3 +40,14 @@ test('rollback records the actual target SHA as the Production deployment identi
   assert.match(promote, /ref: targetSha/);
   assert.match(promote, /createDeploymentStatus/);
 });
+
+test('rollback callers grant deployment-write only to reusable deployment jobs', () => {
+  for (const workflow of [
+    readFileSync(join(root, 'workflows/build.yml'), 'utf8'),
+    readFileSync(join(root, 'workflows/promote-test.yml'), 'utf8'),
+    readFileSync(join(root, 'workflows/promote-prod.yml'), 'utf8'),
+  ]) {
+    assert.match(workflow, /uses: \.\/\.github\/workflows\/promote\.yml[\s\S]*?permissions:\n\s+deployments: write/);
+  }
+  assert.match(rollback, /uses: \.\/\.github\/workflows\/promote\.yml[\s\S]*?permissions:\n\s+deployments: write/);
+});
