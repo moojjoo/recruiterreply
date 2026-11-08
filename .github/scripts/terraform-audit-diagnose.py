@@ -39,7 +39,7 @@ compact_action_pattern = re.compile(
     r"([a-z][a-z0-9-]*)\s*:\s*([A-Za-z][A-Za-z0-9*]*)\b"
 )
 for line in log.splitlines():
-    if not re.search(r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied|statuscode\s*:\s*403)", line):
+    if not re.search(r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied|operation error|statuscode\s*:\s*403)", line):
         continue
     for service, operation in action_pattern.findall(line):
         normalized_service = service_aliases.get(re.sub(r"\s+", " ", service.strip().lower()), service.strip().lower())

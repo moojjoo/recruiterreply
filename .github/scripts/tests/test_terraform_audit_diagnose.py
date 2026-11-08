@@ -29,6 +29,7 @@ class TerraformAuditDiagnoseTests(unittest.TestCase):
             "AccessDeniedException: User is not authorized to perform: kms:GetKeyRotationStatus\n"
             "operation error CloudWatch Logs: ListTagsForResource, https response error StatusCode: 403\n"
             "operation error Cognito Identity Provider: DescribeResourceServer, access denied\n"
+            "operation error KMS: GetKeyRotationStatus\n"
         )
         self.assertIn("AWS action denied: kms:GetKeyRotationStatus", output)
         self.assertIn("AWS action denied: logs:ListTagsForResource", output)
