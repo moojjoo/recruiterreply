@@ -11,7 +11,7 @@ const promote = readFileSync(join(root, 'workflows/promote.yml'), 'utf8');
 
 test('Dev build records and attests backend and frontend provenance', () => {
   assert.match(build, /attestations: write/);
-  assert.match(build, /actions\/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45/);
+  assert.match(build, /actions\/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad/);
   assert.match(build, /backend-release-\$\{\{ github\.sha \}\}/);
   assert.match(build, /frontend-build-manifest\.json/);
   assert.match(build, /source_sha/);

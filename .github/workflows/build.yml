@@ -168,7 +168,7 @@ jobs:
           echo "Verified pushed image: account=$ACCOUNT_ID region=$AWS_REGION repository=$BACKEND_IMAGE_NAME sha=$GITHUB_SHA digest=$IMAGE_DIGEST"
 
       - name: Attest backend image provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3
         with:
           subject-name: ${{ steps.backend-image.outputs.repository }}
           subject-digest: ${{ steps.backend-image.outputs.digest }}
@@ -252,7 +252,7 @@ jobs:
             > frontend/dist/frontend-build-manifest.json
 
       - name: Attest frontend build provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3
         with:
           subject-path: frontend/dist
 
