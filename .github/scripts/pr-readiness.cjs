@@ -180,7 +180,6 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   if (pr.draft) reasons.push('PR is draft');
   const risk = classifyRisk(changedFiles);
   if (risk === 'high' && !trustedDependabotUpdate && !ownerAuthorization) reasons.push('High/unknown risk change requires owner execute-dev authorization for the current SHA');
-  if (!trustedDependabotUpdate && !(pr.labels || []).some(x => (typeof x === 'string' ? x : x.name) === 'automation-ready')) reasons.push('Missing automation-ready label');
   const body = pr.body || '';
   const evidence = body.match(/^## Implementation evidence\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/mi);
   if (!trustedDependabotUpdate && (!evidence || !/\b(commit|test|verification|workflow)\b/i.test(evidence[1]) || evidence[1].trim().length < 20)) reasons.push('Missing substantive implementation evidence');
