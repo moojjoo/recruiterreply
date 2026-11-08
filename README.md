@@ -135,4 +135,4 @@ Read [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) and [docs/RELE
 - [Database migration policy](docs/DATABASE_MIGRATION_POLICY.md)
 - [Frontend architecture](docs/FRONTEND_ARCHITECTURE.md)
 - [Backend architecture](docs/BACKEND_ARCHITECTURE.md)
-- [Dependabot auto-merge policy](docs/DEPENDABOT_AUTOMERGE.md)
+- [Dependabot manual-review policy](docs/DEPENDABOT_AUTOMERGE.md)

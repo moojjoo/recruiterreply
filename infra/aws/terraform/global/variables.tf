@@ -32,6 +32,17 @@ variable "github_repo" {
   default     = "moojjoo/recruiterreply"
 }
 
+variable "github_actions_ec2_instance_id" {
+  description = "Shared EC2 instance targeted by GitHub Actions SSM deployment commands."
+  type        = string
+  default     = "i-0dbe396e361ea6d56"
+
+  validation {
+    condition     = can(regex("^i-[0-9a-f]+$", var.github_actions_ec2_instance_id))
+    error_message = "github_actions_ec2_instance_id must be an EC2 instance ID."
+  }
+}
+
 variable "create_frontend_buckets" {
   description = "Whether to create frontend S3 buckets for static app hosting."
   type        = bool

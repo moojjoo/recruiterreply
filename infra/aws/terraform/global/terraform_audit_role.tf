@@ -57,6 +57,7 @@ data "aws_iam_policy_document" "terraform_audit" {
     actions = [
       "cognito-idp:DescribeUserPool",
       "cognito-idp:DescribeUserPoolClient",
+      "cognito-idp:DescribeResourceServer",
       "cognito-idp:GetUserPoolMfaConfig",
       "cognito-idp:ListTagsForResource",
     ]
@@ -75,6 +76,45 @@ data "aws_iam_policy_document" "terraform_audit" {
       variable = "aws:RequestedRegion"
       values   = [var.aws_region]
     }
+  }
+  # ListTagsForCertificate supports certificate resource scoping, so grant it
+  # only for certificates managed by the frontend module.
+  dynamic "statement" {
+    for_each = length(module.frontend.certificate_arns) > 0 ? [1] : []
+    content {
+      sid       = "ReadManagedCertificateTags"
+      actions   = ["acm:ListTagsForCertificate"]
+      resources = module.frontend.certificate_arns
+    }
+  }
+  # GetKeyPolicy supports key resource scoping. The conditional module output
+  # keeps access limited to the managed BFF session keys when they are enabled.
+  dynamic "statement" {
+    for_each = length(module.bff_sessions) > 0 ? [1] : []
+    content {
+      sid       = "ReadManagedBffSessionKeyPolicies"
+      actions   = ["kms:GetKeyPolicy"]
+      resources = values(module.bff_sessions[0].kms_key_arns)
+    }
+  }
+  # DescribeLogGroups is an account-level list operation and does not support
+  # resource-level permissions. Restrict its wildcard grant to the configured region.
+  statement {
+    sid       = "ListRegionalCloudWatchLogGroups"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
+  }
+  statement {
+    sid     = "ReadRegionalCloudWatchLogGroupTags"
+    actions = ["logs:ListTagsForResource"]
+    resources = [
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*",
+    ]
   }
   statement {
     sid = "ReadPrivateEdgeFunctionMetadata"
