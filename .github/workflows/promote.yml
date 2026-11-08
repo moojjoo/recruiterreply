@@ -734,6 +734,8 @@ jobs:
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
                 "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env; fi",
                 "sudo grep \"^\($image_var)=\" .env",
+                "if [ ! -x \"$DEPLOY_SOURCE_PATH/scripts/recruiterreply-host-preflight.sh\" ]; then echo Missing host preflight script for promoted SHA \($sha); exit 1; fi",
+                "sudo \"$DEPLOY_SOURCE_PATH/scripts/recruiterreply-host-preflight.sh\" \($environment) \($deploy_path) \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\"",
                 "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
                 "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ps; exit 1; }",
                 "HEALTH_PORT=$(case \($environment) in dev) echo 5001;; test) echo 5002;; prod) echo 5003;; *) exit 1;; esac)",

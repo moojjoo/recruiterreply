@@ -58,6 +58,7 @@ jobs:
       - name: Test Docker image retention safety
         run: |
           python3 -m unittest discover -s tests -p 'test_docker_image_prune.py'
+          python3 -m unittest discover -s tests -p 'test_shared_ec2_safety.py'
           node --test .github/scripts/tests/resolve-image-retention-policy.test.cjs
           node --test .github/scripts/tests/ecr-image-retention.test.cjs
           node --test .github/scripts/tests/ecr-image-retention-workflow.test.cjs
