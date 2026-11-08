@@ -1,5 +1,6 @@
 {
   "variables": {
+    "create_bff_session_infrastructure": true,
     "enable_private_environment_identity": true,
     "private_environment_identity_environments": ["dev", "test"],
     "enable_private_edge_runtime_state": true,
