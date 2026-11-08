@@ -9,6 +9,9 @@ on:
       sha:
         required: true
         type: string
+      migration_authorization:
+        required: false
+        type: string
       build_run_id:
         required: false
         type: string
@@ -397,13 +400,43 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Detect pending Production migrations
+        id: pending-migrations
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
+        run: |
+          set -euo pipefail
+          SOURCE_MIGRATIONS=$(find src/backend/Migrations -maxdepth 1 -type f -name '*.cs' ! -name '*Designer.cs' ! -name '*ModelSnapshot.cs' -printf '%f\n' | sed 's/\.cs$//' | sort)
+          test -n "$SOURCE_MIGRATIONS"
+          COMMANDS_JSON=$(jq -n '{commands:["set -eu", "PGU=$(sudo grep ^POSTGRES_SUPERUSER= /home/ubuntu/recruiterreply/.env | cut -d= -f2); PGU=${PGU:-postgres}", "sudo docker exec recruiterreply-postgres psql -U $PGU -d recruiterreply_prod -Atc '\''SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY 1'\''"]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$EC2_INSTANCE_ID" --document-name AWS-RunShellScript --comment "Read Production migration history for $GITHUB_SHA" --parameters "$COMMANDS_JSON" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID"
+          INVOCATION_JSON=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID")
+          test "$(jq -r '.Status' <<< "$INVOCATION_JSON")" = Success
+          APPLIED_MIGRATIONS=$(jq -r '.StandardOutputContent' <<< "$INVOCATION_JSON")
+          PENDING=$(comm -23 <(printf '%s\n' "$SOURCE_MIGRATIONS") <(printf '%s\n' "$APPLIED_MIGRATIONS" | sed '/^$/d' | sort))
+          if [[ -n "$PENDING" ]]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+            echo 'Pending Production migrations:'
+            printf '%s\n' "$PENDING"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+            echo 'No pending Production migrations; database mutation will be skipped.'
+          fi
+
       - name: Generate idempotent migration script
         if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         working-directory: src/backend
         env:
+          PENDING_MIGRATIONS: ${{ steps.pending-migrations.outputs.pending }}
           ConnectionStrings__DefaultConnection: Host=localhost;Database=recruiterreply
         run: |
           set -euo pipefail
+          if [[ "$PENDING_MIGRATIONS" != true ]]; then
+            : > "$RUNNER_TEMP/migrate.sql"
+            exit 0
+          fi
           dotnet tool restore
           dotnet restore
           dotnet ef migrations script --idempotent -o "$RUNNER_TEMP/migrate.sql"
@@ -412,12 +445,27 @@ jobs:
           echo "Migrations in script:"
           grep -o "MigrationId\" = '[^']*'" "$RUNNER_TEMP/migrate.sql" | sort -u | sed "s/.*= //"
 
+      - name: Review and authorize Production migration
+        id: migration-review
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
+        env:
+          SHA: ${{ inputs.sha }}
+          AUTHORIZATION: ${{ inputs.migration_authorization }}
+        working-directory: src
+        run: |
+          set -euo pipefail
+          DIGEST="sha256:$(sha256sum "$RUNNER_TEMP/migrate.sql" | cut -d' ' -f1)"
+          node .github/scripts/migration-gate.cjs "$RUNNER_TEMP/migrate.sql" "$SHA" "$DIGEST" "$AUTHORIZATION" > "$RUNNER_TEMP/migration-review.json"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/migration-review.json" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Back up database and apply migrations on EC2
-        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           ENVIRONMENT: ${{ inputs.environment }}
           SHA: ${{ inputs.sha }}
+          MIGRATION_DIGEST: ${{ steps.migration-review.outputs.digest }}
         run: |
           set -euo pipefail
 
@@ -428,12 +476,13 @@ jobs:
             --arg db "recruiterreply_$ENVIRONMENT" \
             --arg sha "$SHA" \
             --arg sql_b64 "$SQL_B64" \
+            --arg migration_digest "$MIGRATION_DIGEST" \
             '{
               commands: [
                 "set -eu",
                 "cd \($deploy_path)",
                 "PGU=$(sudo grep ^POSTGRES_SUPERUSER= .env | cut -d= -f2); PGU=${PGU:-postgres}",
-                "BACKUP=/home/ubuntu/\($db)_backup_$(date +%Y%m%d%H%M%S)_\($sha[0:7]).dump",
+                "BACKUP=/home/ubuntu/\($db)_backup_$(date +%Y%m%d%H%M%S)_\($sha[0:7])_\($migration_digest[7:14]).dump",
                 "sudo docker exec recruiterreply-postgres pg_dump -U $PGU -Fc \($db) > $BACKUP",
                 "test -s $BACKUP || { echo Backup is empty: $BACKUP; exit 1; }",
                 "ls -lh $BACKUP",

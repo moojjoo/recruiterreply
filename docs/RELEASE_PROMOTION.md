@@ -20,5 +20,6 @@ Dev completion is automated from the verified merged SHA, required checks, deplo
 - Database rollback needs a separately reviewed migration compatibility and restore procedure. Never automatically roll back a database.
 - GitHub Actions tests and a real Dev deployment are required before claiming the feature complete.
 - Production promotion performs database migrations; require an explicit separate approval before running it.
+- Production promotion first performs a read-only migration-history comparison. Pending migrations require an exact `database_authorization` input matching `<production-sha>:sha256:<migration-script-digest>`; no pending migrations skip the database mutation path. Destructive SQL is rejected by the migration gate unless that exact authorization is present, and backups are named with the migration digest.
 
 Do not close issue #237 until these gaps and its acceptance criteria are validated.
