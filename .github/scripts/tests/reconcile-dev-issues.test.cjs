@@ -52,7 +52,14 @@ test('acceptance-label retry resolves the matching verified Dev deployment', asy
   const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: pr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
   const github = {
     rest: {pulls: {list: pulls}, actions: {listWorkflowRunsForRepo: runs}},
-    paginate: async endpoint => endpoint === pulls ? [pr] : [run]
+    paginate: async (endpoint, params) => {
+      if (endpoint === pulls) return [pr];
+      assert.equal(params.head_sha, undefined);
+      return [
+        {...run, head_sha: 'd'.repeat(40)},
+        run,
+      ];
+    }
   };
   const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
   assert.deepEqual(deployment, {pr, sha: run.head_sha, runUrl: run.html_url});
