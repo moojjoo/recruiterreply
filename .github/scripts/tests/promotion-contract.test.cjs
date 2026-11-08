@@ -31,6 +31,8 @@ test('promotion instructions preserve environment provenance and separate approv
   assert.match(skill, /fails before promotion\s+if it differs from `expected_sha`/);
   assert.match(skill, /production is a separate, deliberate action/);
   assert.match(skill, /confirm the new successful `prod` deployment records the\s+expected Test SHA/);
+  assert.match(skill, /database_authorization/);
+  assert.match(skill, /never infer database approval/);
 });
 
 test('promotion wrappers fail closed on invalid or stale expected SHAs before reuse', () => {
@@ -46,6 +48,12 @@ test('promotion wrappers fail closed on invalid or stale expected SHAs before re
       `${name} must enforce the expected SHA before exposing it to the reusable promotion`,
     );
   }
+});
+
+test('Production migration authorization is explicit and SHA-bound', () => {
+  const production = workflows['promote-prod.yml'];
+  assert.match(production, /database_authorization:/);
+  assert.match(production, /migration_authorization: \$\{\{ inputs\.database_authorization \}\}/);
 });
 
 test('workflow input parser handles no inputs and declared inputs', () => {

@@ -48,6 +48,13 @@ environment — never rebuilding. That's done via `.github/workflows/promote.yml
    After completion, confirm the new successful `prod` deployment records the
    expected Test SHA.
 
+   If the Production preflight reports pending migrations, stop and review the
+   generated SQL and its SHA-256 digest. Resume only with the separately approved
+   `database_authorization` input in the exact form
+   `<production-sha>:sha256:<migration-script-digest>`. A Production release with
+   no pending migrations skips database mutation; never infer database approval
+   from ordinary Production release approval.
+
 ## Notes
 
 - There is no PR, branch merge, or new commit involved in promotion. The required

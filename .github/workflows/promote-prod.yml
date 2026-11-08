@@ -7,6 +7,10 @@ on:
         description: Full SHA of the successful Test deployment approved for Production
         required: true
         type: string
+      database_authorization:
+        description: Exact <production-sha>:sha256:<migration-script-digest> approval when migrations are pending
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -61,6 +65,7 @@ jobs:
     with:
       environment: prod
       sha: ${{ needs.resolve-source.outputs.sha }}
+      migration_authorization: ${{ inputs.database_authorization }}
       api_base_url: https://api.recruiterreply.com/api
       frontend_url: https://recruiterreply.com
       api_url: https://api.recruiterreply.com

@@ -68,6 +68,9 @@ jobs:
       - name: Test promotion command contract
         run: node --test .github/scripts/tests/promotion-contract.test.cjs
 
+      - name: Test migration approval gate
+        run: node --test .github/scripts/tests/migration-gate.test.cjs
+
       - name: Test release provenance contract
         run: node --test .github/scripts/tests/release-provenance.test.cjs
 
