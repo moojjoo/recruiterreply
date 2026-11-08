@@ -163,6 +163,7 @@ data "aws_iam_policy_document" "terraform_audit" {
     actions = [
       "dynamodb:DescribeContinuousBackups",
       "dynamodb:DescribeTable",
+      "dynamodb:DescribeTimeToLive",
     ]
     resources = [
       for env in local.terraform_audit_bff_session_environments :
@@ -193,6 +194,7 @@ data "aws_iam_policy_document" "terraform_audit" {
     sid = "ReadObservabilityAlarmMetadata"
     actions = [
       "cloudwatch:DescribeAlarms",
+      "cloudwatch:ListTagsForResource",
     ]
     resources = [
       for env in ["dev", "test", "prod"] :
