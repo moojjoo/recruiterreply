@@ -30,6 +30,8 @@ test('read-only OIDC and no-apply safeguards remain intact', () => {
   assert.match(audit, /environment:\s*terraform-readonly-audit/);
   assert.match(audit, /terraform plan -refresh-only[^\n]*-lock=false[^\n]*-detailed-exitcode/);
   assert.match(audit, /terraform plan -input=false -lock=false -detailed-exitcode/);
+  assert.match(audit, /TF_LOG=TRACE terraform plan -refresh-only/);
+  assert.match(audit, /TF_LOG=TRACE terraform plan -input=false/);
   assert.doesNotMatch(audit, /terraform\s+apply/);
   assert.doesNotMatch(audit, /-auto-approve/);
 });

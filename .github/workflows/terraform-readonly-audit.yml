@@ -51,7 +51,7 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          terraform plan -refresh-only -input=false -lock=false -detailed-exitcode -no-color > /tmp/tf-refresh.log 2>&1
+          TF_LOG=TRACE terraform plan -refresh-only -input=false -lock=false -detailed-exitcode -no-color > /tmp/tf-refresh.log 2>&1
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           echo "Refresh-only result: $code (0=no drift, 2=drift, 1=error)"
@@ -67,7 +67,7 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          terraform plan -input=false -lock=false -detailed-exitcode -no-color > /tmp/tf-desired.log 2>&1
+          TF_LOG=TRACE terraform plan -input=false -lock=false -detailed-exitcode -no-color > /tmp/tf-desired.log 2>&1
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           echo "Desired-state result: $code (0=no change, 2=proposed change, 1=error)"
