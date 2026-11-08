@@ -42,8 +42,9 @@ test('Test promotion no longer invokes the Node 20 AWS action', () => {
 test('Terraform audit policy grants only the required metadata reads', () => {
   assert.match(auditPolicy, /"cognito-idp:DescribeResourceServer"/);
   assert.match(auditPolicy, /sid\s*=\s*"ReadManagedCertificateTags"[\s\S]*"acm:ListTagsForCertificate"[\s\S]*module\.frontend\.certificate_arns/);
-  assert.match(auditPolicy, /sid\s*=\s*"ReadManagedBffSessionKeyPolicies"[\s\S]*"kms:GetKeyPolicy"[\s\S]*"kms:GetKeyRotationStatus"[\s\S]*module\.bff_sessions\[0\]\.kms_key_arns/);
+  assert.match(auditPolicy, /sid\s*=\s*"ReadManagedBffSessionKeyPolicies"[\s\S]*"kms:GetKeyPolicy"[\s\S]*"kms:GetKeyRotationStatus"[\s\S]*"kms:ListResourceTags"[\s\S]*module\.bff_sessions\[0\]\.kms_key_arns/);
   assert.match(auditPolicy, /sid\s*=\s*"ListRegionalCloudWatchLogGroups"[\s\S]*"logs:DescribeLogGroups"[\s\S]*aws:RequestedRegion/);
+  assert.match(auditPolicy, /sid\s*=\s*"ReadRegionalCloudWatchMetricFilters"[\s\S]*"logs:DescribeMetricFilters"[\s\S]*log-group:\*/);
   assert.match(frontendOutputs, /output "certificate_arns"/);
 });
 
