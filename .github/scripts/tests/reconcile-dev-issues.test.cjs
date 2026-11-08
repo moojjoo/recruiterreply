@@ -51,14 +51,19 @@ test('acceptance-label retry resolves the matching verified Dev deployment', asy
   const pr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: 'Dev-Completes: #558'};
   const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: pr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
   const github = {
-    rest: {pulls: {list: pulls}, actions: {listWorkflowRunsForRepo: runs}},
-    paginate: async (endpoint, params) => {
+    rest: {
+      pulls: {list: pulls},
+      actions: {listWorkflowRunsForRepo: async params => {
+        assert.equal(params.per_page, 100);
+        return {data: {workflow_runs: [
+          {...run, head_sha: 'd'.repeat(40)},
+          run,
+        ]}};
+      }}
+    },
+    paginate: async endpoint => {
       if (endpoint === pulls) return [pr];
-      assert.equal(params.head_sha, undefined);
-      return [
-        {...run, head_sha: 'd'.repeat(40)},
-        run,
-      ];
+      throw new Error('Deployment lookup must use the bounded first page');
     }
   };
   const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
