@@ -118,7 +118,8 @@ jobs:
 
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME:$SHA" >> "$GITHUB_OUTPUT"
+          echo "backend_digest=$ECR_RESULT" >> "$GITHUB_OUTPUT"
+          echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME@$ECR_RESULT" >> "$GITHUB_OUTPUT"
 
       - name: Resolve immutable backend image digest
         id: image-digest
@@ -214,12 +215,44 @@ jobs:
           run-id: ${{ steps.build-run.outputs.run_id }}
           github-token: ${{ github.token }}
 
+      - name: Download backend build manifest
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: backend-release-${{ inputs.sha }}
+          path: backend-release
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify build provenance manifests
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ inputs.sha }}
+          BACKEND_DIGEST: ${{ steps.verify-backend.outputs.backend_digest }}
+        run: |
+          set -euo pipefail
+          test -f backend-release/backend-release-manifest.json
+          test -f promoted-dist/frontend-build-manifest.json
+
+          jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
+            --arg digest "$BACKEND_DIGEST" \
+            '(.repository == $repository) and (.source_sha == $sha) and (.backend_digest == $digest) and (.backend_image | contains("@" + $digest))' \
+            backend-release/backend-release-manifest.json >/dev/null
+
+          jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
+            '.repository == $repository and .source_sha == $sha and (.frontend_digest | test("^sha256:[a-f0-9]{64}$"))' \
+            promoted-dist/frontend-build-manifest.json >/dev/null
+
+          RECORDED_FRONTEND_DIGEST=$(jq -r '.frontend_digest' promoted-dist/frontend-build-manifest.json)
+          ACTUAL_FRONTEND_DIGEST=$(find promoted-dist -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          test "$RECORDED_FRONTEND_DIGEST" = "sha256:$ACTUAL_FRONTEND_DIGEST"
+          echo "Build provenance manifests verified for $SHA"
+
       - name: Verify immutable frontend artifact digest
         id: frontend-digest
         run: |
           set -euo pipefail
           test -f promoted-dist/index.html
-          DIGEST=$(find promoted-dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          DIGEST=$(find promoted-dist -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
           [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || exit 1
           echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
 
