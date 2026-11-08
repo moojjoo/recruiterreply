@@ -1,7 +1,23 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const reconcile = require('../reconcile-dev-issues.cjs');
-const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, findVerifiedDeploymentForIssue, requiredChecks} = reconcile;
+const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, findVerifiedDeploymentForIssue, createAuthenticatedClient, requiredChecks} = reconcile;
+
+test('Project write client is authenticated separately from the read client', () => {
+  class FakeClient { constructor(options) { this.options = options; } }
+  const readGithub = {constructor: FakeClient};
+  const writeGithub = createAuthenticatedClient(readGithub, 'project-write-token');
+  assert.notEqual(writeGithub, readGithub);
+  assert.deepEqual(writeGithub.options, {auth: 'project-write-token'});
+  assert.equal(createAuthenticatedClient(readGithub, ''), readGithub);
+});
+
+test('acceptance workflow keeps Actions reads on the default token', () => {
+  const workflow = require('fs').readFileSync(require('path').join(__dirname, '../../workflows/reconcile-dev-acceptance.yml'), 'utf8');
+  assert.match(workflow, /github-token:\s*\$\{\{ github\.token \}\}/);
+  assert.match(workflow, /createAuthenticatedClient\(github, process\.env\.PROJECTS_WRITE_TOKEN\)/);
+  assert.match(workflow, /reconcile\(\{github, writeGithub, context, core\}\)/);
+});
 
 test('only explicit Dev-Completes markers qualify', () => {
   assert.deepEqual(linkedIssues('Refs #12\nCloses #13\nDev-Completes: #14\nDev-Completes: #14\nDev-Completes: #15'), [14, 15]);
@@ -32,14 +48,47 @@ test('all required checks must pass on the exact PR head SHA', () => {
 test('acceptance-label retry resolves the matching verified Dev deployment', async () => {
   const pulls = Symbol('pulls');
   const runs = Symbol('runs');
-  const pr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: 'Dev-Completes: #558'};
+  const pr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #558'};
   const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: pr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
   const github = {
-    rest: {pulls: {list: pulls}, actions: {listWorkflowRunsForRepo: runs}},
-    paginate: async endpoint => endpoint === pulls ? [pr] : [run]
+    rest: {
+      pulls: {list: pulls},
+      actions: {listWorkflowRuns: async params => {
+        assert.equal(params.workflow_id, 'build.yml');
+        assert.equal(params.head_sha, pr.merge_commit_sha);
+        return {data: {workflow_runs: [run]}};
+      }}
+    },
+    paginate: async endpoint => {
+      if (endpoint === pulls) return [pr];
+      throw new Error('Unexpected pagination endpoint');
+    }
   };
   const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
   assert.deepEqual(deployment, {pr, sha: run.head_sha, runUrl: run.html_url});
+});
+
+test('acceptance-label retry skips incomplete newer PRs and finds an eligible linked PR', async () => {
+  const pulls = Symbol('pulls');
+  const completePr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #558'};
+  const incompletePr = {...completePr, number: 560, merge_commit_sha: 'd'.repeat(40), body: 'Dev-Completes: #558'};
+  const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: completePr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
+  const github = {
+    rest: {
+      pulls: {list: pulls},
+      actions: {listWorkflowRuns: async params => {
+        assert.equal(params.workflow_id, 'build.yml');
+        assert.equal(params.head_sha, completePr.merge_commit_sha);
+        return {data: {workflow_runs: [run]}};
+      }}
+    },
+    paginate: async endpoint => {
+      if (endpoint === pulls) return [incompletePr, completePr];
+      throw new Error('Unexpected pagination endpoint');
+    }
+  };
+  const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
+  assert.equal(deployment.pr.number, completePr.number);
 });
 
 function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true, approvalLabel = true} = {}) {

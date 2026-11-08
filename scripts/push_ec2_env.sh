@@ -71,6 +71,8 @@ cat >"$tmp_json" <<EOF
     "if ! command -v docker >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker; fi",
     "if [ \"${TARGET_SERVICE}\" = \"backend-dev\" ]; then IMAGE_VAR=BACKEND_IMAGE_DEV; elif [ \"${TARGET_SERVICE}\" = \"backend-test\" ]; then IMAGE_VAR=BACKEND_IMAGE_TEST; else IMAGE_VAR=BACKEND_IMAGE_PROD; fi",
     "TARGET_IMAGE=\$(grep \"^\${IMAGE_VAR}=\" .env | cut -d= -f2- || true)",
+    "if [ ! -x ${DEPLOY_PATH}/scripts/recruiterreply-host-preflight.sh ]; then echo Missing host preflight script; exit 1; fi",
+    "sudo ${DEPLOY_PATH}/scripts/recruiterreply-host-preflight.sh \$(case \"${TARGET_SERVICE}\" in backend-dev) echo dev;; backend-test) echo test;; backend-prod) echo prod;; *) exit 1;; esac) ${DEPLOY_PATH} ${DEPLOY_PATH}/infra/aws/docker-compose.multi-env.yml",
     "sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d postgres",
     "if [ -n \"\$TARGET_IMAGE\" ] && sudo docker image inspect \"\$TARGET_IMAGE\" >/dev/null 2>&1; then sudo docker compose --env-file .env -f infra/aws/docker-compose.multi-env.yml up -d ${TARGET_SERVICE}; else echo \"Skipping ${TARGET_SERVICE}: image '\$TARGET_IMAGE' not present locally. Run deploy workflow to load/pull image.\"; fi"
   ]

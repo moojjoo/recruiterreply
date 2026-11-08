@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { Navbar } from "./Navbar";
 
 interface MainLayoutProps {
@@ -26,23 +27,27 @@ const Footer: React.FC = () => {
     <footer className="bg-gray-50 border-t border-gray-200 py-8 mt-12">
       <div className="container text-center text-sm text-gray-600">
         <p>&copy; 2026 RecruiterReply. All rights reserved.</p>
-        <a href="/policy" className="inline-block mt-2 text-primary-800 hover:underline">
+        <Link to="/policy" className="inline-block mt-2 text-primary-800 hover:underline">
           Privacy Policy
-        </a>
+        </Link>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/cookies" className="text-primary-800 hover:underline">Cookie Policy</a>
+        <Link to="/cookies" className="text-primary-800 hover:underline">Cookie Policy</Link>
         <span className="mx-2 text-gray-400">|</span>
         <button type="button" className="text-primary-800 hover:underline" onClick={() => window.dispatchEvent(new Event("rr-open-cookie-settings"))}>Cookie Settings</button>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/terms" className="text-primary-800 hover:underline">
+        <Link to="/terms" className="text-primary-800 hover:underline">
           Terms and Conditions
-        </a>
+        </Link>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/guides/how-to-reply-to-a-recruiter" className="text-primary-800 hover:underline">Recruiter reply guide</a>
+        <Link to="/guides/how-to-reply-to-a-recruiter" className="text-primary-800 hover:underline">Recruiter reply guide</Link>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/guides/compare-job-offers" className="text-primary-800 hover:underline">Compare offers</a>
+        <Link to="/guides/compare-job-offers" className="text-primary-800 hover:underline">Compare offers</Link>
         <span className="mx-2 text-gray-400">|</span>
-        <a href="/guides/salary-negotiation-email" className="text-primary-800 hover:underline">Salary negotiation</a>
+        <Link to="/guides/salary-negotiation-email" className="text-primary-800 hover:underline">Salary negotiation</Link>
+        <span className="mx-2 text-gray-400">|</span>
+        <Link to="/#why-recruiterreply" className="text-primary-800 hover:underline">Why RecruiterReply</Link>
+        <span className="mx-2 text-gray-400">|</span>
+        <Link to="#top" className="text-primary-800 hover:underline">Back to top</Link>
       </div>
     </footer>
   );

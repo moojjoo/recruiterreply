@@ -19,17 +19,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout trusted default branch
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
           persist-credentials: false
       - name: Reconcile the verified Dev deployment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
           DEV_DEPLOYMENT_VERIFIED: 'true'
         with:
-          github-token: ${{ secrets.PROJECTS_WRITE_TOKEN || github.token }}
+          github-token: ${{ github.token }}
           script: |
             const reconcile = require('./.github/scripts/reconcile-dev-issues.cjs');
-            await reconcile({github, context, core});
+            const writeGithub = reconcile.createAuthenticatedClient(github, process.env.PROJECTS_WRITE_TOKEN);
+            await reconcile({github, writeGithub, context, core});

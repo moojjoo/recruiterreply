@@ -29,8 +29,6 @@ const dependabotVersionPattern = /v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?/;
 const dependabotEcosystems = new Map([
   ['npm_and_yarn', /^frontend\/(?:package(?:-lock)?\.json|npm-shrinkwrap\.json)$/],
   ['nuget', /^backend\/.*\.(?:csproj|props|targets|lock\.json)$/],
-  ['github_actions', /^\.github\/workflows\/[^/]+\.ya?ml$/],
-  ['terraform', /^infra\/aws\/terraform\/.*\.(?:tf|tfvars|lock\.hcl)$/],
 ]);
 
 function parseDependabotVersions(text) {
@@ -54,7 +52,7 @@ function classifyDependabotUpdate(pr, changedFiles = []) {
   }
   if (pr.draft) return {...result, reason: 'Dependabot PR is draft'};
 
-  const branchMatch = /^dependabot\/(nuget|npm_and_yarn|github_actions|terraform)\//.exec(pr.head.ref || '');
+  const branchMatch = /^dependabot\/(nuget|npm_and_yarn)\//.exec(pr.head.ref || '');
   if (!branchMatch) return {...result, reason: 'Unsupported Dependabot ecosystem or branch'};
   const ecosystem = branchMatch[1];
   const metadata = `${pr.title || ''}\n${pr.body || ''}`;
@@ -84,7 +82,7 @@ function classifyDependabotUpdate(pr, changedFiles = []) {
   })) {
     return {...result, ecosystem, updateType, reason: 'Changed files exceed the ecosystem dependency allowlist'};
   }
-  return {eligible: true, ecosystem, updateType, reason: 'Trusted patch/minor Dependabot update'};
+  return {eligible: true, ecosystem, updateType, reason: 'Trusted npm/NuGet patch or minor Dependabot update'};
 }
 
 function requiredCodeQLChecks(changedFiles = []) {
@@ -182,7 +180,6 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
   if (pr.draft) reasons.push('PR is draft');
   const risk = classifyRisk(changedFiles);
   if (risk === 'high' && !trustedDependabotUpdate && !ownerAuthorization) reasons.push('High/unknown risk change requires owner execute-dev authorization for the current SHA');
-  if (!trustedDependabotUpdate && !(pr.labels || []).some(x => (typeof x === 'string' ? x : x.name) === 'automation-ready')) reasons.push('Missing automation-ready label');
   const body = pr.body || '';
   const evidence = body.match(/^## Implementation evidence\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/mi);
   if (!trustedDependabotUpdate && (!evidence || !/\b(commit|test|verification|workflow)\b/i.test(evidence[1]) || evidence[1].trim().length < 20)) reasons.push('Missing substantive implementation evidence');

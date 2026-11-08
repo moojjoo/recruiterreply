@@ -7,86 +7,25 @@ resource "aws_iam_openid_connect_provider" "github" {
   thumbprint_list = ["22ff89586561fc2d52f77491e9f1eff1b80be33e"]
 }
 
-data "aws_iam_policy_document" "github_actions_assume_role" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
-    principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringLike"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
-    }
-  }
-}
-
 resource "aws_iam_role" "github_actions" {
-  name                 = "${var.name_prefix}-github-actions-role"
-  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role.json
-  max_session_duration = 3600
-}
-
-# Superseded by the RecruiterReplyGithubActionsDeployPolicy statement below; kept intact on
-# import to avoid an unreviewed permissions change. Candidate for removal in a follow-up once
-# confirmed unused.
-resource "aws_iam_role_policy" "github_actions_deploy_dev_inline" {
-  name = "github-actions-deploy-dev-inline"
-  role = aws_iam_role.github_actions.id
-
-  policy = jsonencode({
+  name = "${var.name_prefix}-github-actions-role"
+  assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "EcrAuth"
-        Effect   = "Allow"
-        Action   = "ecr:GetAuthorizationToken"
-        Resource = "*"
-      },
-      {
-        Sid    = "EcrPushPullBackend"
-        Effect = "Allow"
-        Action = [
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:BatchGetImage",
-          "ecr:CompleteLayerUpload",
-          "ecr:DescribeRepositories",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:InitiateLayerUpload",
-          "ecr:ListImages",
-          "ecr:PutImage",
-          "ecr:UploadLayerPart",
-        ]
-        Resource = "arn:aws:ecr:us-east-1:${var.aws_account_id}:repository/recruiterreply-backend"
-      },
-      {
-        Sid      = "S3ListFrontendBucket"
-        Effect   = "Allow"
-        Action   = "s3:ListBucket"
-        Resource = "arn:aws:s3:::recruiterreply-dev-frontend-${var.aws_account_id}"
-      },
-      {
-        Sid    = "S3SyncFrontendObjects"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-        ]
-        Resource = "arn:aws:s3:::recruiterreply-dev-frontend-${var.aws_account_id}/*"
-      },
-    ]
+    Statement = [{
+      Effect = "Allow"
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Principal = {
+        Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"
+      }
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = [for environment in var.github_environments : "repo:${var.github_repo}:environment:${environment}"]
+        }
+      }
+    }]
   })
+  max_session_duration = 3600
 }
 
 resource "aws_iam_role_policy" "github_actions_deploy" {
@@ -97,71 +36,84 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "EcrPushPull"
-        Effect = "Allow"
-        Action = [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload",
-          "ecr:PutImage",
-          "ecr:BatchGetImage",
-          "ecr:DescribeRepositories",
-          "ecr:DescribeImages",
-          "ecr:CreateRepository",
-        ]
+        Sid      = "EcrPushPull"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
-        Sid    = "FrontendArtifactsAndCdn"
+        Sid    = "EcrPushPullBackend"
         Effect = "Allow"
         Action = [
-          "s3:ListBucket",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:DescribeRepositories",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:ListImages",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart",
+        ]
+        Resource = "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/recruiterreply-backend"
+      },
+      {
+        Sid    = "EcrRetentionBackend"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchDeleteImage",
+          "ecr:DescribeImages",
+        ]
+        Resource = "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/recruiterreply-backend"
+      },
+      {
+        Sid      = "FrontendBucketListing"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [for bucket in values(var.frontend_bucket_names) : "arn:aws:s3:::${bucket}"]
+      },
+      {
+        Sid    = "FrontendObjectSync"
+        Effect = "Allow"
+        Action = [
+          "s3:DeleteObject",
           "s3:GetObject",
           "s3:PutObject",
-          "s3:DeleteObject",
-          "cloudfront:GetDistribution",
+        ]
+        Resource = [for bucket in values(var.frontend_bucket_names) : "arn:aws:s3:::${bucket}/*"]
+      },
+      {
+        Sid    = "CloudFrontDeployment"
+        Effect = "Allow"
+        Action = [
           "cloudfront:CreateInvalidation",
+          "cloudfront:GetDistribution",
+          "cloudfront:GetInvalidation",
         ]
-        Resource = "*"
+        Resource = [for distribution_id in values(var.cloudfront_distribution_ids) : "arn:aws:cloudfront::${var.aws_account_id}:distribution/${distribution_id}"]
       },
       {
-        Sid      = "CloudFrontGetInvalidation"
-        Effect   = "Allow"
-        Action   = ["cloudfront:GetInvalidation"]
-        Resource = "arn:aws:cloudfront::${var.aws_account_id}:distribution/*"
-      },
-      {
-        Sid    = "SsmEc2Deploy"
+        Sid    = "SsmSendCommandToRecruiterReplyHost"
         Effect = "Allow"
-        Action = [
-          "ssm:SendCommand",
-          "ssm:GetCommandInvocation",
-          "ssm:ListCommandInvocations",
-          "ssm:DescribeInstanceInformation",
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${var.aws_account_id}:instance/${var.ec2_instance_id}",
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
         ]
-        Resource = "*"
       },
       {
-        Sid      = "EksAccess"
+        Sid      = "SsmCommandStatus"
         Effect   = "Allow"
-        Action   = ["eks:DescribeCluster"]
+        Action   = ["ssm:GetCommandInvocation"]
+        # GetCommandInvocation does not support command-level resource scoping;
+        # AWS evaluates this API against the account-level SSM resource ARN.
         Resource = "*"
       },
       {
-        Sid    = "ReadSecretsManager"
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret",
-        ]
-        Resource = "*"
-      },
-      {
-        Sid      = "PassRole"
+        Sid      = "SsmHostDiscovery"
         Effect   = "Allow"
-        Action   = "iam:PassRole"
+        Action   = ["ssm:DescribeInstanceInformation", "ssm:ListCommandInvocations"]
         Resource = "*"
       },
     ]

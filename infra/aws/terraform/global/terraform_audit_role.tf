@@ -34,7 +34,13 @@ locals {
     "us-east-1_bMcYQWq8U",
     "us-east-1_OUaaIhK6h",
   ]
-  terraform_audit_private_environments = ["dev", "test"]
+  terraform_audit_private_environments     = ["dev", "test"]
+  terraform_audit_bff_session_environments = ["dev", "test", "prod"]
+}
+
+data "aws_kms_alias" "terraform_audit_bff_session" {
+  for_each = toset(local.terraform_audit_bff_session_environments)
+  name     = "alias/${var.app_name}-${each.key}-bff-sessions"
 }
 
 data "aws_iam_policy_document" "terraform_audit" {
@@ -57,6 +63,7 @@ data "aws_iam_policy_document" "terraform_audit" {
     actions = [
       "cognito-idp:DescribeUserPool",
       "cognito-idp:DescribeUserPoolClient",
+      "cognito-idp:DescribeResourceServer",
       "cognito-idp:GetUserPoolMfaConfig",
       "cognito-idp:ListTagsForResource",
     ]
@@ -75,6 +82,55 @@ data "aws_iam_policy_document" "terraform_audit" {
       variable = "aws:RequestedRegion"
       values   = [var.aws_region]
     }
+  }
+  # ListTagsForCertificate supports certificate resource scoping, so grant it
+  # only for certificates managed by the frontend module.
+  dynamic "statement" {
+    for_each = length(module.frontend.certificate_arns) > 0 ? [1] : []
+    content {
+      sid       = "ReadManagedCertificateTags"
+      actions   = ["acm:ListTagsForCertificate"]
+      resources = module.frontend.certificate_arns
+    }
+  }
+  # GetKeyPolicy supports key resource scoping. Resolve existing aliases rather
+  # than depending on the optional creation module, which is disabled in the
+  # reviewed global inputs while these deployed keys remain in state.
+  statement {
+    sid = "ReadManagedBffSessionKeyPolicies"
+    actions = [
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListResourceTags",
+    ]
+    resources = [for alias in data.aws_kms_alias.terraform_audit_bff_session : alias.target_key_arn]
+  }
+  # DescribeLogGroups is an account-level list operation and does not support
+  # resource-level permissions. Restrict its wildcard grant to the configured region.
+  statement {
+    sid       = "ListRegionalCloudWatchLogGroups"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
+  }
+  statement {
+    sid     = "ReadManagedCloudWatchLogGroupTags"
+    actions = ["logs:ListTagsForResource"]
+    resources = [
+      for env in ["dev", "test", "prod"] :
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/recruiterreply/${env}/backend"
+    ]
+  }
+  # DescribeMetricFilters is a list operation over log groups. AWS requires
+  # the regional log-group resource form for this provider read.
+  statement {
+    sid       = "ReadRegionalCloudWatchMetricFilters"
+    actions   = ["logs:DescribeMetricFilters"]
+    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*"]
   }
   statement {
     sid = "ReadPrivateEdgeFunctionMetadata"
@@ -100,6 +156,50 @@ data "aws_iam_policy_document" "terraform_audit" {
     resources = [
       for env in local.terraform_audit_private_environments :
       "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${env}-oauth-replay"
+    ]
+  }
+  statement {
+    sid = "ReadBffSessionTableMetadata"
+    actions = [
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:ListTagsOfResource",
+    ]
+    resources = [
+      for env in local.terraform_audit_bff_session_environments :
+      "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${env}-bff-sessions"
+    ]
+  }
+  statement {
+    sid = "ReadBudgetMetadata"
+    actions = [
+      "budgets:ListTagsForResource",
+      "budgets:ViewBudget",
+    ]
+    resources = [
+      "arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/${aws_budgets_budget.cloudwatch_observability.name}",
+    ]
+  }
+  statement {
+    sid = "ReadFrontendAndBackupBucketTags"
+    actions = [
+      "s3:ListTagsForResource",
+    ]
+    resources = concat(
+      values(module.frontend.bucket_arns),
+      [aws_s3_bucket.postgres_backups.arn],
+    )
+  }
+  statement {
+    sid = "ReadObservabilityAlarmMetadata"
+    actions = [
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:ListTagsForResource",
+    ]
+    resources = [
+      for env in ["dev", "test", "prod"] :
+      "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:${var.app_name}-${env}-unhandled-errors"
     ]
   }
   statement {

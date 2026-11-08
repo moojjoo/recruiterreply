@@ -13,11 +13,23 @@ test('trusted workflow accepts owner commands and serializes asynchronous reeval
   const untrustedBranch = workflow.match(/if \(context\.payload\.comment\?\.user\?\.login !== ownerLogin\) \{([\s\S]*?)\} else if/);
   assert.ok(untrustedBranch && !/\bcontinue\b/.test(untrustedBranch[1]));
   assert.match(workflow, /group: execute-pr-automation-.*pull_request\.number.*workflow_run\.pull_requests\[0\]\.number.*event\.issue\.number/);
-  assert.match(workflow, /targetNumber = context\.payload\.pull_request\?\.number \|\|\s*context\.payload\.workflow_run\?\.pull_requests\?\.\[0\]\?\.number/);
-  assert.match(workflow, /const prs = targetNumber[\s\S]*: \[\];/);
+  assert.match(workflow, /resolveTargetPullRequestNumber\(context\.eventName, context\.payload\)/);
+  assert.match(workflow, /throw new Error\(message\)/);
   assert.doesNotMatch(workflow, /workflow_dispatch:/);
   assert.match(workflow, /pull_request_review:[\s\S]*types: \[submitted, dismissed\]/);
   assert.doesNotMatch(workflow, /pull_request_review_thread:/);
+});
+
+
+
+test('Dependabot eligibility is evaluated before unmanaged PRs are skipped', () => {
+  const classify = workflow.indexOf('policy.classifyDependabotUpdate');
+  const skip = workflow.indexOf('!labeled && !managed && !trustedDependabotUpdate');
+  assert.ok(classify >= 0 && skip > classify);
+  assert.doesNotMatch(workflow, /if \(!labeled && !managed\) continue/);
+  assert.match(workflow, /if \(!labeled && managed\)[\s\S]*labels: \['execute-dev'\]/);
+  assert.match(workflow, /Dependabot eligibility=/);
+  assert.match(workflow, /readiness=/);
 });
 
 test('high-risk authorization is invalidated on changed heads or revocation', () => {
@@ -34,4 +46,12 @@ test('high-risk merge is atomically bound to the re-read head SHA', () => {
   const enable = workflow.indexOf('enablePullRequestAutoMerge');
   assert.ok(cleanup >= 0 && readiness > cleanup && reread > readiness && expectedShaMerge > reread && enable > expectedShaMerge);
   assert.match(workflow, /if \(risk === 'high'\)[\s\S]*github\.rest\.pulls\.merge/);
+});
+
+test('publishes a stable native readiness check without automation-ready labels', () => {
+  assert.match(workflow, /checks: write/);
+  assert.match(workflow, /PR readiness policy/);
+  assert.match(workflow, /checks\.create/);
+  assert.match(workflow, /checks\.update/);
+  assert.doesNotMatch(workflow, /automation-ready/);
 });

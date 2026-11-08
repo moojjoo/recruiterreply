@@ -25,4 +25,27 @@ The reusable Dev/Test/Prod promotion workflow resolves successful GitHub deploym
 4. Preserve and extend race, changed-tag, missing-image, multi-tag, Docker-error, stopped-container, and dry-run regression coverage.
 5. Capture `df -h /` and `docker system df` before and after cleanup; alert when root utilization approaches 80%.
 
-The script does not touch PostgreSQL images, volumes, containers, backups, or unrelated repositories. Docker may preserve layers shared by retained images. This **local EC2** retention policy is separate from AWS ECR lifecycle policies.
+The script does not touch PostgreSQL images, volumes, containers, backups, or unrelated repositories. Docker may preserve layers shared by retained images. This **local EC2** retention policy is separate from the deployment-aware ECR retention operation below.
+
+## Amazon ECR retention
+
+The manually dispatched **ECR Backend Image Retention** workflow inventories only the
+`recruiterreply-backend` ECR repository. It reuses the successful GitHub deployment histories
+above, protects the five newest immutable SHA builds, protects untagged images for seven days,
+and protects any image carrying a non-SHA tag. The workflow has no schedule and defaults to a
+preview. It does not contact the EC2 host or remove local Docker images.
+
+An apply requires both `DELETE-ECR-DEV10-TEST5-PROD4` and the exact 64-character plan digest
+from a fresh preview. The planner binds that digest to the complete paginated ECR inventory,
+tags, timestamps, sizes, deployment policy, protected reasons, and candidates. Any intervening
+push or tag change changes the digest and stops the apply. Tagged candidates are removed by
+their expected tags; old untagged candidates are removed by digest. AWS-reported partial
+failures fail the workflow.
+
+The Terraform GitHub Actions role grants `ecr:BatchDeleteImage` and `ecr:DescribeImages` only
+on the `recruiterreply-backend` repository. Apply that reviewed IAM change
+through the separately approved Terraform process before the first ECR apply; this feature does
+not run Terraform or delete images during normal Dev deployment.
+
+The preview's `candidate_reported_bytes` is the sum of ECR image manifest sizes, not a billing
+forecast. ECR deduplicates shared layers, so billed storage savings can be materially lower.

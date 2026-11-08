@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Determine required languages
         id: select
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             // Main always gets a full scan. Fail closed to both on uncertainty.
@@ -75,17 +75,17 @@ jobs:
         language: ${{ fromJSON(needs.changes.outputs.languages) }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Record analysis start
         run: echo "CODEQL_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: none
 
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           category: "/language:${{ matrix.language }}"
 

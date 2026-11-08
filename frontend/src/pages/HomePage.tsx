@@ -46,12 +46,12 @@ export const HomePage: React.FC = () => {
                 responses, and compare offers like a pro. Powered by
                 cutting-edge AI.
               </p>
-              <a
-                href="/register"
+              <Link
+                to="/register"
                 className="btn-primary text-lg"
               >
                 Get Started Now
-              </a>
+              </Link>
             </div>
           </div>
         </section>
@@ -82,7 +82,7 @@ export const HomePage: React.FC = () => {
         </section>
 
         {/* Features Highlight */}
-        <section className="container py-16 md:py-24">
+        <section id="why-recruiterreply" className="hash-target container py-16 md:py-24">
           <div className="max-w-4xl mx-auto">
             <h2 className="section-title text-center mb-12">
               Why Choose RecruiterReply?
@@ -137,12 +137,12 @@ export const HomePage: React.FC = () => {
                 Make recruiter conversations clearer and negotiate your next
                 offer with confidence.
               </p>
-              <a
-                href="/register"
+              <Link
+                to="/register"
                 className="btn-primary text-lg"
               >
                 Start Your Free Analysis
-              </a>
+              </Link>
             </div>
           </div>
         </section>

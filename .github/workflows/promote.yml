@@ -9,6 +9,17 @@ on:
       sha:
         required: true
         type: string
+      migration_authorization:
+        required: false
+        type: string
+      skip_database_migration:
+        required: false
+        default: false
+        type: boolean
+      force_redeploy:
+        required: false
+        default: false
+        type: boolean
       build_run_id:
         required: false
         type: string
@@ -39,16 +50,19 @@ jobs:
   promote:
     runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
+    concurrency:
+      group: recruiterreply-shared-host-promotions
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repository for deployment verification scripts
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Resolve environment image retention policy
         id: retention-policy
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           CURRENT_ENVIRONMENT: ${{ inputs.environment }}
           CURRENT_SHA: ${{ inputs.sha }}
@@ -69,57 +83,17 @@ jobs:
           ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           ROLE_ARN_FROM_VARS: ${{ vars.AWS_ROLE_ARN }}
           ROLE_ARN_FROM_SECRETS: ${{ secrets.AWS_ROLE_ARN }}
-          KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
-          KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          KEY_ALIAS_FROM_VARS: ${{ vars.AWS_ACCESS_KEY }}
-          KEY_ALIAS_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY }}
-          SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
-          SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SECRET_ALIAS_FROM_VARS: ${{ vars.AWS_SECRET_KEY }}
-          SECRET_ALIAS_FROM_SECRETS: ${{ secrets.AWS_SECRET_KEY }}
-          TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
-          TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           set -euo pipefail
 
           ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-${ROLE_ARN_FROM_VARS:-${ROLE_ARN_FROM_SECRETS:-}}}}"
-          AWS_ACCESS_KEY_ID_VAL="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-${KEY_ALIAS_FROM_VARS:-${KEY_ALIAS_FROM_SECRETS:-}}}}"
-          AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-${SECRET_ALIAS_FROM_SECRETS:-${SECRET_ALIAS_FROM_VARS:-}}}}"
-          AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
-
-          if [[ -n "$ROLE_TO_ASSUME" ]]; then
-            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
-            echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -n "$AWS_ACCESS_KEY_ID_VAL" && -n "$AWS_SECRET_ACCESS_KEY_VAL" ]]; then
-            echo "auth_mode=keys" >> "$GITHUB_OUTPUT"
-            echo "aws_access_key_id=$AWS_ACCESS_KEY_ID_VAL" >> "$GITHUB_OUTPUT"
-            echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY_VAL" >> "$GITHUB_OUTPUT"
-            if [[ -n "$AWS_SESSION_TOKEN_VAL" ]]; then
-              echo "aws_session_token=$AWS_SESSION_TOKEN_VAL" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
-          fi
-
-          echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY."
-          exit 1
+          [[ -n "$ROLE_TO_ASSUME" ]] || { echo "::error::Missing AWS_ROLE_TO_ASSUME or AWS_ROLE_ARN"; exit 1; }
+          echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC role)
-        if: steps.aws-auth.outputs.auth_mode == 'oidc'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
         with:
           role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Configure AWS credentials (access keys)
-        if: steps.aws-auth.outputs.auth_mode == 'keys'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
-          aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
-          aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Resolve environment identifiers
@@ -158,7 +132,8 @@ jobs:
 
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME:$SHA" >> "$GITHUB_OUTPUT"
+          echo "backend_digest=$ECR_RESULT" >> "$GITHUB_OUTPUT"
+          echo "backend_image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME@$ECR_RESULT" >> "$GITHUB_OUTPUT"
 
       - name: Resolve immutable backend image digest
         id: image-digest
@@ -247,23 +222,102 @@ jobs:
           echo "run_id=$SELECTED_RUN" >> "$GITHUB_OUTPUT"
 
       - name: Download frontend artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: frontend-dist-${{ inputs.sha }}
           path: promoted-dist
           run-id: ${{ steps.build-run.outputs.run_id }}
           github-token: ${{ github.token }}
 
+      - name: Download backend build manifest
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: backend-release-${{ inputs.sha }}
+          path: backend-release
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download verified release manifest
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-manifest-${{ inputs.sha }}
+          path: release-manifest
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify build provenance manifests
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ inputs.sha }}
+          BACKEND_DIGEST: ${{ steps.verify-backend.outputs.backend_digest }}
+        run: |
+          set -euo pipefail
+          test -f backend-release/backend-release-manifest.json
+          test -f promoted-dist/frontend-build-manifest.json
+          test -f release-manifest/release-manifest.json
+
+          jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
+            --arg digest "$BACKEND_DIGEST" \
+            --arg run_id "${{ steps.build-run.outputs.run_id }}" \
+            '(.schema_version == 1) and (.repository == $repository) and (.source_sha == $sha) and (.build_run_id == ($run_id|tonumber)) and (.backend_digest == $digest) and (.backend_image | contains("@" + $digest)) and (.status == "built")' \
+            release-manifest/release-manifest.json >/dev/null
+
+          jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
+            --arg digest "$BACKEND_DIGEST" \
+            '(.repository == $repository) and (.source_sha == $sha) and (.backend_digest == $digest) and (.backend_image | contains("@" + $digest))' \
+            backend-release/backend-release-manifest.json >/dev/null
+
+          jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
+            '.repository == $repository and .source_sha == $sha and (.frontend_digest | test("^sha256:[a-f0-9]{64}$"))' \
+            promoted-dist/frontend-build-manifest.json >/dev/null
+
+          RECORDED_FRONTEND_DIGEST=$(jq -r '.frontend_digest' promoted-dist/frontend-build-manifest.json)
+          ACTUAL_FRONTEND_DIGEST=$(cd promoted-dist && find . -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          test "$RECORDED_FRONTEND_DIGEST" = "sha256:$ACTUAL_FRONTEND_DIGEST"
+          echo "Build provenance manifests verified for $SHA"
+
+      - name: Detect already deployed release
+        id: idempotency
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SHA: ${{ inputs.sha }}
+          FORCE_REDEPLOY: ${{ inputs.force_redeploy }}
+        with:
+          script: |
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              ...context.repo, environment: process.env.ENVIRONMENT, per_page: 100
+            });
+            if (process.env.FORCE_REDEPLOY === 'true') {
+              core.setOutput('already_deployed', 'false');
+              core.notice(`Forced application redeployment requested for ${process.env.SHA}`);
+              return;
+            }
+            for (const deployment of deployments) {
+              if (deployment.sha !== process.env.SHA) continue;
+              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
+                ...context.repo, deployment_id: deployment.id, per_page: 1
+              });
+              if (statuses[0]?.state === 'success') {
+                core.setOutput('already_deployed', 'true');
+                core.notice(`Release ${process.env.SHA} is already successfully deployed to ${process.env.ENVIRONMENT}; skipping redeployment.`);
+                return;
+              }
+            }
+            core.setOutput('already_deployed', 'false');
+
       - name: Verify immutable frontend artifact digest
+        if: steps.idempotency.outputs.already_deployed != 'true'
         id: frontend-digest
         run: |
           set -euo pipefail
           test -f promoted-dist/index.html
-          DIGEST=$(find promoted-dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          DIGEST=$(cd promoted-dist && find . -type f ! -name frontend-build-manifest.json -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
           [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || exit 1
           echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Apply environment configuration
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           ROBOTS_TXT: ${{ inputs.robots_txt }}
@@ -277,6 +331,7 @@ jobs:
           printf '%s\n' "$ROBOTS_TXT" > promoted-dist/robots.txt
 
       - name: Validate frontend deployment configuration
+        if: steps.idempotency.outputs.already_deployed != 'true'
         id: frontend-config
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
@@ -346,25 +401,56 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout promoted commit
-        uses: actions/checkout@v7
+        if: steps.idempotency.outputs.already_deployed != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.sha }}
           # Separate path so checkout doesn't wipe promoted-dist/ in the workspace root.
           path: src
 
       - name: Setup .NET SDK (for migrations)
-        if: inputs.environment == 'prod'
-        uses: actions/setup-dotnet@v6
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true'
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
 
+      - name: Detect pending Production migrations
+        id: pending-migrations
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true'
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
+        run: |
+          set -euo pipefail
+          SOURCE_MIGRATIONS=$(find src/backend/Migrations -maxdepth 1 -type f -name '*.cs' ! -name '*Designer.cs' ! -name '*ModelSnapshot.cs' -printf '%f\n' | sed 's/\.cs$//' | sort)
+          test -n "$SOURCE_MIGRATIONS"
+          COMMANDS_JSON=$(jq -n '{commands:["set -eu", "PGU=$(sudo grep ^POSTGRES_SUPERUSER= /home/ubuntu/recruiterreply/.env | cut -d= -f2); PGU=${PGU:-postgres}", "sudo docker exec recruiterreply-postgres psql -U $PGU -d recruiterreply_prod -Atc '\''SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY 1'\''"]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$EC2_INSTANCE_ID" --document-name AWS-RunShellScript --comment "Read Production migration history for $GITHUB_SHA" --parameters "$COMMANDS_JSON" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID"
+          INVOCATION_JSON=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID")
+          test "$(jq -r '.Status' <<< "$INVOCATION_JSON")" = Success
+          APPLIED_MIGRATIONS=$(jq -r '.StandardOutputContent' <<< "$INVOCATION_JSON")
+          PENDING=$(comm -23 <(printf '%s\n' "$SOURCE_MIGRATIONS") <(printf '%s\n' "$APPLIED_MIGRATIONS" | sed '/^$/d' | sort))
+          if [[ -n "$PENDING" ]]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+            echo 'Pending Production migrations:'
+            printf '%s\n' "$PENDING"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+            echo 'No pending Production migrations; database mutation will be skipped.'
+          fi
+
       - name: Generate idempotent migration script
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true'
         working-directory: src/backend
         env:
+          PENDING_MIGRATIONS: ${{ steps.pending-migrations.outputs.pending }}
           ConnectionStrings__DefaultConnection: Host=localhost;Database=recruiterreply
         run: |
           set -euo pipefail
+          if [[ "$PENDING_MIGRATIONS" != true ]]; then
+            : > "$RUNNER_TEMP/migrate.sql"
+            exit 0
+          fi
           dotnet tool restore
           dotnet restore
           dotnet ef migrations script --idempotent -o "$RUNNER_TEMP/migrate.sql"
@@ -373,12 +459,27 @@ jobs:
           echo "Migrations in script:"
           grep -o "MigrationId\" = '[^']*'" "$RUNNER_TEMP/migrate.sql" | sort -u | sed "s/.*= //"
 
+      - name: Review and authorize Production migration
+        id: migration-review
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
+        env:
+          SHA: ${{ inputs.sha }}
+          AUTHORIZATION: ${{ inputs.migration_authorization }}
+        working-directory: src
+        run: |
+          set -euo pipefail
+          DIGEST="sha256:$(sha256sum "$RUNNER_TEMP/migrate.sql" | cut -d' ' -f1)"
+          node .github/scripts/migration-gate.cjs "$RUNNER_TEMP/migrate.sql" "$SHA" "$DIGEST" "$AUTHORIZATION" > "$RUNNER_TEMP/migration-review.json"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/migration-review.json" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Back up database and apply migrations on EC2
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           ENVIRONMENT: ${{ inputs.environment }}
           SHA: ${{ inputs.sha }}
+          MIGRATION_DIGEST: ${{ steps.migration-review.outputs.digest }}
         run: |
           set -euo pipefail
 
@@ -389,12 +490,13 @@ jobs:
             --arg db "recruiterreply_$ENVIRONMENT" \
             --arg sha "$SHA" \
             --arg sql_b64 "$SQL_B64" \
+            --arg migration_digest "$MIGRATION_DIGEST" \
             '{
               commands: [
                 "set -eu",
                 "cd \($deploy_path)",
                 "PGU=$(sudo grep ^POSTGRES_SUPERUSER= .env | cut -d= -f2); PGU=${PGU:-postgres}",
-                "BACKUP=/home/ubuntu/\($db)_backup_$(date +%Y%m%d%H%M%S)_\($sha[0:7]).dump",
+                "BACKUP=/home/ubuntu/\($db)_backup_$(date +%Y%m%d%H%M%S)_\($sha[0:7])_\($migration_digest[7:14]).dump",
                 "sudo docker exec recruiterreply-postgres pg_dump -U $PGU -Fc \($db) > $BACKUP",
                 "test -s $BACKUP || { echo Backup is empty: $BACKUP; exit 1; }",
                 "ls -lh $BACKUP",
@@ -427,6 +529,7 @@ jobs:
           fi
 
       - name: Upload frontend to S3
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
@@ -454,6 +557,7 @@ jobs:
           echo "S3 object verification passed: count=$OBJECT_COUNT assets=${{ steps.frontend-config.outputs.asset_count }}"
 
       - name: Verify frontend deployment files
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
         run: |
@@ -470,6 +574,7 @@ jobs:
           echo "Frontend deployment files verified in S3: index.html, config.js, robots.txt"
 
       - name: Preflight CloudFront invalidation permissions (non-mutating)
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
@@ -495,6 +600,7 @@ jobs:
           fi
 
       - name: Invalidate CloudFront cache
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
@@ -516,7 +622,7 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Verify private Dev frontend deployment
-        if: inputs.environment == 'dev'
+        if: inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
@@ -535,7 +641,7 @@ jobs:
           DEV_SMOKE_OIDC_TOKEN="$token" node .github/scripts/private-dev-smoke.cjs --authenticated
 
       - name: Verify private Test frontend deployment
-        if: inputs.environment == 'test'
+        if: inputs.environment == 'test' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
@@ -547,7 +653,7 @@ jobs:
           node .github/scripts/private-test-smoke.cjs
 
       - name: Smoke test deployed frontend
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           FRONTEND_URL: ${{ inputs.frontend_url }}
         run: |
@@ -570,6 +676,7 @@ jobs:
           echo "Frontend smoke test passed: $FRONTEND_URL"
 
       - name: Deploy backend container on EC2
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           BACKEND_IMAGE: ${{ steps.verify-backend.outputs.backend_image }}
@@ -641,6 +748,8 @@ jobs:
                 "echo \($ecr_password) | sudo docker login --username AWS --password-stdin \($ecr_registry)",
                 "if sudo grep -q \"^\($image_var)=\" .env; then sudo sed -i \"s|^\($image_var)=.*|\($image_var)=\($backend_image)|\" .env; else echo \"\($image_var)=\($backend_image)\" | sudo tee -a .env; fi",
                 "sudo grep \"^\($image_var)=\" .env",
+                "if [ ! -x \"$DEPLOY_SOURCE_PATH/scripts/recruiterreply-host-preflight.sh\" ]; then echo Missing host preflight script for promoted SHA \($sha); exit 1; fi",
+                "sudo \"$DEPLOY_SOURCE_PATH/scripts/recruiterreply-host-preflight.sh\" \($environment) \($deploy_path) \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\"",
                 "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" pull \($backend_service) || { echo docker compose pull failed; exit 1; }",
                 "sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" up -d \($backend_service) || { echo docker compose up failed; sudo docker compose --env-file \($deploy_path)/.env -f \"$DEPLOY_SOURCE_PATH/infra/aws/docker-compose.multi-env.yml\" ps; exit 1; }",
                 "HEALTH_PORT=$(case \($environment) in dev) echo 5001;; test) echo 5002;; prod) echo 5003;; *) exit 1;; esac)",
@@ -705,6 +814,7 @@ jobs:
           fi
 
       - name: Preview backend image retention
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           BACKEND_IMAGE: ${{ steps.verify-backend.outputs.backend_image }}
@@ -764,7 +874,7 @@ jobs:
           fi
 
       - name: Smoke test live frontend
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
@@ -851,7 +961,7 @@ jobs:
           done <<< "$EXPECTED_ASSETS"
 
       - name: Verify live environment SEO indexing safeguards
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           SEO_ENVIRONMENT: ${{ inputs.environment }}
         run: |
@@ -859,6 +969,7 @@ jobs:
           node .github/scripts/environment-seo-http-smoke.cjs
 
       - name: Record verified release manifest
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           SHA: ${{ inputs.sha }}
           ENVIRONMENT: ${{ inputs.environment }}
@@ -870,17 +981,19 @@ jobs:
             --arg backend_digest "$BACKEND_DIGEST" --arg frontend_digest "$FRONTEND_DIGEST" \
             --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
+            '{schema_version:1,environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
           cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload immutable release manifest
-        uses: actions/upload-artifact@v7
+        if: steps.idempotency.outputs.already_deployed != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-manifest-${{ inputs.environment }}-${{ inputs.sha }}
           path: release-manifest.json
           retention-days: 90
 
       - name: Deployment summary
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           FRONTEND_URL: ${{ inputs.frontend_url }}
           API_URL: ${{ inputs.api_url }}

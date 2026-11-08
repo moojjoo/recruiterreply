@@ -9,14 +9,16 @@ on:
 
 permissions:
   actions: read
+  attestations: write
   id-token: write
   contents: read
   deployments: read
 
-# Serialize main builds so overlapping dev deploys don't race on the shared EC2 host.
+# Collapse duplicate/superseded feature-branch and PR verification while keeping
+# main serialized so shared-EC2 Dev deployments cannot race.
 concurrency:
-  group: build-main-${{ github.ref }}
-  cancel-in-progress: false
+  group: build-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   BACKEND_IMAGE_NAME: recruiterreply-backend
@@ -27,7 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Test private Dev deployment verification
         run: node --test .github/scripts/tests/private-dev-smoke.test.cjs
@@ -44,6 +46,9 @@ jobs:
       - name: Verify static SEO assets
         run: node .github/scripts/seo-static-check.cjs
 
+      - name: Test production search-engine submission safety
+        run: node --test .github/scripts/tests/search-engine-submission.test.mjs
+
       - name: Test issue reconciliation audit
         run: node --test .github/scripts/tests/issue-reconciliation-report.test.cjs
 
@@ -53,7 +58,10 @@ jobs:
       - name: Test Docker image retention safety
         run: |
           python3 -m unittest discover -s tests -p 'test_docker_image_prune.py'
+          python3 -m unittest discover -s tests -p 'test_shared_ec2_safety.py'
           node --test .github/scripts/tests/resolve-image-retention-policy.test.cjs
+          node --test .github/scripts/tests/ecr-image-retention.test.cjs
+          node --test .github/scripts/tests/ecr-image-retention-workflow.test.cjs
 
       - name: Test Terraform audit maintenance policy
         run: node --test .github/scripts/tests/terraform-readonly-audit.test.cjs
@@ -61,8 +69,14 @@ jobs:
       - name: Test promotion command contract
         run: node --test .github/scripts/tests/promotion-contract.test.cjs
 
+      - name: Test migration approval gate
+        run: node --test .github/scripts/tests/migration-gate.test.cjs
+
+      - name: Test release provenance contract
+        run: node --test .github/scripts/tests/release-provenance.test.cjs
+
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -77,7 +91,7 @@ jobs:
         run: npm run lint
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
 
@@ -97,7 +111,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Resolve AWS auth inputs
         id: aws-auth
@@ -106,60 +120,21 @@ jobs:
           ROLE_FROM_SECRETS: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           ROLE_ARN_FROM_VARS: ${{ vars.AWS_ROLE_ARN }}
           ROLE_ARN_FROM_SECRETS: ${{ secrets.AWS_ROLE_ARN }}
-          KEY_FROM_VARS: ${{ vars.AWS_ACCESS_KEY_ID }}
-          KEY_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          KEY_ALIAS_FROM_VARS: ${{ vars.AWS_ACCESS_KEY }}
-          KEY_ALIAS_FROM_SECRETS: ${{ secrets.AWS_ACCESS_KEY }}
-          SECRET_FROM_VARS: ${{ vars.AWS_SECRET_ACCESS_KEY }}
-          SECRET_FROM_SECRETS: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SECRET_ALIAS_FROM_VARS: ${{ vars.AWS_SECRET_KEY }}
-          SECRET_ALIAS_FROM_SECRETS: ${{ secrets.AWS_SECRET_KEY }}
-          TOKEN_FROM_VARS: ${{ vars.AWS_SESSION_TOKEN }}
-          TOKEN_FROM_SECRETS: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           set -euo pipefail
 
           ROLE_TO_ASSUME="${ROLE_FROM_VARS:-${ROLE_FROM_SECRETS:-${ROLE_ARN_FROM_VARS:-${ROLE_ARN_FROM_SECRETS:-}}}}"
-          AWS_ACCESS_KEY_ID_VAL="${KEY_FROM_VARS:-${KEY_FROM_SECRETS:-${KEY_ALIAS_FROM_VARS:-${KEY_ALIAS_FROM_SECRETS:-}}}}"
-          AWS_SECRET_ACCESS_KEY_VAL="${SECRET_FROM_SECRETS:-${SECRET_FROM_VARS:-${SECRET_ALIAS_FROM_SECRETS:-${SECRET_ALIAS_FROM_VARS:-}}}}"
-          AWS_SESSION_TOKEN_VAL="${TOKEN_FROM_SECRETS:-${TOKEN_FROM_VARS:-}}"
-
-          if [[ -n "$ROLE_TO_ASSUME" ]]; then
-            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
-            echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -n "$AWS_ACCESS_KEY_ID_VAL" && -n "$AWS_SECRET_ACCESS_KEY_VAL" ]]; then
-            echo "auth_mode=keys" >> "$GITHUB_OUTPUT"
-            echo "aws_access_key_id=$AWS_ACCESS_KEY_ID_VAL" >> "$GITHUB_OUTPUT"
-            echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY_VAL" >> "$GITHUB_OUTPUT"
-            if [[ -n "$AWS_SESSION_TOKEN_VAL" ]]; then
-              echo "aws_session_token=$AWS_SESSION_TOKEN_VAL" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
-          fi
-
-          echo "::error::Missing AWS auth config. Provide either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY."
-          exit 1
+          [[ -n "$ROLE_TO_ASSUME" ]] || { echo "::error::Missing AWS_ROLE_TO_ASSUME or AWS_ROLE_ARN"; exit 1; }
+          echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC role)
-        if: steps.aws-auth.outputs.auth_mode == 'oidc'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
         with:
           role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure AWS credentials (access keys)
-        if: steps.aws-auth.outputs.auth_mode == 'keys'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-access-key-id: ${{ steps.aws-auth.outputs.aws_access_key_id }}
-          aws-secret-access-key: ${{ steps.aws-auth.outputs.aws_secret_access_key }}
-          aws-session-token: ${{ steps.aws-auth.outputs.aws_session_token }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Build and push backend image
+        id: backend-image
         run: |
           set -euo pipefail
           LOCAL_BACKEND_IMAGE="$BACKEND_IMAGE_NAME:${GITHUB_SHA}"
@@ -187,10 +162,43 @@ jobs:
             echo "::error::ECR read-after-write returned an invalid image digest"
             exit 1
           }
+          echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "repository=$ECR_REGISTRY/$BACKEND_IMAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "image=$ECR_REGISTRY/$BACKEND_IMAGE_NAME@$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
           echo "Verified pushed image: account=$ACCOUNT_ID region=$AWS_REGION repository=$BACKEND_IMAGE_NAME sha=$GITHUB_SHA digest=$IMAGE_DIGEST"
 
+      - name: Attest backend image provenance
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3
+        with:
+          subject-name: ${{ steps.backend-image.outputs.repository }}
+          subject-digest: ${{ steps.backend-image.outputs.digest }}
+          push-to-registry: false
+
+      - name: Record backend build manifest
+        env:
+          BACKEND_DIGEST: ${{ steps.backend-image.outputs.digest }}
+          BACKEND_IMAGE: ${{ steps.backend-image.outputs.image }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg backend_digest "$BACKEND_DIGEST" \
+            '{repository:$repository,workflow:$workflow,source_sha:$source_sha,backend_image:$backend_image,backend_digest:$backend_digest}' \
+            > backend-release-manifest.json
+
+      - name: Upload backend build manifest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: backend-release-${{ github.sha }}
+          path: backend-release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -230,11 +238,55 @@ jobs:
 
           echo "Frontend artifact check passed: assets=$ASSET_COUNT"
 
+          FRONTEND_DIGEST=$(cd frontend/dist && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          [[ "$FRONTEND_DIGEST" =~ ^[a-f0-9]{64}$ ]] || {
+            echo "::error::Unable to create deterministic frontend digest"
+            exit 1
+          }
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg digest "sha256:$FRONTEND_DIGEST" \
+            '{repository:$repository,workflow:$workflow,source_sha:$source_sha,frontend_digest:$digest}' \
+            > frontend/dist/frontend-build-manifest.json
+
+      - name: Attest frontend build provenance
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3
+        with:
+          subject-path: frontend/dist
+
       - name: Upload frontend artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: frontend-dist-${{ github.sha }}
           path: frontend/dist
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Record verified release manifest
+        env:
+          BACKEND_DIGEST: ${{ steps.backend-image.outputs.digest }}
+          BACKEND_IMAGE: ${{ steps.backend-image.outputs.image }}
+        run: |
+          set -euo pipefail
+          FRONTEND_DIGEST=$(jq -r '.frontend_digest' frontend/dist/frontend-build-manifest.json)
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg build_run_id "$GITHUB_RUN_ID" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg backend_digest "$BACKEND_DIGEST" \
+            --arg frontend_digest "$FRONTEND_DIGEST" \
+            '{schema_version:1,repository:$repository,workflow:$workflow,source_sha:$source_sha,build_run_id:($build_run_id|tonumber),backend_image:$backend_image,backend_digest:$backend_digest,frontend_digest:$frontend_digest,status:"built"}' \
+            > release-manifest.json
+
+      - name: Upload verified release manifest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-manifest-${{ github.sha }}
+          path: release-manifest.json
           if-no-files-found: error
           retention-days: 90
 
@@ -260,7 +312,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify live Dev private access boundary
         env:
           DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
@@ -299,12 +351,12 @@ jobs:
       checks: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Reconcile completed issues
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PROJECTS_WRITE_TOKEN: ${{ secrets.PROJECTS_WRITE_TOKEN }}
           DEV_DEPLOYMENT_VERIFIED: 'true'
