@@ -19,18 +19,28 @@ for name in matches or ["Unclassified Terraform plan error; inspect securely out
 
 # Extract only AWS IAM action names from explicit authorization-denied messages.
 # Never emit full error lines: they may contain ARNs, resource identifiers, or secrets.
+known_services = {
+    "acm", "cloudfront", "ec2", "ecr", "iam", "kms", "route53",
+    "s3", "secretsmanager", "ssm", "sts", "cognito-idp",
+    "logs", "elasticloadbalancing", "autoscaling", "rds",
+}
+service_aliases = {
+    "cloudwatch logs": "logs",
+    "cognito identity provider": "cognito-idp",
+    "cognito idp": "cognito-idp",
+}
 denied_actions = set()
+action_pattern = re.compile(
+    r"(?i)\\b((?:cloudwatch\\s+logs|cognito(?:[-\\s]+identity)?(?:[-\\s]+provider|[-\\s]+idp)|[a-z][a-z0-9-]*))"
+    r"\\s*:\\s*([A-Za-z][A-Za-z0-9*]*)\\b"
+)
 for line in log.splitlines():
     if not re.search(r"(?i)(accessdenied|unauthorizedoperation|not authorized to perform|access denied)", line):
         continue
-    for action in re.findall(r"\b([a-z][a-z0-9-]*:[A-Z][A-Za-z0-9*]*)\b", line):
-        service, operation = action.split(":", 1)
-        if service in {
-            "acm", "cloudfront", "ec2", "ecr", "iam", "kms", "route53",
-            "s3", "secretsmanager", "ssm", "sts", "cognito-idp",
-            "logs", "elasticloadbalancing", "autoscaling", "rds"
-        } and re.match(r"^[A-Za-z][A-Za-z0-9*]*$", operation):
-            denied_actions.add(action)
+    for service, operation in action_pattern.findall(line):
+        normalized_service = service_aliases.get(re.sub(r"\\s+", " ", service.strip().lower()), service.strip().lower())
+        if normalized_service in known_services:
+            denied_actions.add(f"{normalized_service}:{operation}")
 for action in sorted(denied_actions):
     print("::error::AWS action denied: " + action)
 if "AWS access denied" in matches and not denied_actions:
