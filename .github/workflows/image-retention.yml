@@ -38,7 +38,7 @@ jobs:
     environment: dev
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -60,7 +60,7 @@ jobs:
 
       - name: Resolve successful environment histories
         id: retention-policy
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const resolvePolicy = require('./.github/scripts/resolve-image-retention-policy.cjs');
@@ -81,7 +81,7 @@ jobs:
           echo "role_to_assume=$ROLE_TO_ASSUME" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC role)
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
         with:
           role-to-assume: ${{ steps.aws-auth.outputs.role_to_assume }}
           aws-region: ${{ env.AWS_REGION }}

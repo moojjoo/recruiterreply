@@ -19,8 +19,8 @@ const frontendOutputs = fs.readFileSync(
 
 test('Terraform audit uses Node 24 actions and a deliberate runner pin', () => {
   assert.match(audit, /runs-on:\s*ubuntu-24\.04/);
-  assert.match(audit, /hashicorp\/setup-terraform@v4/);
-  assert.match(audit, /aws-actions\/configure-aws-credentials@v6/);
+  assert.match(audit, /hashicorp\/setup-terraform@[0-9a-f]{40} # v4/);
+  assert.match(audit, /aws-actions\/configure-aws-credentials@[0-9a-f]{40} # v6/);
   assert.doesNotMatch(audit, /hashicorp\/setup-terraform@v3/);
   assert.doesNotMatch(audit, /aws-actions\/configure-aws-credentials@v4/);
 });
@@ -35,7 +35,7 @@ test('read-only OIDC and no-apply safeguards remain intact', () => {
 });
 
 test('Test promotion no longer invokes the Node 20 AWS action', () => {
-  assert.match(promotion, /aws-actions\/configure-aws-credentials@v6/);
+  assert.match(promotion, /aws-actions\/configure-aws-credentials@[0-9a-f]{40} # v6/);
   assert.doesNotMatch(promotion, /aws-actions\/configure-aws-credentials@v4/);
 });
 
