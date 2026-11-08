@@ -53,17 +53,15 @@ test('acceptance-label retry resolves the matching verified Dev deployment', asy
   const github = {
     rest: {
       pulls: {list: pulls},
-      actions: {listWorkflowRunsForRepo: async params => {
-        assert.equal(params.per_page, 100);
-        return {data: {workflow_runs: [
-          {...run, head_sha: 'd'.repeat(40)},
-          run,
-        ]}};
+      actions: {listWorkflowRuns: async params => {
+        assert.equal(params.workflow_id, 'build.yml');
+        assert.equal(params.head_sha, pr.merge_commit_sha);
+        return {data: {workflow_runs: [run]}};
       }}
     },
     paginate: async endpoint => {
       if (endpoint === pulls) return [pr];
-      throw new Error('Deployment lookup must use the bounded first page');
+      throw new Error('Unexpected pagination endpoint');
     }
   };
   const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
@@ -78,7 +76,11 @@ test('acceptance-label retry skips incomplete newer PRs and finds an eligible li
   const github = {
     rest: {
       pulls: {list: pulls},
-      actions: {listWorkflowRunsForRepo: async () => ({data: {workflow_runs: [run]}})}
+      actions: {listWorkflowRuns: async params => {
+        assert.equal(params.workflow_id, 'build.yml');
+        assert.equal(params.head_sha, completePr.merge_commit_sha);
+        return {data: {workflow_runs: [run]}};
+      }}
     },
     paginate: async endpoint => {
       if (endpoint === pulls) return [incompletePr, completePr];
