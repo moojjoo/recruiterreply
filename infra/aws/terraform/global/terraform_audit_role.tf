@@ -110,6 +110,13 @@ data "aws_iam_policy_document" "terraform_audit" {
     }
   }
   statement {
+    sid     = "ReadRegionalCloudWatchLogGroupTags"
+    actions = ["logs:ListTagsForResource"]
+    resources = [
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*",
+    ]
+  }
+  statement {
     sid = "ReadPrivateEdgeFunctionMetadata"
     actions = [
       "lambda:GetFunction",
