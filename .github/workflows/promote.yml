@@ -39,7 +39,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
-  deployments: write
+  deployments: read
 
 env:
   BACKEND_IMAGE_NAME: recruiterreply-backend
@@ -967,33 +967,6 @@ jobs:
         run: |
           set -euo pipefail
           node .github/scripts/environment-seo-http-smoke.cjs
-
-      - name: Record rollback target deployment identity
-        if: inputs.environment == 'prod' && inputs.force_redeploy == true
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          TARGET_SHA: ${{ inputs.sha }}
-          FRONTEND_URL: ${{ inputs.frontend_url }}
-        with:
-          script: |
-            const targetSha = process.env.TARGET_SHA;
-            const environment = 'prod';
-            const {data: deployment} = await github.rest.repos.createDeployment({
-              ...context.repo,
-              ref: targetSha,
-              environment,
-              description: `Application rollback target ${targetSha}`,
-              auto_merge: false,
-              required_contexts: []
-            });
-            await github.rest.repos.createDeploymentStatus({
-              ...context.repo,
-              deployment_id: deployment.id,
-              state: 'success',
-              environment_url: process.env.FRONTEND_URL,
-              description: `Rollback target ${targetSha} passed application health and smoke checks`
-            });
-            core.notice(`Recorded rollback deployment ${deployment.id} for target SHA ${targetSha}`);
 
       - name: Record verified release manifest
         if: steps.idempotency.outputs.already_deployed != 'true'

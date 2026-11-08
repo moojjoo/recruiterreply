@@ -92,8 +92,6 @@ jobs:
   promote:
     needs: [resolve-source, preflight-backend-image]
     uses: ./.github/workflows/promote.yml
-    permissions:
-      deployments: write
     with:
       environment: test
       sha: ${{ needs.resolve-source.outputs.sha }}

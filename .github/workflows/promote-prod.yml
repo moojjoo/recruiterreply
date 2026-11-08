@@ -62,8 +62,6 @@ jobs:
   promote:
     needs: resolve-source
     uses: ./.github/workflows/promote.yml
-    permissions:
-      deployments: write
     with:
       environment: prod
       sha: ${{ needs.resolve-source.outputs.sha }}

@@ -33,21 +33,14 @@ test('rollback keeps the shared-host serialization and production environment', 
 });
 
 test('rollback records the actual target SHA as the Production deployment identity', () => {
-  assert.match(promote, /deployments: write/);
   assert.match(rollback, /deployments: write/);
-  assert.match(promote, /Record rollback target deployment identity/);
-  assert.match(promote, /inputs\.environment == 'prod' && inputs\.force_redeploy == true/);
-  assert.match(promote, /ref: targetSha/);
-  assert.match(promote, /createDeploymentStatus/);
+  assert.match(rollback, /record-target-deployment:/);
+  assert.match(rollback, /Record rollback target deployment identity/);
+  assert.match(rollback, /ref: targetSha/);
+  assert.match(rollback, /createDeploymentStatus/);
 });
 
 test('rollback callers grant deployment-write only to reusable deployment jobs', () => {
-  for (const workflow of [
-    readFileSync(join(root, 'workflows/build.yml'), 'utf8'),
-    readFileSync(join(root, 'workflows/promote-test.yml'), 'utf8'),
-    readFileSync(join(root, 'workflows/promote-prod.yml'), 'utf8'),
-  ]) {
-    assert.match(workflow, /uses: \.\/\.github\/workflows\/promote\.yml[\s\S]*?permissions:\n\s+deployments: write/);
-  }
-  assert.match(rollback, /uses: \.\/\.github\/workflows\/promote\.yml[\s\S]*?permissions:\n\s+deployments: write/);
+  assert.doesNotMatch(promote, /deployments: write/);
+  assert.match(rollback, /record-target-deployment:[\s\S]*?deployments: write/);
 });
