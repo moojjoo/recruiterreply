@@ -120,6 +120,15 @@ public class BillingServiceTests
         var checkoutUrl = await sut.UpgradeToRecruiterProAsync(user.Id);
 
         Assert.Equal("https://checkout.stripe.com/pay/cs_recovery", checkoutUrl);
+        var sessionRequest = stripeClient.Invocations
+            .Where(invocation => invocation.Method.Name == nameof(IStripeClient.RequestAsync))
+            .Select(invocation => invocation.Arguments[2])
+            .OfType<Stripe.Checkout.SessionCreateOptions>()
+            .Single();
+        Assert.True(sessionRequest.AutomaticTax?.Enabled);
+        Assert.Equal("required", sessionRequest.BillingAddressCollection);
+        Assert.Equal("auto", sessionRequest.CustomerUpdate?.Address);
+        Assert.Equal("always", sessionRequest.PaymentMethodCollection);
         stripeClient.Verify(
             c => c.RequestAsync<Subscription>(
                 It.IsAny<HttpMethod>(),

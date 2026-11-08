@@ -82,6 +82,7 @@ public class BillingService : IBillingService
             Items = [new SubscriptionItemOptions { Id = item.Id, Price = GetPriceId(PlanTiers.RecruiterPro, interval) }],
             ProrationBehavior = "always_invoice",
             CancelAtPeriodEnd = false,
+            AutomaticTax = new SubscriptionAutomaticTaxOptions { Enabled = true },
         }, cancellationToken: cancellationToken);
 
         return null;
@@ -103,6 +104,9 @@ public class BillingService : IBillingService
         {
             Mode = "subscription",
             PaymentMethodCollection = "always",
+            AutomaticTax = new Stripe.Checkout.SessionAutomaticTaxOptions { Enabled = true },
+            BillingAddressCollection = "required",
+            CustomerUpdate = new Stripe.Checkout.SessionCustomerUpdateOptions { Address = "auto" },
             Customer = user.StripeCustomerId,
             ClientReferenceId = user.Id.ToString(),
             LineItems =
