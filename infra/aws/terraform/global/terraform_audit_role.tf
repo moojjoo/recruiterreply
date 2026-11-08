@@ -164,6 +164,7 @@ data "aws_iam_policy_document" "terraform_audit" {
       "dynamodb:DescribeContinuousBackups",
       "dynamodb:DescribeTable",
       "dynamodb:DescribeTimeToLive",
+      "dynamodb:ListTagsOfResource",
     ]
     resources = [
       for env in local.terraform_audit_bff_session_environments :
