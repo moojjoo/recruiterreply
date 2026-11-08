@@ -92,7 +92,7 @@ data "aws_iam_policy_document" "terraform_audit" {
   dynamic "statement" {
     for_each = length(module.bff_sessions) > 0 ? [1] : []
     content {
-      sid       = "ReadManagedBffSessionKeyPolicies"
+      sid = "ReadManagedBffSessionKeyPolicies"
       actions = [
         "kms:GetKeyPolicy",
         "kms:GetKeyRotationStatus",
