@@ -16,7 +16,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
-  deployments: read
+  deployments: write
 
 jobs:
   validate-target:
