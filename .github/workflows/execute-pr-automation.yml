@@ -22,7 +22,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  checks: read
+  checks: write
 
 jobs:
   execute:
@@ -63,6 +63,18 @@ jobs:
               const previous = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(statusMarker));
               if (previous) await github.rest.issues.updateComment({owner, repo, comment_id:previous.id, body});
               else await github.rest.issues.createComment({owner, repo, issue_number:number, body});
+            }
+            async function publishPolicyCheck(pr, result) {
+              const checkName = 'PR readiness policy';
+              const summary = result.eligible
+                ? `Trusted readiness policy passed for current head \`${pr.head.sha}\` (${result.risk} risk).`
+                : result.reasons.map(reason => `- ${reason}`).join('\n');
+              const {data} = await github.rest.checks.listForRef({owner, repo, ref:pr.head.sha, check_name:checkName, per_page:100});
+              const existing = data.check_runs.find(check => check.name === checkName);
+              const input = {owner, repo, name:checkName, head_sha:pr.head.sha, status:'completed',
+                conclusion:result.eligible ? 'success' : 'failure', output:{title:checkName, summary}};
+              if (existing) await github.rest.checks.update({owner, repo, check_run_id:existing.id, ...input});
+              else await github.rest.checks.create(input);
             }
             for (const pr of prs) {
               if (pr.base.ref !== 'main') continue;
@@ -134,12 +146,6 @@ jobs:
               const risk = policy.classifyRisk(changedFiles);
               // A label must never lower the risk tier or bypass required checks.
               // High-risk labeling additionally requires current-SHA owner authorization.
-              const hasEvidence = /^## Implementation evidence\\s*\\n[\\s\\S]*?\\b(?:commit|test|verification|workflow)\\b/im.test(full.body || '');
-              const hasCompleteCriteria = /^## Acceptance criteria\\s*\\n(?:[\\s\\S]*?\\n)?\\s*[-*]\\s*\\[[xX]\\]/im.test(full.body || '') && !/^\\s*[-*]\\s*\\[ \\]/m.test(full.body || '');
-              if ((trustedDependabotUpdate || ((risk !== 'high' || authorization.authorized) && hasEvidence && hasCompleteCriteria)) && !full.labels.some(l => l.name === 'automation-ready')) {
-                await github.rest.issues.addLabels({owner, repo, issue_number: full.number, labels: ['automation-ready']});
-                full.labels.push({name: 'automation-ready'});
-              }
               // High-risk PRs must never retain a background auto-merge request:
               // it could outlive authorization or merge after a later blocker clears.
               // Their only merge path is the expected-SHA protected merge below.
@@ -160,6 +166,7 @@ jobs:
                 changedFiles, ownerAuthorization:authorization.authorized,
                 threads:item.reviewThreads.nodes, dependenciesMerged, trustedDependabotUpdate
               });
+              await publishPolicyCheck(full, result);
               core.notice(`PR #${full.number}: risk=${result.risk}; readiness=${result.eligible ? 'eligible' : 'blocked'}`);
               if (!result.eligible) {
                 const remediation = require('./.github/scripts/ci-remediation-comment.cjs');

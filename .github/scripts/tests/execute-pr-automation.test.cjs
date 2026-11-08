@@ -47,3 +47,11 @@ test('high-risk merge is atomically bound to the re-read head SHA', () => {
   assert.ok(cleanup >= 0 && readiness > cleanup && reread > readiness && expectedShaMerge > reread && enable > expectedShaMerge);
   assert.match(workflow, /if \(risk === 'high'\)[\s\S]*github\.rest\.pulls\.merge/);
 });
+
+test('publishes a stable native readiness check without automation-ready labels', () => {
+  assert.match(workflow, /checks: write/);
+  assert.match(workflow, /PR readiness policy/);
+  assert.match(workflow, /checks\.create/);
+  assert.match(workflow, /checks\.update/);
+  assert.doesNotMatch(workflow, /automation-ready/);
+});
