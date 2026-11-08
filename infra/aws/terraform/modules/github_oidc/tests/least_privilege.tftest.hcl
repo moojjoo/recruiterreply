@@ -87,7 +87,18 @@ run "least_privilege_deployment_policy" {
   }
 
   assert {
-    condition     = !strcontains(aws_iam_role_policy.github_actions_deploy.policy, "Resource\":\"*\"\n")
-    error_message = "Deployment resource statements must not use wildcard resources."
+    condition = alltrue([
+      for statement in jsondecode(aws_iam_role_policy.github_actions_deploy.policy).Statement :
+      statement.Resource == "*" ? contains(["EcrPushPull", "SsmCommandStatus", "SsmHostDiscovery"], statement.Sid) : true
+    ])
+    error_message = "Only AWS-required ECR auth and SSM read/discovery statements may use wildcard resources."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.github_actions_deploy.policy).Statement :
+      statement.Sid == "SsmCommandStatus" && statement.Resource == "*" && contains(statement.Action, "ssm:GetCommandInvocation")
+    ])
+    error_message = "GetCommandInvocation must use the AWS-required wildcard resource scope."
   }
 }

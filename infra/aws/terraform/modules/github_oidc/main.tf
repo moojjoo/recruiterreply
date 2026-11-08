@@ -106,7 +106,9 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Sid      = "SsmCommandStatus"
         Effect   = "Allow"
         Action   = ["ssm:GetCommandInvocation"]
-        Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:command/*"
+        # GetCommandInvocation does not support command-level resource scoping;
+        # AWS evaluates this API against the account-level SSM resource ARN.
+        Resource = "*"
       },
       {
         Sid      = "SsmHostDiscovery"
