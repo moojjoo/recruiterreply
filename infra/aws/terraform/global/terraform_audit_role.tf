@@ -93,7 +93,10 @@ data "aws_iam_policy_document" "terraform_audit" {
     for_each = length(module.bff_sessions) > 0 ? [1] : []
     content {
       sid       = "ReadManagedBffSessionKeyPolicies"
-      actions   = ["kms:GetKeyPolicy"]
+      actions = [
+        "kms:GetKeyPolicy",
+        "kms:GetKeyRotationStatus",
+      ]
       resources = values(module.bff_sessions[0].kms_key_arns)
     }
   }
