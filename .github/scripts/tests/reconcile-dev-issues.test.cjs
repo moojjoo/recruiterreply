@@ -1,7 +1,23 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const reconcile = require('../reconcile-dev-issues.cjs');
-const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, findVerifiedDeploymentForIssue, requiredChecks} = reconcile;
+const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, findVerifiedDeploymentForIssue, createAuthenticatedClient, requiredChecks} = reconcile;
+
+test('Project write client is authenticated separately from the read client', () => {
+  class FakeClient { constructor(options) { this.options = options; } }
+  const readGithub = {constructor: FakeClient};
+  const writeGithub = createAuthenticatedClient(readGithub, 'project-write-token');
+  assert.notEqual(writeGithub, readGithub);
+  assert.deepEqual(writeGithub.options, {auth: 'project-write-token'});
+  assert.equal(createAuthenticatedClient(readGithub, ''), readGithub);
+});
+
+test('acceptance workflow keeps Actions reads on the default token', () => {
+  const workflow = require('fs').readFileSync(require('path').join(__dirname, '../../workflows/reconcile-dev-acceptance.yml'), 'utf8');
+  assert.match(workflow, /github-token:\s*\$\{\{ github\.token \}\}/);
+  assert.match(workflow, /createAuthenticatedClient\(github, process\.env\.PROJECTS_WRITE_TOKEN\)/);
+  assert.match(workflow, /reconcile\(\{github, writeGithub, context, core\}\)/);
+});
 
 test('only explicit Dev-Completes markers qualify', () => {
   assert.deepEqual(linkedIssues('Refs #12\nCloses #13\nDev-Completes: #14\nDev-Completes: #14\nDev-Completes: #15'), [14, 15]);
