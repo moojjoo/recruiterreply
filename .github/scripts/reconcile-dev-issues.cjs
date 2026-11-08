@@ -23,15 +23,18 @@ async function findVerifiedDeploymentForIssue({github, owner, repo, issueNumber}
   const prs = await github.paginate(github.rest.pulls.list, {
     owner, repo, state: 'closed', base: 'main', sort: 'updated', direction: 'desc', per_page: 100
   });
-  const pr = prs.find(candidate => candidate.merged_at && linkedIssues(candidate.body || '').includes(issueNumber));
-  if (!pr?.merge_commit_sha) return null;
   const {data: workflowRuns} = await github.rest.actions.listWorkflowRunsForRepo({
     owner, repo, per_page: 100
   });
   const runs = workflowRuns.workflow_runs || [];
-  const run = runs.find(candidate => candidate.name === 'Build and Deploy to Dev' &&
-    candidate.head_sha === pr.merge_commit_sha && candidate.conclusion === 'success');
-  return run ? {pr, sha: run.head_sha, runUrl: run.html_url} : null;
+  for (const pr of prs) {
+    if (!pr.merged_at || !pr.merge_commit_sha || !linkedIssues(pr.body || '').includes(issueNumber) ||
+        !acceptanceChecklistComplete(pr.body || '')) continue;
+    const run = runs.find(candidate => candidate.name === 'Build and Deploy to Dev' &&
+      candidate.head_sha === pr.merge_commit_sha && candidate.conclusion === 'success');
+    if (run) return {pr, sha: run.head_sha, runUrl: run.html_url};
+  }
+  return null;
 }
 function createAuthenticatedClient(github, token) {
   if (!token) return github;
