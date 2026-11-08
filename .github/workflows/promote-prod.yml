@@ -57,9 +57,6 @@ jobs:
 
   promote:
     needs: resolve-source
-    concurrency:
-      group: promote-prod
-      cancel-in-progress: false
     uses: ./.github/workflows/promote.yml
     with:
       environment: prod
