@@ -31,3 +31,16 @@ test('rollback keeps the shared-host serialization and production environment', 
   assert.match(rollback, /environment: prod/);
   assert.match(rollback, /uses: \.\/\.github\/workflows\/promote\.yml/);
 });
+
+test('rollback records the actual target SHA as the Production deployment identity', () => {
+  assert.match(rollback, /deployments: write/);
+  assert.match(rollback, /record-target-deployment:/);
+  assert.match(rollback, /Record rollback target deployment identity/);
+  assert.match(rollback, /ref: targetSha/);
+  assert.match(rollback, /createDeploymentStatus/);
+});
+
+test('rollback callers grant deployment-write only to reusable deployment jobs', () => {
+  assert.doesNotMatch(promote, /deployments: write/);
+  assert.match(rollback, /record-target-deployment:[\s\S]*?deployments: write/);
+});

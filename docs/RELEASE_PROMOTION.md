@@ -4,7 +4,7 @@
 - Dev: implement and merge an issue PR; the existing Build (Dev) workflow deploys the main SHA and automatically reconciles eligible `Dev-Completes` issues after deployment and smoke verification. The optional `dev-acceptance-verified` label triggers a retry for an already verified deployment.
 - Test: GitHub Actions > Promote to Test > Run workflow. This resolves the latest successful Dev deployment SHA.
 - Prod: GitHub Actions > Promote to Prod > Run workflow. This resolves the latest successful Test deployment SHA.
-- Application rollback: GitHub Actions > Roll Back Production Application > Run workflow. Supply a prior successful Production SHA and type `ROLLBACK:<target_sha>` exactly. This restores application artifacts only; it does not run EF migrations or restore the database. After validation, run the same workflow with the current release SHA to restore the forward release.
+- Application rollback: GitHub Actions > Roll Back Production Application > Run workflow. Supply a prior successful Production SHA and type `ROLLBACK:<target_sha>` exactly. This restores application artifacts only; it does not run EF migrations or restore the database. The rollback records an explicit Production deployment status for the target SHA so the subsequent restore guard sees the actual deployed release. After validation, run the same workflow with the current release SHA to restore the forward release.
 - From a terminal: `gh workflow run promote-test.yml --repo moojjoo/recruiterreply --ref main` and, after independent Test approval, `gh workflow run promote-prod.yml --repo moojjoo/recruiterreply --ref main`.
 
 ## Evidence

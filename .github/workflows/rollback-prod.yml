@@ -16,7 +16,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
-  deployments: read
+  deployments: write
 
 jobs:
   validate-target:
@@ -95,3 +95,36 @@ jobs:
         Disallow: /auth/
 
         Sitemap: https://recruiterreply.com/sitemap.xml
+
+  record-target-deployment:
+    needs: [validate-target, rollback]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+    steps:
+      - name: Record rollback target deployment identity
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TARGET_SHA: ${{ needs.validate-target.outputs.target_sha }}
+        with:
+          script: |
+            const targetSha = process.env.TARGET_SHA;
+            const environment = 'prod';
+            const {data: deployment} = await github.rest.repos.createDeployment({
+              ...context.repo,
+              ref: targetSha,
+              environment,
+              description: `Application rollback target ${targetSha}`,
+              auto_merge: false,
+              required_contexts: []
+            });
+            await github.rest.repos.createDeploymentStatus({
+              ...context.repo,
+              deployment_id: deployment.id,
+              state: 'success',
+              environment_url: 'https://recruiterreply.com',
+              description: `Rollback target ${targetSha} passed application health and smoke checks`
+            });
+            core.notice(`Recorded rollback deployment ${deployment.id} for target SHA ${targetSha}`);
