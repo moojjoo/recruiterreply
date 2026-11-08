@@ -1,0 +1,97 @@
+name: Roll Back Production Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Full SHA of a prior successful Production application release
+        required: true
+        type: string
+      confirmation:
+        description: Type ROLLBACK:<target_sha> to confirm this application-only rollback
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+  deployments: read
+
+jobs:
+  validate-target:
+    runs-on: ubuntu-24.04
+    outputs:
+      target_sha: ${{ steps.validate.outputs.target_sha }}
+    steps:
+      - name: Validate prior Production release target
+        id: validate
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        with:
+          script: |
+            const targetSha = process.env.TARGET_SHA;
+            const confirmation = process.env.CONFIRMATION;
+            if (!/^[a-f0-9]{40}$/.test(targetSha)) {
+              core.setFailed('target_sha must be a full lowercase commit SHA');
+              return;
+            }
+            if (confirmation !== `ROLLBACK:${targetSha}`) {
+              core.setFailed('confirmation must exactly equal ROLLBACK:<target_sha>');
+              return;
+            }
+
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              ...context.repo, environment: 'prod', per_page: 100
+            });
+            let latestSuccessfulSha = null;
+            let targetDeployment = null;
+            for (const deployment of deployments) {
+              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
+                ...context.repo, deployment_id: deployment.id, per_page: 1
+              });
+              if (statuses[0]?.state !== 'success') continue;
+              if (latestSuccessfulSha === null) latestSuccessfulSha = deployment.sha;
+              if (deployment.sha === targetSha && targetDeployment === null) {
+                targetDeployment = deployment;
+              }
+            }
+
+            if (!targetDeployment) {
+              core.setFailed(`Rollback target ${targetSha} has no successful Production deployment`);
+              return;
+            }
+            if (latestSuccessfulSha === targetSha) {
+              core.setFailed(`Rollback target ${targetSha} is already the latest successful Production release`);
+              return;
+            }
+
+            core.notice(`Validated prior Production rollback target ${targetSha} from deployment ${targetDeployment.id}; latest successful SHA is ${latestSuccessfulSha}`);
+            core.setOutput('target_sha', targetSha);
+
+  rollback:
+    needs: validate-target
+    uses: ./.github/workflows/promote.yml
+    with:
+      environment: prod
+      sha: ${{ needs.validate-target.outputs.target_sha }}
+      skip_database_migration: true
+      force_redeploy: true
+      api_base_url: https://api.recruiterreply.com/api
+      frontend_url: https://recruiterreply.com
+      api_url: https://api.recruiterreply.com
+      robots_txt: |
+        User-agent: *
+        Allow: /
+        Disallow: /dashboard
+        Disallow: /analyze
+        Disallow: /reply
+        Disallow: /compare
+        Disallow: /profile
+        Disallow: /opportunities
+        Disallow: /gmail/
+        Disallow: /auth/
+
+        Sitemap: https://recruiterreply.com/sitemap.xml
