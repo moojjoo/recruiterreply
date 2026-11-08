@@ -48,7 +48,7 @@ test('all required checks must pass on the exact PR head SHA', () => {
 test('acceptance-label retry resolves the matching verified Dev deployment', async () => {
   const pulls = Symbol('pulls');
   const runs = Symbol('runs');
-  const pr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: 'Dev-Completes: #558'};
+  const pr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #558'};
   const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: pr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
   const github = {
     rest: {
@@ -68,6 +68,25 @@ test('acceptance-label retry resolves the matching verified Dev deployment', asy
   };
   const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
   assert.deepEqual(deployment, {pr, sha: run.head_sha, runUrl: run.html_url});
+});
+
+test('acceptance-label retry skips incomplete newer PRs and finds an eligible linked PR', async () => {
+  const pulls = Symbol('pulls');
+  const completePr = {number: 559, merged_at: 'now', base: {ref: 'main'}, merge_commit_sha: 'c'.repeat(40), body: '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #558'};
+  const incompletePr = {...completePr, number: 560, merge_commit_sha: 'd'.repeat(40), body: 'Dev-Completes: #558'};
+  const run = {id: 7, name: 'Build and Deploy to Dev', head_sha: completePr.merge_commit_sha, conclusion: 'success', html_url: 'https://example/run'};
+  const github = {
+    rest: {
+      pulls: {list: pulls},
+      actions: {listWorkflowRunsForRepo: async () => ({data: {workflow_runs: [run]}})}
+    },
+    paginate: async endpoint => {
+      if (endpoint === pulls) return [incompletePr, completePr];
+      throw new Error('Unexpected pagination endpoint');
+    }
+  };
+  const deployment = await findVerifiedDeploymentForIssue({github, owner: 'o', repo: 'r', issueNumber: 558});
+  assert.equal(deployment.pr.number, completePr.number);
 });
 
 function harness({body = '## Acceptance criteria\n- [x] Complete\n\nDev-Completes: #320', projectItem = true, approvalLabel = true} = {}) {
