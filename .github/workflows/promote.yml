@@ -39,6 +39,9 @@ jobs:
   promote:
     runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
+    concurrency:
+      group: recruiterreply-shared-host-promotions
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repository for deployment verification scripts
@@ -223,6 +226,14 @@ jobs:
           run-id: ${{ steps.build-run.outputs.run_id }}
           github-token: ${{ github.token }}
 
+      - name: Download verified release manifest
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-manifest-${{ inputs.sha }}
+          path: release-manifest
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
       - name: Verify build provenance manifests
         env:
           REPOSITORY: ${{ github.repository }}
@@ -232,6 +243,13 @@ jobs:
           set -euo pipefail
           test -f backend-release/backend-release-manifest.json
           test -f promoted-dist/frontend-build-manifest.json
+          test -f release-manifest/release-manifest.json
+
+          jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
+            --arg digest "$BACKEND_DIGEST" \
+            --arg run_id "${{ steps.build-run.outputs.run_id }}" \
+            '(.schema_version == 1) and (.repository == $repository) and (.source_sha == $sha) and (.build_run_id == ($run_id|tonumber)) and (.backend_digest == $digest) and (.backend_image | contains("@" + $digest)) and (.status == "built")' \
+            release-manifest/release-manifest.json >/dev/null
 
           jq -e --arg repository "$REPOSITORY" --arg sha "$SHA" \
             --arg digest "$BACKEND_DIGEST" \
@@ -247,7 +265,32 @@ jobs:
           test "$RECORDED_FRONTEND_DIGEST" = "sha256:$ACTUAL_FRONTEND_DIGEST"
           echo "Build provenance manifests verified for $SHA"
 
+      - name: Detect already deployed release
+        id: idempotency
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SHA: ${{ inputs.sha }}
+        with:
+          script: |
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              ...context.repo, environment: process.env.ENVIRONMENT, per_page: 100
+            });
+            for (const deployment of deployments) {
+              if (deployment.sha !== process.env.SHA) continue;
+              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
+                ...context.repo, deployment_id: deployment.id, per_page: 1
+              });
+              if (statuses[0]?.state === 'success') {
+                core.setOutput('already_deployed', 'true');
+                core.notice(`Release ${process.env.SHA} is already successfully deployed to ${process.env.ENVIRONMENT}; skipping redeployment.`);
+                return;
+              }
+            }
+            core.setOutput('already_deployed', 'false');
+
       - name: Verify immutable frontend artifact digest
+        if: steps.idempotency.outputs.already_deployed != 'true'
         id: frontend-digest
         run: |
           set -euo pipefail
@@ -257,6 +300,7 @@ jobs:
           echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Apply environment configuration
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           ROBOTS_TXT: ${{ inputs.robots_txt }}
@@ -270,6 +314,7 @@ jobs:
           printf '%s\n' "$ROBOTS_TXT" > promoted-dist/robots.txt
 
       - name: Validate frontend deployment configuration
+        if: steps.idempotency.outputs.already_deployed != 'true'
         id: frontend-config
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
@@ -339,6 +384,7 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout promoted commit
+        if: steps.idempotency.outputs.already_deployed != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.sha }}
@@ -346,13 +392,13 @@ jobs:
           path: src
 
       - name: Setup .NET SDK (for migrations)
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
 
       - name: Generate idempotent migration script
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         working-directory: src/backend
         env:
           ConnectionStrings__DefaultConnection: Host=localhost;Database=recruiterreply
@@ -367,7 +413,7 @@ jobs:
           grep -o "MigrationId\" = '[^']*'" "$RUNNER_TEMP/migrate.sql" | sort -u | sed "s/.*= //"
 
       - name: Back up database and apply migrations on EC2
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           ENVIRONMENT: ${{ inputs.environment }}
@@ -420,6 +466,7 @@ jobs:
           fi
 
       - name: Upload frontend to S3
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
@@ -447,6 +494,7 @@ jobs:
           echo "S3 object verification passed: count=$OBJECT_COUNT assets=${{ steps.frontend-config.outputs.asset_count }}"
 
       - name: Verify frontend deployment files
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
         run: |
@@ -463,6 +511,7 @@ jobs:
           echo "Frontend deployment files verified in S3: index.html, config.js, robots.txt"
 
       - name: Preflight CloudFront invalidation permissions (non-mutating)
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
@@ -488,6 +537,7 @@ jobs:
           fi
 
       - name: Invalidate CloudFront cache
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
@@ -509,7 +559,7 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Verify private Dev frontend deployment
-        if: inputs.environment == 'dev'
+        if: inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
@@ -528,7 +578,7 @@ jobs:
           DEV_SMOKE_OIDC_TOKEN="$token" node .github/scripts/private-dev-smoke.cjs --authenticated
 
       - name: Verify private Test frontend deployment
-        if: inputs.environment == 'test'
+        if: inputs.environment == 'test' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
@@ -540,7 +590,7 @@ jobs:
           node .github/scripts/private-test-smoke.cjs
 
       - name: Smoke test deployed frontend
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           FRONTEND_URL: ${{ inputs.frontend_url }}
         run: |
@@ -563,6 +613,7 @@ jobs:
           echo "Frontend smoke test passed: $FRONTEND_URL"
 
       - name: Deploy backend container on EC2
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           BACKEND_IMAGE: ${{ steps.verify-backend.outputs.backend_image }}
@@ -698,6 +749,7 @@ jobs:
           fi
 
       - name: Preview backend image retention
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           BACKEND_IMAGE: ${{ steps.verify-backend.outputs.backend_image }}
@@ -757,7 +809,7 @@ jobs:
           fi
 
       - name: Smoke test live frontend
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
           ASSET_PATHS: ${{ steps.frontend-config.outputs.asset_paths }}
@@ -844,7 +896,7 @@ jobs:
           done <<< "$EXPECTED_ASSETS"
 
       - name: Verify live environment SEO indexing safeguards
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           SEO_ENVIRONMENT: ${{ inputs.environment }}
         run: |
@@ -852,6 +904,7 @@ jobs:
           node .github/scripts/environment-seo-http-smoke.cjs
 
       - name: Record verified release manifest
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           SHA: ${{ inputs.sha }}
           ENVIRONMENT: ${{ inputs.environment }}
@@ -863,10 +916,11 @@ jobs:
             --arg backend_digest "$BACKEND_DIGEST" --arg frontend_digest "$FRONTEND_DIGEST" \
             --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
+            '{schema_version:1,environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
           cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload immutable release manifest
+        if: steps.idempotency.outputs.already_deployed != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-manifest-${{ inputs.environment }}-${{ inputs.sha }}
@@ -874,6 +928,7 @@ jobs:
           retention-days: 90
 
       - name: Deployment summary
+        if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           FRONTEND_URL: ${{ inputs.frontend_url }}
           API_URL: ${{ inputs.api_url }}

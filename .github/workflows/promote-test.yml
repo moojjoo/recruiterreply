@@ -91,9 +91,6 @@ jobs:
 
   promote:
     needs: [resolve-source, preflight-backend-image]
-    concurrency:
-      group: promote-test
-      cancel-in-progress: false
     uses: ./.github/workflows/promote.yml
     with:
       environment: test

@@ -260,6 +260,32 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Record verified release manifest
+        env:
+          BACKEND_DIGEST: ${{ steps.backend-image.outputs.digest }}
+          BACKEND_IMAGE: ${{ steps.backend-image.outputs.image }}
+        run: |
+          set -euo pipefail
+          FRONTEND_DIGEST=$(jq -r '.frontend_digest' frontend/dist/frontend-build-manifest.json)
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg build_run_id "$GITHUB_RUN_ID" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg backend_digest "$BACKEND_DIGEST" \
+            --arg frontend_digest "$FRONTEND_DIGEST" \
+            '{schema_version:1,repository:$repository,workflow:$workflow,source_sha:$source_sha,build_run_id:($build_run_id|tonumber),backend_image:$backend_image,backend_digest:$backend_digest,frontend_digest:$frontend_digest,status:"built"}' \
+            > release-manifest.json
+
+      - name: Upload verified release manifest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-manifest-${{ github.sha }}
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
   deploy-dev:
     needs: build
     # Dev is intentionally private/disabled until authenticated access is verified.
