@@ -139,6 +139,120 @@ public class BillingServiceTests
             Times.Never);
     }
 
+    [Theory]
+    [InlineData(PlanTiers.Professional, BillingIntervals.Month, "price_professional_test")]
+    [InlineData(PlanTiers.Professional, BillingIntervals.Year, "price_professional_annual_test")]
+    [InlineData(PlanTiers.RecruiterPro, BillingIntervals.Month, "price_recruiterpro_test")]
+    [InlineData(PlanTiers.RecruiterPro, BillingIntervals.Year, "price_recruiterpro_annual_test")]
+    public async Task CreateCheckoutSessionAsync_UsesConfiguredPriceForTierAndInterval(
+        string tier, string interval, string expectedPriceId)
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Customer>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { Id = "cus_existing" });
+        stripeClient
+            .Setup(c => c.RequestAsync<Stripe.Checkout.Session>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Stripe.Checkout.Session { Url = "https://checkout.stripe.com/pay/cs_price_test" });
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        await sut.CreateCheckoutSessionAsync(user.Id, tier, interval);
+
+        var sessionRequest = stripeClient.Invocations
+            .Select(invocation => invocation.Arguments[2])
+            .OfType<Stripe.Checkout.SessionCreateOptions>()
+            .Single();
+        Assert.Equal(expectedPriceId, sessionRequest.LineItems.Single().Price);
+    }
+
+    [Fact]
+    public async Task UpgradeToRecruiterProAsync_WithExistingSubscriptionEnablesAutomaticTax()
+    {
+        var user = BuildUser(stripeCustomerId: "cus_existing");
+        user.SubscriptionTier = PlanTiers.Professional;
+        user.StripeSubscriptionId = "sub_existing";
+        _userRepository.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var subscription = new Subscription
+        {
+            Id = "sub_existing",
+            Status = "active",
+            Items = new StripeList<SubscriptionItem>
+            {
+                Data = [new SubscriptionItem { Id = "si_existing" }],
+            },
+        };
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .SetupSequence(c => c.RequestAsync<Subscription>(It.IsAny<HttpMethod>(), It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(subscription)
+            .ReturnsAsync(subscription);
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        await sut.UpgradeToRecruiterProAsync(user.Id, BillingIntervals.Year);
+
+        var updateRequest = stripeClient.Invocations
+            .Select(invocation => invocation.Arguments[2])
+            .OfType<SubscriptionUpdateOptions>()
+            .Single();
+        Assert.True(updateRequest.AutomaticTax?.Enabled);
+        Assert.Equal("price_recruiterpro_annual_test", updateRequest.Items.Single().Price);
+    }
+
+    [Fact]
+    public async Task GetPlanCatalogAsync_ReturnsAllConfiguredMonthlyAndAnnualPrices()
+    {
+        var requestedPricePaths = new List<string>();
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Price>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .Callback<HttpMethod, string, BaseOptions, RequestOptions, CancellationToken>((_, path, _, _, _) => requestedPricePaths.Add(path))
+            .ReturnsAsync(new Price { UnitAmount = 4900, Currency = "usd" });
+
+        var sut = CreateSut(stripeClient: stripeClient.Object);
+
+        var catalog = await sut.GetPlanCatalogAsync();
+
+        Assert.Equal(4, catalog.Plans.Count);
+        Assert.Equal(
+            [
+                "price_professional_test",
+                "price_professional_annual_test",
+                "price_recruiterpro_test",
+                "price_recruiterpro_annual_test",
+            ],
+            requestedPricePaths.Select(path => path.Split('/').Last()).ToArray());
+    }
+
+    [Theory]
+    [InlineData("Stripe:PriceId:Professional", PlanTiers.Professional, BillingIntervals.Month)]
+    [InlineData("Stripe:PriceId:Professional:Year", PlanTiers.Professional, BillingIntervals.Year)]
+    [InlineData("Stripe:PriceId:RecruiterPro", PlanTiers.RecruiterPro, BillingIntervals.Month)]
+    [InlineData("Stripe:PriceId:RecruiterPro:Year", PlanTiers.RecruiterPro, BillingIntervals.Year)]
+    public async Task GetPlanCatalogAsync_OmitsUnconfiguredPrices(string missingPriceKey, string missingTier, string missingInterval)
+    {
+        var stripeClient = new Mock<IStripeClient>();
+        stripeClient
+            .Setup(c => c.RequestAsync<Price>(HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Price { UnitAmount = 4900, Currency = "usd" });
+        var config = BuildConfig(new Dictionary<string, string?>
+        {
+            [missingPriceKey] = null,
+        });
+
+        var sut = CreateSut(config, stripeClient.Object);
+
+        var catalog = await sut.GetPlanCatalogAsync();
+
+        Assert.Equal(3, catalog.Plans.Count);
+        Assert.DoesNotContain(catalog.Plans, plan => plan.Tier == missingTier && plan.Interval == missingInterval);
+    }
+
     [Fact]
     public async Task CreateCheckoutSessionAsync_WithUnknownUser_Throws()
     {
