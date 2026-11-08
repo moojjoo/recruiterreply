@@ -58,9 +58,18 @@ module "cognito_bff" {
 module "github_oidc" {
   source = "../modules/github_oidc"
 
-  name_prefix    = var.app_name
-  github_repo    = var.github_repo
-  aws_account_id = data.aws_caller_identity.current.account_id
+  name_prefix           = var.app_name
+  github_repo           = var.github_repo
+  aws_account_id        = data.aws_caller_identity.current.account_id
+  aws_region            = var.aws_region
+  github_environments   = ["dev", "test", "prod"]
+  frontend_bucket_names = var.frontend_bucket_names
+  cloudfront_distribution_ids = {
+    dev  = "E2JWU1TLDA6YRS"
+    test = "E2IGR9MYMWVQFI"
+    prod = "EHWW9BKSSF64L"
+  }
+  ec2_instance_id = var.github_actions_ec2_instance_id
 }
 
 # Frontend S3 buckets + CloudFront distributions for all three environments.
