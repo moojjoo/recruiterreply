@@ -9,7 +9,7 @@ This is a source-code inventory based on the `main` branch reviewed on 2026-10-0
 - `backend/Data/RecruiterReplyDbContext.cs`: entity mappings for users, messages, analyses, generated replies, opportunities, comparisons, Gmail connections, usage records, career profiles, recruiter threads and recruiter emails.
 - `backend/Migrations/`: EF Core migrations for initial schema, Gmail, Google login, billing, recruiter autopilot, and thread drafts.
 - `infra/aws/`: Terraform, multi-environment Docker Compose, nginx routing, PostgreSQL initialization.
-- `.github/workflows/`: `build.yml`, `promote.yml`, `promote-test.yml`, `promote-prod.yml`, `playwright.yml`, `codeql.yml`. Existing workflows are considered working and must not be edited without a separate approved issue.
+- `.github/workflows/`: `build.yml`, `promote.yml`, `promote-test.yml`, `promote-prod.yml`, `rollback-prod.yml`, `playwright.yml`, `codeql.yml`. Existing workflows are considered working and must not be edited without a separate approved issue.
 
 ## Existing product capabilities
 

@@ -12,6 +12,14 @@ on:
       migration_authorization:
         required: false
         type: string
+      skip_database_migration:
+        required: false
+        default: false
+        type: boolean
+      force_redeploy:
+        required: false
+        default: false
+        type: boolean
       build_run_id:
         required: false
         type: string
@@ -274,11 +282,17 @@ jobs:
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           SHA: ${{ inputs.sha }}
+          FORCE_REDEPLOY: ${{ inputs.force_redeploy }}
         with:
           script: |
             const deployments = await github.paginate(github.rest.repos.listDeployments, {
               ...context.repo, environment: process.env.ENVIRONMENT, per_page: 100
             });
+            if (process.env.FORCE_REDEPLOY === 'true') {
+              core.setOutput('already_deployed', 'false');
+              core.notice(`Forced application redeployment requested for ${process.env.SHA}`);
+              return;
+            }
             for (const deployment of deployments) {
               if (deployment.sha !== process.env.SHA) continue;
               const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
@@ -395,14 +409,14 @@ jobs:
           path: src
 
       - name: Setup .NET SDK (for migrations)
-        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true'
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
 
       - name: Detect pending Production migrations
         id: pending-migrations
-        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
         run: |
@@ -426,7 +440,7 @@ jobs:
           fi
 
       - name: Generate idempotent migration script
-        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true'
         working-directory: src/backend
         env:
           PENDING_MIGRATIONS: ${{ steps.pending-migrations.outputs.pending }}
@@ -447,7 +461,7 @@ jobs:
 
       - name: Review and authorize Production migration
         id: migration-review
-        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
         env:
           SHA: ${{ inputs.sha }}
           AUTHORIZATION: ${{ inputs.migration_authorization }}
@@ -460,7 +474,7 @@ jobs:
           cat "$RUNNER_TEMP/migration-review.json" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Back up database and apply migrations on EC2
-        if: inputs.environment == 'prod' && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
+        if: inputs.environment == 'prod' && inputs.skip_database_migration != true && steps.idempotency.outputs.already_deployed != 'true' && steps.pending-migrations.outputs.pending == 'true'
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || secrets.EC2_INSTANCE_ID || 'i-0dbe396e361ea6d56' }}
           ENVIRONMENT: ${{ inputs.environment }}

@@ -4,6 +4,7 @@
 - Dev: implement and merge an issue PR; the existing Build (Dev) workflow deploys the main SHA and automatically reconciles eligible `Dev-Completes` issues after deployment and smoke verification. The optional `dev-acceptance-verified` label triggers a retry for an already verified deployment.
 - Test: GitHub Actions > Promote to Test > Run workflow. This resolves the latest successful Dev deployment SHA.
 - Prod: GitHub Actions > Promote to Prod > Run workflow. This resolves the latest successful Test deployment SHA.
+- Application rollback: GitHub Actions > Roll Back Production Application > Run workflow. Supply a prior successful Production SHA and type `ROLLBACK:<target_sha>` exactly. This restores application artifacts only; it does not run EF migrations or restore the database. After validation, run the same workflow with the current release SHA to restore the forward release.
 - From a terminal: `gh workflow run promote-test.yml --repo moojjoo/recruiterreply --ref main` and, after independent Test approval, `gh workflow run promote-prod.yml --repo moojjoo/recruiterreply --ref main`.
 
 ## Evidence
@@ -20,6 +21,7 @@ Dev completion is automated from the verified merged SHA, required checks, deplo
 - Database rollback needs a separately reviewed migration compatibility and restore procedure. Never automatically roll back a database.
 - GitHub Actions tests and a real Dev deployment are required before claiming the feature complete.
 - Production promotion performs database migrations; require an explicit separate approval before running it.
+- Production application rollback requires a prior successful Production deployment, immutable artifacts, the Production environment approval, and exact SHA confirmation. It must never perform a database migration or database restore.
 - Production promotion first performs a read-only migration-history comparison. Pending migrations require an exact `database_authorization` input matching `<production-sha>:sha256:<migration-script-digest>`; no pending migrations skip the database mutation path. Destructive SQL is rejected by the migration gate unless that exact authorization is present, and backups are named with the migration digest.
 
 Do not close issue #237 until these gaps and its acceptance criteria are validated.
