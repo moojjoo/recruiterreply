@@ -71,6 +71,18 @@ export const RegisterForm: React.FC = () => {
     }
   };
 
+  const handleGoogleRegistration = async () => {
+    setLoading(true);
+    try {
+      const response = await authService.googleLoginStart();
+      trackProductEvent("sign_up", { method: "google" });
+      window.location.href = response.data.redirectUrl;
+    } catch {
+      showToast("Google registration is currently unavailable.", "error");
+      setLoading(false);
+    }
+  };
+
   if (cookieAuthEnabled) {
     return (
       <Card elevated>
@@ -100,6 +112,21 @@ export const RegisterForm: React.FC = () => {
   return (
     <Card elevated>
       <h2 className="text-2xl font-bold mb-6">Create Account</h2>
+      <Button
+        type="button"
+        variant="secondary"
+        isLoading={loading}
+        disabled={loading}
+        className="w-full mb-4"
+        onClick={handleGoogleRegistration}
+      >
+        Continue with Google
+      </Button>
+      <div className="flex items-center gap-3 mb-4 text-sm text-gray-500">
+        <span className="h-px flex-1 bg-gray-300" />
+        <span>or create with email</span>
+        <span className="h-px flex-1 bg-gray-300" />
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         {formError && <p role="status" className="error-text">{formError}</p>}
         <Input
