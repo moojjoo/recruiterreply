@@ -47,11 +47,13 @@ The two files shown in the historical generated reports were not repository work
 `execute-pr-automation.yml` runs from trusted `main` and uses the GitHub Actions
 workflow token for its protected SHA-bound REST merge. The token explicitly
 grants `contents: write` because GitHub's merge endpoint requires repository
-Contents write permission. This is the minimum repository permission needed for
-that operation in the workflow; it does not bypass required reviews, required
-checks, merge queues, branch protection, or environment rules. No personal
-access token is used. A rejected merge remains a reported blocker and the
-workflow fails closed.
+Contents write permission. It also grants `actions: write` solely to dispatch
+the existing `build.yml` on `main` after a successful merge; a merge performed
+with `GITHUB_TOKEN` does not trigger another Actions workflow. These are the
+minimum permissions needed for the two operations; they do not bypass required
+reviews, required checks, merge queues, branch protection, or environment rules.
+No personal access token is used. A rejected merge remains a reported blocker,
+and a failed Dev dispatch is reported separately after the merge succeeds.
 
 ## Label cleanup
 

@@ -23,6 +23,9 @@ permissions:
   # Keep this scoped to the workflow token; branch protection and the expected
   # head SHA remain authoritative for every merge.
   contents: write
+  # GITHUB_TOKEN pushes do not trigger another workflow; dispatch the existing
+  # Build and Deploy to Dev workflow explicitly after a successful merge.
+  actions: write
   pull-requests: write
   issues: write
   checks: write
@@ -206,8 +209,14 @@ jobs:
                     await reportStatus(full.number, 'Waiting on repository protection', `All execute-dev policy checks passed for \`${current.head.sha}\`, but GitHub did not merge it: ${merge.message || 'branch protection or merge queue requirements remain'}. The workflow will retry on review or thread changes.`);
                     continue;
                   }
-                  await reportStatus(full.number, 'Merged for Dev deployment', `GitHub accepted the protected SHA-bound merge for \`${current.head.sha}\`. The existing main-push workflow now owns Build and Dev deployment.`);
-                  core.notice(`Merged owner-authorized high-risk PR #${full.number} at expected head ${current.head.sha}`);
+                  try {
+                    await github.rest.actions.createWorkflowDispatch({owner, repo, workflow_id:'build.yml', ref:'main'});
+                    await reportStatus(full.number, 'Merged; Dev deployment dispatched', `GitHub accepted the protected SHA-bound merge for \`${current.head.sha}\`. The existing Build and Deploy to Dev workflow was explicitly dispatched on \`main\`; its verification and environment gates remain authoritative.`);
+                    core.notice(`Merged owner-authorized high-risk PR #${full.number} at expected head ${current.head.sha}; dispatched build.yml for Dev deployment`);
+                  } catch (dispatchError) {
+                    await reportStatus(full.number, 'Merged; Dev deployment dispatch failed', `GitHub accepted the protected SHA-bound merge for \`${current.head.sha}\`, but dispatching \`build.yml\` for Dev deployment failed: ${dispatchError.message}. The merge succeeded; Dev deployment requires authorized owner follow-up through the existing workflow.`);
+                    core.error(`Merged owner-authorized high-risk PR #${full.number}, but build.yml dispatch failed: ${dispatchError.message}`);
+                  }
                 } catch (e) {
                   await reportStatus(full.number, 'Waiting on repository protection', `GitHub rejected the protected SHA-bound merge for \`${current.head.sha}\`: ${e.message}. Required reviews, merge queue, and branch protection remain authoritative.`);
                 }

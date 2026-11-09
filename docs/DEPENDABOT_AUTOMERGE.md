@@ -23,8 +23,11 @@ review. Labels and PR text cannot bypass this policy. The workflow runs from
 trusted `main`, never checks out or executes pull-request code, and receives
 only its explicit token permissions. Because the same trusted workflow can use
 the protected REST merge endpoint, its token includes repository `Contents:
-write`; this is required by GitHub's merge API and does not bypass branch
-protection or grant a personal access token. Dependabot PR validation receives GitHub's
+write`; this is required by GitHub's merge API. The same workflow uses
+`Actions: write` only to explicitly dispatch the existing `build.yml` on
+`main` after a successful token-authored merge, because that merge does not
+trigger another Actions workflow. Neither permission bypasses branch
+protection or grants a personal access token. Dependabot PR validation receives GitHub's
 restricted Dependabot token behavior and no ordinary Actions secrets.
 
 ## CI load controls
