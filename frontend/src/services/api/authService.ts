@@ -19,7 +19,10 @@ export const authService = {
   completePasswordRecovery: (email: string, password: string, code?: string, token?: string) =>
     apiClient.post("/auth/password-recovery/complete", { email, password, code, token }),
   googleLoginStart: () => apiClient.get<{ redirectUrl: string }>('/auth/google/start'),
-  cognitoLoginStart: () => apiClient.get<{ authorizationUrl: string }>('/auth/cognito/start'),
+  cognitoLoginStart: (provider?: "Google") => apiClient.get<{ authorizationUrl: string }>(
+    '/auth/cognito/start',
+    provider ? { params: { provider } } : undefined,
+  ),
   getCurrentUser: () => apiClient.get<User>("/auth/me"),
   logout: () => apiClient.post("/auth/logout"),
 };

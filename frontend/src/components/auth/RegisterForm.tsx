@@ -59,6 +59,18 @@ export const RegisterForm: React.FC = () => {
     }
   };
 
+  const handleCognitoGoogleRegistration = async () => {
+    setLoading(true);
+    try {
+      const response = await authService.cognitoLoginStart("Google");
+      trackProductEvent("sign_up", { method: "google" });
+      window.location.href = response.data.authorizationUrl;
+    } catch {
+      showToast("Google registration is currently unavailable.", "error");
+      setLoading(false);
+    }
+  };
+
   if (cookieAuthEnabled) {
     return (
       <Card elevated>
@@ -67,15 +79,14 @@ export const RegisterForm: React.FC = () => {
         <p className="text-gray-600 mb-6">
           Create your account securely through RecruiterReply&apos;s hosted sign-in.
         </p>
-        <Button
-          type="button"
-          isLoading={loading}
-          disabled={loading}
-          className="w-full"
-          onClick={handleCognitoRegistration}
-        >
-          Continue with Google
-        </Button>
+        <div className="space-y-3">
+          <Button type="button" isLoading={loading} disabled={loading} className="w-full" onClick={handleCognitoGoogleRegistration}>
+            Continue with Google
+          </Button>
+          <Button type="button" variant="secondary" isLoading={loading} disabled={loading} className="w-full" onClick={handleCognitoRegistration}>
+            Continue with email
+          </Button>
+        </div>
         <p className="text-sm text-gray-600 mt-4">
           Already have an account?{" "}
           <a href="/login" className="text-primary-600 hover:underline font-medium">

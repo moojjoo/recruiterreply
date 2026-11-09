@@ -59,6 +59,18 @@ export const LoginForm: React.FC = () => {
     }
   };
 
+  const handleCognitoGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      const response = await authService.cognitoLoginStart("Google");
+      trackProductEvent("login", { method: "google" });
+      window.location.href = response.data.authorizationUrl;
+    } catch {
+      showToast("Google login is currently unavailable.", "error");
+      setGoogleLoading(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     try {
@@ -82,15 +94,14 @@ export const LoginForm: React.FC = () => {
         <p className="text-gray-600 mb-6">
           Continue securely through RecruiterReply&apos;s hosted sign-in.
         </p>
-        <Button
-          type="button"
-          variant="primary"
-          isLoading={googleLoading}
-          className="w-full"
-          onClick={handleCognitoLogin}
-        >
-          Continue with Google
-        </Button>
+        <div className="space-y-3">
+          <Button type="button" variant="primary" isLoading={googleLoading} className="w-full" onClick={handleCognitoGoogleLogin}>
+            Continue with Google
+          </Button>
+          <Button type="button" variant="secondary" isLoading={googleLoading} className="w-full" onClick={handleCognitoLogin}>
+            Continue with email
+          </Button>
+        </div>
       </Card>
     );
   }

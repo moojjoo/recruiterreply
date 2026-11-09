@@ -35,6 +35,17 @@ variable "logout_urls" {
   }
 }
 
+variable "supported_identity_providers" {
+  description = "Identity providers enabled on the BFF app client. Provider resources must already exist in the user pool."
+  type        = list(string)
+  default     = ["COGNITO"]
+
+  validation {
+    condition     = contains(var.supported_identity_providers, "COGNITO")
+    error_message = "The BFF client must retain the native COGNITO identity provider."
+  }
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

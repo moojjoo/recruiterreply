@@ -276,6 +276,14 @@ public class AuthControllerTests
         Assert.Contains("error=google_auth_failed", redirect.Url);
     }
 
+    [Fact]
+    public void CognitoStart_WithUnsupportedProvider_Returns400()
+    {
+        var result = _sut.CognitoStart("LinkedIn");
+
+        Assert.Equal(400, Assert.IsType<BadRequestObjectResult>(result).StatusCode);
+    }
+
     // ----- Me -----
 
     [Fact]

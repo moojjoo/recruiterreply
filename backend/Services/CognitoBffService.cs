@@ -20,7 +20,7 @@ public sealed record CognitoTokenSet(string AccessToken, string? RefreshToken, s
 
 public interface ICognitoBffService
 {
-    string BeginLogin(HttpContext context);
+    string BeginLogin(HttpContext context, string? identityProvider = null);
     Task<CognitoTokenSet> CompleteLoginAsync(HttpContext context, string code, string state, CancellationToken cancellationToken = default);
 }
 
@@ -46,7 +46,7 @@ public sealed class CognitoBffService : ICognitoBffService
             new OpenIdConnectConfigurationRetriever(), new HttpDocumentRetriever { RequireHttps = true });
     }
 
-    public string BeginLogin(HttpContext context)
+    public string BeginLogin(HttpContext context, string? identityProvider = null)
     {
         EnsureConfigured();
         var state = RandomUrlToken(32);
@@ -79,6 +79,10 @@ public sealed class CognitoBffService : ICognitoBffService
             ["code_challenge"] = challenge,
             ["resource"] = _options.ResourceIdentifier
         };
+        if (!string.IsNullOrWhiteSpace(identityProvider))
+        {
+            query["identity_provider"] = identityProvider;
+        }
         return $"{_options.Domain.TrimEnd('/')}/oauth2/authorize?{string.Join('&', query.Select(pair =>
             $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"))}";
     }
