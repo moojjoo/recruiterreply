@@ -179,10 +179,12 @@ public class AuthController : ControllerBase
 
     [HttpGet("cognito/start")]
     [AllowAnonymous]
-    public IActionResult CognitoStart()
+    public IActionResult CognitoStart([FromQuery] string? provider = null)
     {
+        if (!string.IsNullOrWhiteSpace(provider) && !string.Equals(provider, "Google", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Unsupported identity provider." });
         if (_cognitoBff is null) return StatusCode(StatusCodes.Status503ServiceUnavailable);
-        try { return Ok(new CognitoLoginRequest(_cognitoBff.BeginLogin(HttpContext))); }
+        try { return Ok(new CognitoLoginRequest(_cognitoBff.BeginLogin(HttpContext, provider))); }
         catch (InvalidOperationException ex) { _logger.LogWarning(ex, "Cognito BFF is unavailable"); return StatusCode(503); }
     }
 

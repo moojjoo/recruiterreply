@@ -49,6 +49,7 @@ module "cognito_bff" {
   resource_identifier = var.cognito_bff_resource_identifiers[each.key]
   callback_urls       = var.cognito_bff_callback_urls[each.key]
   logout_urls         = var.cognito_bff_logout_urls[each.key]
+  supported_identity_providers = lookup(var.cognito_bff_supported_identity_providers, each.key, ["COGNITO"])
   tags                = var.tags
 }
 

@@ -48,7 +48,7 @@ resource "aws_cognito_user_pool_client" "bff" {
   ]
   callback_urls                 = var.callback_urls
   logout_urls                   = var.logout_urls
-  supported_identity_providers  = ["COGNITO"]
+  supported_identity_providers  = var.supported_identity_providers
   prevent_user_existence_errors = "ENABLED"
   enable_token_revocation       = true
   auth_session_validity         = 10

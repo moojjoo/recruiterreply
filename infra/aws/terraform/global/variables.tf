@@ -131,3 +131,9 @@ variable "cognito_bff_logout_urls" {
   type        = map(list(string))
   default     = {}
 }
+
+variable "cognito_bff_supported_identity_providers" {
+  description = "Identity providers enabled on each Cognito BFF client. External providers must be configured in the target user pool first."
+  type        = map(list(string))
+  default     = {}
+}

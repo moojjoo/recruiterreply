@@ -39,6 +39,31 @@ public sealed class CognitoBffServiceTests
     }
 
     [Fact]
+    public void BeginLogin_WithProvider_AddsIdentityProviderWithoutChangingCallbackContract()
+    {
+        var factory = new Mock<IHttpClientFactory>();
+        var options = Options.Create(new CognitoBffOptions
+        {
+            Enabled = true,
+            Issuer = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_test",
+            ResourceIdentifier = "https://api.dev.example.test",
+            ClientId = "client-id",
+            ClientSecret = "client-secret",
+            Domain = "https://example.auth.us-east-1.amazoncognito.com",
+            RedirectUri = "https://dev.example.test/api/auth/cognito/callback",
+        });
+        var dataProtection = DataProtectionProvider.Create("recruiterreply-cognito-bff-provider-tests");
+        var sut = new CognitoBffService(factory.Object, dataProtection, options);
+
+        var authorizationUrl = sut.BeginLogin(new DefaultHttpContext(), "Google");
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(authorizationUrl).Query);
+
+        Assert.Equal("Google", query["identity_provider"]);
+        Assert.Equal("https://dev.example.test/api/auth/cognito/callback", query["redirect_uri"]);
+        Assert.Equal("code", query["response_type"]);
+    }
+
+    [Fact]
     public void CognitoTokenResponse_MapsOAuthSnakeCaseFields()
     {
         var response = JsonSerializer.Deserialize<CognitoBffService.CognitoTokenResponse>(
