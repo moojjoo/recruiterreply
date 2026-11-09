@@ -19,7 +19,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # The protected REST merge endpoint requires repository Contents: write.
+  # Keep this scoped to the workflow token; branch protection and the expected
+  # head SHA remain authoritative for every merge.
+  contents: write
   pull-requests: write
   issues: write
   checks: write
