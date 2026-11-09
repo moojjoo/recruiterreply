@@ -11,6 +11,11 @@ function valid() {
  return {pr:{draft:false,labels:[],head:{sha},body:'## Implementation evidence\nCommit abc123 and test verification workflow succeeded.\n\n## Acceptance criteria\n- [x] Implemented\n- [x] Tested\n'},checks:names.map(name=>({name,head_sha:sha,status:'completed',conclusion:'success'})),reviews:[],threads:[],dependenciesMerged:true,changedFiles:['README.md']};
 }
 test('complete PR eligible',()=>assert.equal(validateReadiness(valid()).eligible,true));
+test('post-merge validation does not block pre-merge readiness',()=>{
+ const x=valid();
+ x.pr.body += '\n## Post-merge validation\n- [ ] Approved canary evidence\n';
+ assert.equal(validateReadiness(x).eligible,true);
+});
 test('automation-ready label is not a readiness input',()=>{
  const x=valid();
  x.pr.labels=[];

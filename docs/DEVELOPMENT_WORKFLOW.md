@@ -79,5 +79,6 @@ Project 2 has automatic intake and closed-item workflows enabled. New qualifying
 - Apply the `execute-dev` PR label to opt in to the existing automation; it checks successful verify, Playwright and CodeQL checks and unresolved review threads. GitHub branch protection remains authoritative.
 - A new push invalidates high-risk authorization. Reissue `/execute-dev <issue>` only after reviewing the final SHA. Use `/revoke-execute-dev <issue>` on the PR to revoke an active authorization. Labels and PR-authored files cannot grant owner authorization.
 - A Copilot reviewer is optional and must not block a solo developer's CI-gated PR merge. A failed or pending check prevents merge.
+- PRs may include a `Post-merge validation` checklist for evidence that can only exist after deployment or a protected canary merge. Those items do not bypass pre-merge checks and reviews; reconciliation must keep the linked issue open until the post-merge checklist is complete.
 - `/execute test` and `/execute prod` require separate owner commands and promote the approved immutable SHA; never automatically promote them.
 - If required GitHub rules/settings cannot be verified through repository permissions, validate them in repository Settings before claiming enforcement.

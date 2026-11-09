@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const reconcile = require('../reconcile-dev-issues.cjs');
-const {linkedIssues, findProject, acceptanceChecklistComplete, checksPass, findVerifiedDeploymentForIssue, createAuthenticatedClient, requiredChecks} = reconcile;
+const {linkedIssues, findProject, acceptanceChecklistComplete, postMergeValidationComplete, checksPass, findVerifiedDeploymentForIssue, createAuthenticatedClient, requiredChecks} = reconcile;
 
 test('Project write client is authenticated separately from the read client', () => {
   class FakeClient { constructor(options) { this.options = options; } }
@@ -29,6 +29,12 @@ test('acceptance checklist fails closed when any item is unchecked', () => {
   assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One'), true);
   assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One\n- [ ] Two'), false);
   assert.equal(acceptanceChecklistComplete('Dev-Completes: #320'), false);
+});
+test('post-merge validation is optional for legacy PRs but fails closed when declared', () => {
+  assert.equal(postMergeValidationComplete('## Acceptance criteria\n- [x] Complete'), true);
+  assert.equal(postMergeValidationComplete('## Post-merge validation\n'), false);
+  assert.equal(postMergeValidationComplete('## Post-merge validation\n- [ ] Canary evidence'), false);
+  assert.equal(postMergeValidationComplete('## Post-merge validation\n- [x] Canary evidence'), true);
 });
 test('project matches either GitHub display title or bare title', () => {
   assert.equal(findProject([{id:'p',title:'recruiterreply project'}]).id, 'p');
@@ -166,4 +172,12 @@ test('partial PR and missing project item never close an issue', async () => {
   await runWithEvidence(absent);
   assert.equal(absent.state(), 'open');
   assert.match(absent.warnings.join(';'), /not in target project/);
+});
+
+test('incomplete post-merge validation never closes an issue', async () => {
+  const subject = harness({body: '## Acceptance criteria\n- [x] Complete\n\n## Post-merge validation\n- [ ] Canary evidence\n\nDev-Completes: #320'});
+  await runWithEvidence(subject);
+  assert.equal(subject.state(), 'open');
+  assert.equal(subject.updates.length + subject.mutations.length + subject.comments.length, 0);
+  assert.match(subject.warnings.join(';'), /post-merge validation/);
 });

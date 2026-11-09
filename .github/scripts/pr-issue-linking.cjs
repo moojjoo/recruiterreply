@@ -16,9 +16,22 @@ function linkedIssueNumbers(body = '') {
 }
 
 function acceptanceChecklistComplete(body = '') {
-  const section = String(body).match(/^## Acceptance criteria[^\n]*\n([\s\S]*?)(?=^## |$)/im);
-  const criteria = section?.[1] || '';
+  const criteria = checklistSection(body, 'Acceptance criteria');
   return /^\s*[-*]\s*\[[xX]\]/m.test(criteria) && !/^\s*[-*]\s*\[ \]/m.test(criteria);
+}
+
+function checklistSection(body, heading) {
+  const section = String(body).match(new RegExp(`^## ${heading}[^\\n]*\\n([\\s\\S]*)`, 'im'));
+  return section?.[1].split(/^## /m, 1)[0] || '';
+}
+
+function postMergeValidationComplete(body = '') {
+  const text = String(body);
+  if (!/^## Post-merge validation[^\n]*\n/im.test(text)) return true;
+  const section = checklistSection(text, 'Post-merge validation');
+  const items = section.split(/\r?\n/).filter(line => /^\s*[-*]\s*\[[ xX]\]/.test(line));
+  if (!items.length) return false;
+  return /^\s*[-*]\s*\[[xX]\]/m.test(section) && !/^\s*[-*]\s*\[ \]/m.test(section);
 }
 
 function ensureIssueLink(body, issueNumber) {
@@ -26,8 +39,10 @@ function ensureIssueLink(body, issueNumber) {
   const linked = linkedIssueNumbers(text);
   if (linked.includes(issueNumber)) return text;
 
-  const relation = acceptanceChecklistComplete(text) ? `Dev-Completes: #${issueNumber}` : `Refs #${issueNumber}`;
+  const relation = acceptanceChecklistComplete(text) && postMergeValidationComplete(text)
+    ? `Dev-Completes: #${issueNumber}`
+    : `Refs #${issueNumber}`;
   return `${text}\n\n## Issue linking\n${relation}\n`;
 }
 
-module.exports = {issueNumberFromPullRequest, linkedIssueNumbers, acceptanceChecklistComplete, ensureIssueLink};
+module.exports = {issueNumberFromPullRequest, linkedIssueNumbers, acceptanceChecklistComplete, postMergeValidationComplete, ensureIssueLink};

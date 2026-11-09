@@ -2,6 +2,7 @@
 const MARKER = /(?:^|\n)Dev-Completes:\s*#(\d+)\b/gim;
 const eligibleLabel = 'dev-acceptance-verified';
 const requiredChecks = ['verify', 'test', 'CodeQL required gate'];
+const {acceptanceChecklistComplete, postMergeValidationComplete} = require('./pr-issue-linking.cjs');
 
 function linkedIssues(body = '') {
   return [...new Set([...body.matchAll(MARKER)].map(m => Number(m[1])))];
@@ -10,11 +11,6 @@ function findProject(projects) {
   const matches = projects.filter(p => ["recruiterreply project", "@moojjoo's recruiterreply project"].includes(p.title.toLowerCase()));
   if (matches.length !== 1) throw new Error('Expected exactly one RecruiterReply GitHub Project; found ' + matches.length);
   return matches[0];
-}
-function acceptanceChecklistComplete(body = '') {
-  const section = body.match(/^## Acceptance criteria[^\n]*\n([\s\S]*)$/im);
-  const criteria = section?.[1].split(/^## /m, 1)[0] || '';
-  return /^\s*[-*]\s*\[[xX]\]/m.test(criteria) && !/^\s*[-*]\s*\[ \]/m.test(criteria);
 }
 function checksPass(checks, headSha, names = requiredChecks) {
   return names.every(name => checks.some(check => check.name === name && check.head_sha === headSha && check.conclusion === 'success'));
@@ -25,7 +21,7 @@ async function findVerifiedDeploymentForIssue({github, owner, repo, issueNumber}
   });
   for (const pr of prs) {
     if (!pr.merged_at || !pr.merge_commit_sha || !linkedIssues(pr.body || '').includes(issueNumber) ||
-        !acceptanceChecklistComplete(pr.body || '')) continue;
+        !acceptanceChecklistComplete(pr.body || '') || !postMergeValidationComplete(pr.body || '')) continue;
     const {data: matchingRuns} = await github.rest.actions.listWorkflowRuns({
       owner, repo, workflow_id: 'build.yml', head_sha: pr.merge_commit_sha, per_page: 100
     });
@@ -101,6 +97,10 @@ module.exports = async ({github, writeGithub = github, context, core}) => {
       core.warning(`#${pr.number}: acceptance checklist is missing or incomplete; skipped`);
       continue;
     }
+    if (!postMergeValidationComplete(pr.body || '')) {
+      core.warning(`#${pr.number}: post-merge validation is missing or incomplete; skipped`);
+      continue;
+    }
     const checks = await github.paginate(github.rest.checks.listForRef,
       {owner, repo, ref: pr.head.sha, per_page: 100});
     if (!checksPass(checks, pr.head.sha)) {
@@ -150,6 +150,7 @@ module.exports = async ({github, writeGithub = github, context, core}) => {
 module.exports.linkedIssues = linkedIssues;
 module.exports.findProject = findProject;
 module.exports.acceptanceChecklistComplete = acceptanceChecklistComplete;
+module.exports.postMergeValidationComplete = postMergeValidationComplete;
 module.exports.checksPass = checksPass;
 module.exports.findVerifiedDeploymentForIssue = findVerifiedDeploymentForIssue;
 module.exports.createAuthenticatedClient = createAuthenticatedClient;

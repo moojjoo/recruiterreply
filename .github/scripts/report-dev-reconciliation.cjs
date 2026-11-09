@@ -21,6 +21,7 @@ function request(path) {
 }
 const marker = /(?:^|\n)Dev-Completes:\s*#(\d+)\b/gim;
 const references = /(?:^|\n)Refs\s+#(\d+)\b/gim;
+const {acceptanceChecklistComplete, postMergeValidationComplete} = require('./pr-issue-linking.cjs');
 function ids(body, regex) { return [...new Set([...String(body||'').matchAll(regex)].map(m=>Number(m[1])))]; }
 // Escape untrusted GitHub API text before inserting into Markdown table cells.
 // Backslashes must be escaped first, before pipes, so an input such as \\| cannot
@@ -35,7 +36,8 @@ function inspect(pr, issue) {
   const blockers = [];
   if(!ids(pr.body,marker).includes(issue.number)) blockers.push('missing final Dev-Completes marker');
   if(/\[ \]/.test(issue.body||'')) blockers.push('unfinished issue acceptance checklist');
-  if(/\[ \]/.test(pr.body||'')) blockers.push('unfinished PR acceptance checklist');
+  if(!acceptanceChecklistComplete(pr.body||'')) blockers.push('unfinished PR acceptance checklist');
+  if(!postMergeValidationComplete(pr.body||'')) blockers.push('unfinished post-merge validation checklist');
   // Absence of independently verified CI/deployment evidence must not be interpreted as success.
   blockers.push('current-head CI/security, deployed Dev SHA and smoke evidence not independently verified');
   blockers.push('GitHub Project membership and token permissions not independently verified');
@@ -77,4 +79,4 @@ async function main(){
   process.stdout.write(summary);
 }
 if(require.main===module) main().catch(e=>{console.error(e);process.exitCode=1;});
-module.exports={ids,inspect,marker,references,markdownCell};
+module.exports={ids,inspect,marker,references,markdownCell,postMergeValidationComplete};

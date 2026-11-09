@@ -9,11 +9,11 @@ The following earlier changes are merged: #315 (draft PR safety), #317 (prelimin
 | Gate | Evidence to collect | Passing condition |
 | --- | --- | --- |
 | Draft/incomplete PR | Workflow run and PR metadata | Drafts, unchecked criteria and blocked reviews never auto-merge |
-| Eligible PR | PR number, head SHA, check URLs, merge SHA | Owner-approved readiness policy; required checks pass before merge |
+| Eligible PR | PR number, head SHA, check URLs, merge SHA | Owner-approved readiness policy; pre-merge acceptance criteria and required checks pass before merge |
 | Failed CI | Run URL, SHA, diagnostic comment and retry count | Actionable report, bounded remediation, no unsafe mutation |
 | Software Factory | Cross-repo workflow run URLs, permissions and versions | Integration proven in both repositories with least privilege; protected REST merge and explicit Dev build dispatch use only required Contents/Actions write permissions without a broad PAT |
 | Immutable artifacts | Build URL, backend image digest, frontend artifact checksum | Same merged main SHA across builds and deployments |
-| Dev rollout | Deploy run URL, running SHA, health and smoke URLs | Automatic Dev deployment and exact SHA verification |
+| Dev rollout | Deploy run URL, running SHA, health and smoke URLs | Automatic Dev deployment and exact SHA verification; post-merge validation is recorded before issue closure |
 | Test and Prod | Environment protection evidence and approval records | Human approval mandatory; only validated SHA promoted |
 | Rollback | Revert/redeploy runbook and tested command outputs | No Terraform/IAM/secrets bypass; documented recovery |
 

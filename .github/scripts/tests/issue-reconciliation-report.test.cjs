@@ -21,6 +21,9 @@ test('acceptance checklist must contain checked and no unchecked items', () => {
   assert.equal(acceptanceChecklistComplete(body), true);
   assert.equal(acceptanceChecklistComplete('## Acceptance criteria\n- [x] One\n- [ ] Two'), false);
 });
+test('post-merge validation is a separate closure gate', () => {
+  assert.deepEqual(blockers({...valid, pr: {...pr, body: '## Acceptance criteria\n- [x] Verified\n\n## Post-merge validation\n- [ ] Canary evidence\n\nDev-Completes: #320'}}).filter(reason => /post-merge/i.test(reason)), ['Post-merge validation missing or incomplete']);
+});
 test('SEO is required only when frontend files changed', () => {
   assert.deepEqual(requiredCheckNames([{filename: 'backend/Program.cs'}]), names);
   assert.deepEqual(requiredCheckNames([{filename: 'frontend/src/App.tsx'}]), [...names, 'seo']);
