@@ -16,8 +16,10 @@ export const usage = {
 
 export const billingPlans = {
   plans: [
-    { tier: 'professional', unitAmount: 1900, currency: 'usd', interval: 'month', intervalCount: 1 },
-    { tier: 'recruiter_pro', unitAmount: 4900, currency: 'usd', interval: 'month', intervalCount: 1 },
+    { tier: 'professional', unitAmount: 2400, currency: 'usd', interval: 'month', intervalCount: 1, trialPeriodDays: 7 },
+    { tier: 'professional', unitAmount: 22900, currency: 'usd', interval: 'year', intervalCount: 1, trialPeriodDays: 7 },
+    { tier: 'recruiter_pro', unitAmount: 4900, currency: 'usd', interval: 'month', intervalCount: 1, trialPeriodDays: 7 },
+    { tier: 'recruiter_pro', unitAmount: 46900, currency: 'usd', interval: 'year', intervalCount: 1, trialPeriodDays: 7 },
   ],
 };
 
