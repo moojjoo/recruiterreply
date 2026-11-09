@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const {acceptanceChecklistComplete, postMergeValidationComplete} = require('./pr-issue-linking.cjs');
 const FINAL_MARKER = /(?:^|\n)Dev-Completes:\s*#(\d+)\b/gim;
 const PARTIAL_MARKER = /(?:^|\n)Refs:?\s*#(\d+)\b/gim;
 const CORE_CHECKS = ['verify', 'test', 'CodeQL required gate'];
@@ -11,11 +12,6 @@ function linkedIssueReferences(body = '') {
   for (const match of body.matchAll(PARTIAL_MARKER)) references.set(Number(match[1]), 'partial');
   for (const match of body.matchAll(FINAL_MARKER)) references.set(Number(match[1]), 'final');
   return [...references].map(([number, kind]) => ({number, kind}));
-}
-function acceptanceChecklistComplete(body = '') {
-  const section = body.match(/^## Acceptance criteria[^\n]*\n([\s\S]*)$/im);
-  const criteria = section?.[1].split(/^## /m, 1)[0] || '';
-  return /^\s*[-*]\s*\[[xX]\]/m.test(criteria) && !/^\s*[-*]\s*\[ \]/m.test(criteria);
 }
 function requiredCheckNames(files = []) {
   return files.some(file => file.filename?.startsWith('frontend/')) ? [...CORE_CHECKS, 'seo'] : [...CORE_CHECKS];
@@ -32,6 +28,7 @@ function blockers({pr, issue, referenceKind = 'final', checks = [], requiredChec
     if (!checks.some(check => check.name === name && check.head_sha === pr.head.sha && check.conclusion === 'success')) reasons.push(`Missing passing current-head check: ${name}`);
   }
   if (!acceptanceChecklistComplete(pr.body || '')) reasons.push('Acceptance checklist missing or incomplete');
+  if (!postMergeValidationComplete(pr.body || '')) reasons.push('Post-merge validation missing or incomplete');
   return reasons;
 }
 function markdownEscape(value) { return String(value).replace(/[|\r\n]/g, match => match === '|' ? '\\|' : ' '); }
@@ -87,4 +84,4 @@ async function report({github, context, core, outputDirectory = 'reconciliation-
   core.notice(`Unresolved completion candidates: ${rows.length}`);
   return rows;
 }
-module.exports = {FINAL_MARKER, PARTIAL_MARKER, linkedIssueReferences, acceptanceChecklistComplete, requiredCheckNames, blockers, projectStateForIssue, report};
+module.exports = {FINAL_MARKER, PARTIAL_MARKER, linkedIssueReferences, acceptanceChecklistComplete, postMergeValidationComplete, requiredCheckNames, blockers, projectStateForIssue, report};

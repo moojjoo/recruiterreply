@@ -15,7 +15,7 @@ All 21 repository workflow files have an active purpose. No workflow file met th
 | `dev-issue-reconciliation-report.yml` | Schedule, manual dispatch | Retain | Scheduled read-only reconciliation reports |
 | `ecr-image-retention.yml` | Manual dispatch | Retain | Backend ECR retention operation |
 | `email-forwarding.yml` | Pull request, manual dispatch | Retain | Plan/apply/acceptance workflow with protected inputs |
-| `execute-pr-automation.yml` | PR, review, comment, workflow run | Retain | Protected merge and Dev execution automation |
+| `execute-pr-automation.yml` | PR, review, comment, workflow run | Retain | Protected merge and Dev execution automation; workflow token uses required repository Contents write permission |
 | `frontend-seo.yml` | Pull request, manual dispatch | Retain | Frontend SEO validation |
 | `image-retention.yml` | Manual dispatch | Retain | EC2 image retention operation |
 | `issue-reconciliation-audit.yml` | Schedule, manual dispatch, workflow run | Retain | Read-only issue reconciliation audit |
@@ -41,6 +41,19 @@ The two files shown in the historical generated reports were not repository work
 - The active workflow names and required checks are referenced by repository documentation and contract tests.
 - Recent Actions history confirms use of the CI, security, SEO, reconciliation, promotion, rollback, retention, and audit paths.
 - No workflow run history or audit evidence was deleted.
+
+## Protected merge permission contract (issue #647)
+
+`execute-pr-automation.yml` runs from trusted `main` and uses the GitHub Actions
+workflow token for its protected SHA-bound REST merge. The token explicitly
+grants `contents: write` because GitHub's merge endpoint requires repository
+Contents write permission. It also grants `actions: write` solely to dispatch
+the existing `build.yml` on `main` after a successful merge; a merge performed
+with `GITHUB_TOKEN` does not trigger another Actions workflow. These are the
+minimum permissions needed for the two operations; they do not bypass required
+reviews, required checks, merge queues, branch protection, or environment rules.
+No personal access token is used. A rejected merge remains a reported blocker,
+and a failed Dev dispatch is reported separately after the merge succeeds.
 
 ## Label cleanup
 

@@ -48,6 +48,18 @@ test('high-risk merge is atomically bound to the re-read head SHA', () => {
   assert.match(workflow, /if \(risk === 'high'\)[\s\S]*github\.rest\.pulls\.merge/);
 });
 
+test('protected REST merge has the required least-privilege repository permission', () => {
+  assert.match(workflow, /permissions:[\s\S]*contents: write/);
+  assert.match(workflow, /github\.rest\.pulls\.merge\([\s\S]*sha:current\.head\.sha/);
+  assert.doesNotMatch(workflow, /personal access token/i);
+});
+
+test('successful protected merges explicitly dispatch the existing Dev build', () => {
+  assert.match(workflow, /permissions:[\s\S]*actions: write/);
+  assert.match(workflow, /github\.rest\.actions\.createWorkflowDispatch\(\{owner, repo, workflow_id:'build\.yml', ref:'main'\}\)/);
+  assert.match(workflow, /Merged; Dev deployment dispatch failed/);
+});
+
 test('publishes a stable native readiness check without automation-ready labels', () => {
   assert.match(workflow, /checks: write/);
   assert.match(workflow, /PR readiness policy/);
