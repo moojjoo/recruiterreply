@@ -12,7 +12,13 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   }
 
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Continue with email' }).click();
+  // The private edge may redirect directly to Cognito before the SPA login
+  // page renders. If the SPA is visible, use its hosted-login entry point;
+  // otherwise continue with the Cognito page already loaded.
+  const applicationOrigin = new URL(baseURL).origin;
+  if (new URL(page.url()).origin === applicationOrigin) {
+    await page.getByRole('button', { name: 'Continue with email' }).click();
+  }
 
   await page.locator('input[name="username"], input[type="email"]').first().fill(username);
   await page.locator('input[name="password"], input[type="password"]').first().fill(password);
@@ -29,7 +35,6 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
     await page.locator('button[type="submit"], button[name="verifyCode"]').first().click();
   }
 
-  const applicationOrigin = new URL(baseURL).origin;
   await page.waitForURL((url) => (
     url.origin === applicationOrigin &&
     !/^\/(?:login|register)(?:$|[?#])/.test(url.pathname)
