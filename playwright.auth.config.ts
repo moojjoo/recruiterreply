@@ -30,9 +30,10 @@ export default defineConfig({
     {
       name: `${environment}-auth-setup`,
       testMatch: /.*\.setup\.ts/,
-      // The setup project creates this file; applying it here would make
-      // Playwright fail before the setup test can authenticate.
-      use: { ...devices['Desktop Chrome'], baseURL, storageState: undefined },
+      // The setup project creates the file used by dependent projects. An
+      // empty state object prevents the top-level file path from being read
+      // before the setup test can authenticate.
+      use: { ...devices['Desktop Chrome'], baseURL, storageState: { cookies: [], origins: [] } },
     },
     {
       name: `${environment}-authenticated`,
