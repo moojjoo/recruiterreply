@@ -24,7 +24,7 @@ The authenticated setup stores only the browser state needed by the dependent te
 
 ## GitHub Actions
 
-`.github/workflows/playwright-authenticated.yml` runs automatically after successful Dev/Test deployment statuses and can also be dispatched manually. Configure these secrets separately in the GitHub `dev` and `test` Environments:
+`.github/workflows/playwright-authenticated.yml` runs automatically after a successful Dev/Test deployment status and can also be dispatched manually. The deployment event supplies the target environment, so the same workflow cannot accidentally use Test credentials against Dev. Configure these secrets separately in the GitHub `dev` and `test` Environments:
 
 - `PLAYWRIGHT_USERNAME`
 - `PLAYWRIGHT_PASSWORD`
