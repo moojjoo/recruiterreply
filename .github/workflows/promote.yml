@@ -285,24 +285,26 @@ jobs:
           FORCE_REDEPLOY: ${{ inputs.force_redeploy }}
         with:
           script: |
-            const deployments = await github.paginate(github.rest.repos.listDeployments, {
-              ...context.repo, environment: process.env.ENVIRONMENT, per_page: 100
-            });
             if (process.env.FORCE_REDEPLOY === 'true') {
               core.setOutput('already_deployed', 'false');
               core.notice(`Forced application redeployment requested for ${process.env.SHA}`);
               return;
             }
-            for (const deployment of deployments) {
-              if (deployment.sha !== process.env.SHA) continue;
-              const {data: statuses} = await github.rest.repos.listDeploymentStatuses({
-                ...context.repo, deployment_id: deployment.id, per_page: 1
-              });
-              if (statuses[0]?.state === 'success') {
-                core.setOutput('already_deployed', 'true');
-                core.notice(`Release ${process.env.SHA} is already successfully deployed to ${process.env.ENVIRONMENT}; skipping redeployment.`);
-                return;
-              }
+            // A job-level environment can create a successful deployment record
+            // before this reusable promotion job performs any mutation. Only the
+            // immutable manifest uploaded at the end of this job proves that the
+            // release was actually promoted.
+            const artifactName = `release-manifest-${process.env.ENVIRONMENT}-${process.env.SHA}`;
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              ...context.repo, name: artifactName, per_page: 100
+            });
+            const promoted = artifacts.some((artifact) =>
+              artifact.name === artifactName && artifact.expired === false
+            );
+            if (promoted) {
+              core.setOutput('already_deployed', 'true');
+              core.notice(`Release ${process.env.SHA} has a verified ${process.env.ENVIRONMENT} promotion manifest; skipping redeployment.`);
+              return;
             }
             core.setOutput('already_deployed', 'false');
 
