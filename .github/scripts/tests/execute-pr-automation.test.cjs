@@ -45,7 +45,7 @@ test('high-risk merge is atomically bound to the re-read head SHA', () => {
   const expectedShaMerge = workflow.indexOf("sha:current.head.sha");
   const enable = workflow.indexOf('enablePullRequestAutoMerge');
   assert.ok(cleanup >= 0 && readiness > cleanup && reread > readiness && expectedShaMerge > reread && enable > expectedShaMerge);
-  assert.match(workflow, /if \(risk === 'high'\)[\s\S]*github\.rest\.pulls\.merge/);
+  assert.match(workflow, /if \(risk === 'high' && !majorDependabotUpdate\)[\s\S]*github\.rest\.pulls\.merge/);
 });
 
 test('protected REST merge has the required least-privilege repository permission', () => {

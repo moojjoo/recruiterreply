@@ -14,6 +14,7 @@ const base = {
   number: 1,
 };
 const files = [{filename: 'frontend/package-lock.json', status: 'modified'}];
+const major = {...base, title: 'Bump axios from 1.20.0 to 2.0.0', body: 'Bumps axios from 1.20.0 to 2.0.0.'};
 
 test('eligible patch update is trusted', () => {
   assert.deepEqual(classifyDependabotUpdate(base, files), {
@@ -28,6 +29,46 @@ test('eligible minor update is trusted for NuGet', () => {
   const pr = {...base, head: {...base.head, ref: 'dependabot/nuget/backend/Npgsql-8.1.0'}, title: 'Bump Npgsql from 8.0.5 to 8.1.0', body: 'Bumps Npgsql from 8.0.5 to 8.1.0.'};
   assert.equal(classifyDependabotUpdate(pr, [{filename: 'backend/RecruiterReply.csproj', status: 'modified'}]).eligible, true);
   assert.equal(classifyDependabotUpdate(pr, [{filename: 'backend/RecruiterReply.csproj', status: 'modified'}]).updateType, 'minor');
+});
+
+test('major update is classified for manual review after validating its file scope', () => {
+  assert.deepEqual(classifyDependabotUpdate(major, files), {
+    eligible: false,
+    ecosystem: 'npm_and_yarn',
+    updateType: 'major',
+    manualReviewRequired: true,
+    reason: 'Major update requires manual review',
+  });
+});
+
+test('major update is blocked until the repository owner approves the current commit', () => {
+  const pr = {...major, head: {...major.head, sha: 'major-sha'}};
+  const checks = [
+    {name: 'verify', head_sha: 'major-sha', status: 'completed', conclusion: 'success'},
+    {name: 'test', head_sha: 'major-sha', status: 'completed', conclusion: 'success'},
+    {name: 'CodeQL required gate', head_sha: 'major-sha', status: 'completed', conclusion: 'success'},
+    {name: 'Analyze (javascript-typescript)', head_sha: 'major-sha', status: 'completed', conclusion: 'success'},
+  ];
+  const blocked = validateReadiness({pr, checks, changedFiles: files, majorDependabotUpdate: true, maintainerApproved: false});
+  assert.equal(blocked.eligible, false);
+  assert.match(blocked.reasons.join('; '), /requires an approving review/);
+
+  const approved = validateReadiness({pr, checks, changedFiles: files, majorDependabotUpdate: true, maintainerApproved: true});
+  assert.equal(approved.eligible, true);
+});
+
+test('maintainer approval must match the current commit', () => {
+  const {hasCurrentMaintainerApproval} = require('../pr-readiness.cjs');
+  const reviews = [
+    {user: {login: 'moojjoo'}, state: 'APPROVED', commit_id: 'old-sha'},
+    {user: {login: 'moojjoo'}, state: 'APPROVED', commit_id: 'current-sha'},
+  ];
+  assert.equal(hasCurrentMaintainerApproval({reviews, ownerLogin: 'moojjoo', headSha: 'current-sha'}), true);
+  assert.equal(hasCurrentMaintainerApproval({reviews, ownerLogin: 'moojjoo', headSha: 'other-sha'}), false);
+  assert.equal(hasCurrentMaintainerApproval({
+    reviews: [...reviews, {user: {login: 'moojjoo'}, state: 'DISMISSED', commit_id: 'current-sha'}],
+    ownerLogin: 'moojjoo', headSha: 'current-sha',
+  }), false);
 });
 
 for (const [name, mutate] of [
