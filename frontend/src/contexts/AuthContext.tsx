@@ -83,12 +83,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  const logout = useCallback(() => {
-    if (isCookieAuthEnabled()) {
-      void authService.logout().catch(() => undefined);
+  const logout = useCallback(async () => {
+    const cookieAuthEnabled = isCookieAuthEnabled();
+    const hostedCookieAuth = cookieAuthEnabled && (
+      window.location.hostname === "recruiterreply.com" ||
+      window.location.hostname.endsWith(".recruiterreply.com")
+    );
+
+    if (cookieAuthEnabled) {
+      // Revoke the BFF session before leaving the app. The hosted edge logout
+      // then clears Cognito's Hosted UI session as well.
+      await authService.logout().catch(() => undefined);
     }
     setUser(null);
     clearLegacyAuthState();
+
+    if (hostedCookieAuth) {
+      window.location.assign("/_auth/logout");
+    }
   }, []);
 
   return (

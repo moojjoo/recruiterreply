@@ -1,0 +1,60 @@
+name: Authenticated Dev/Test Playwright
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Lower environment to validate
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+      base_url:
+        description: Optional deployed URL override
+        required: false
+        type: string
+
+concurrency:
+  group: authenticated-playwright-${{ github.event.deployment.environment || inputs.environment }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'deployment_status' &&
+       github.event.deployment_status.state == 'success' &&
+       (github.event.deployment.environment == 'dev' || github.event.deployment.environment == 'test'))
+    runs-on: ubuntu-24.04
+    environment: ${{ github.event.deployment.environment || inputs.environment }}
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_ENV: ${{ github.event.deployment.environment || inputs.environment }}
+      BASE_URL: ${{ inputs.base_url }}
+      PLAYWRIGHT_USERNAME: ${{ secrets.PLAYWRIGHT_USERNAME }}
+      PLAYWRIGHT_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
+      PLAYWRIGHT_MFA_CODE: ${{ secrets.PLAYWRIGHT_MFA_CODE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: lts/*
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run authenticated browser validation
+        run: npx playwright test --config=playwright.auth.config.ts
+      - name: Upload authenticated Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-auth-report-${{ github.event.deployment.environment || inputs.environment }}
+          path: playwright-auth-report/
+          retention-days: 14
