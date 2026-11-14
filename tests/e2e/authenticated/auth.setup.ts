@@ -9,6 +9,7 @@ const perimeterTotpSecret = process.env.PLAYWRIGHT_TOTP_SECRET;
 const applicationUsername = process.env.PLAYWRIGHT_APP_USERNAME || perimeterUsername;
 const applicationPassword = process.env.PLAYWRIGHT_APP_PASSWORD || perimeterPassword;
 const applicationTotpSecret = process.env.PLAYWRIGHT_APP_TOTP_SECRET || perimeterTotpSecret;
+const lastTotpCodes = new Map<string, string>();
 
 async function visibleInput(page: Page, selectors: string, timeout = 0) {
   const deadline = Date.now() + timeout;
@@ -22,6 +23,18 @@ async function visibleInput(page: Page, selectors: string, timeout = 0) {
   } while (Date.now() < deadline);
 
   throw new Error(`No visible control matched: ${selectors}`);
+}
+
+async function freshTotpCode(secret: string, label: string): Promise<string> {
+  const key = `${label}:${secret}`;
+  let code = generateTotp(secret);
+  if (lastTotpCodes.get(key) === code) {
+    const remaining = 30_000 - (Date.now() % 30_000) + 250;
+    await new Promise((resolve) => setTimeout(resolve, remaining));
+    code = generateTotp(secret);
+  }
+  lastTotpCodes.set(key, code);
+  return code;
 }
 
 async function completeCognitoLogin(
@@ -60,7 +73,7 @@ async function completeCognitoLogin(
         `${label} requested MFA, but its TOTP seed is not configured. Configure the appropriate GitHub Environment secret.`,
       );
     }
-    await codeInput.fill(generateTotp(totpSecret));
+    await codeInput.fill(await freshTotpCode(totpSecret, label));
     await (await visibleInput(
       page,
       'button[name="verifyCode"], button[type="submit"], input[type="submit"]',
