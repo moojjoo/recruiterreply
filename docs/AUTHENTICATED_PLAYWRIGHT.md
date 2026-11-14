@@ -36,6 +36,8 @@ The workflow does not upload the temporary authentication directory. It retains 
 
 Deployment-status runs are intentionally limited to successful `dev` and `test` deployment records; unrelated environments and failed deployments are ignored.
 
+The post-deployment job is evidence collection and does not promote, merge, or change environment configuration.
+
 ## Codex interactive browser validation
 
 For Codex-driven interactive validation, enable the `js_repl` feature in the Codex configuration and start a new Codex session. Use a persistent, isolated Playwright browser context for the selected environment, and keep credentials and storage state outside the repository. The interactive session and the GitHub Actions workflow are separate validation paths: interactive Codex work is useful for investigation and guided acceptance, while CI provides repeatable post-deployment evidence.
