@@ -55,6 +55,10 @@ resource "aws_cognito_user_pool" "testers" {
   mfa_configuration        = "ON"
   user_pool_tier           = "ESSENTIALS"
 
+  software_token_mfa_configuration {
+    enabled = true
+  }
+
   admin_create_user_config {
     allow_admin_create_user_only = true
   }

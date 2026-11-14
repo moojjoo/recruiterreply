@@ -1,13 +1,14 @@
 import { test as setup, expect, type Locator, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { authDirectory, baseURL, storageState } from '../../../playwright.auth.config';
+import { generateTotp } from './totp';
 
 const perimeterUsername = process.env.PLAYWRIGHT_USERNAME;
 const perimeterPassword = process.env.PLAYWRIGHT_PASSWORD;
-const perimeterMfaCode = process.env.PLAYWRIGHT_MFA_CODE;
+const perimeterTotpSecret = process.env.PLAYWRIGHT_TOTP_SECRET;
 const applicationUsername = process.env.PLAYWRIGHT_APP_USERNAME || perimeterUsername;
 const applicationPassword = process.env.PLAYWRIGHT_APP_PASSWORD || perimeterPassword;
-const applicationMfaCode = process.env.PLAYWRIGHT_APP_MFA_CODE || perimeterMfaCode;
+const applicationTotpSecret = process.env.PLAYWRIGHT_APP_TOTP_SECRET || perimeterTotpSecret;
 
 async function visibleInput(page: Page, selectors: string, timeout = 0) {
   const deadline = Date.now() + timeout;
@@ -27,7 +28,7 @@ async function completeCognitoLogin(
   page: Page,
   username: string | undefined,
   password: string | undefined,
-  mfaCode: string | undefined,
+  totpSecret: string | undefined,
   label: string,
 ) {
   if (!username || !password) {
@@ -47,19 +48,19 @@ async function completeCognitoLogin(
   try {
     codeInput = await visibleInput(
       page,
-      'input[name="code"], input[name="verification_code"], input[inputmode="numeric"]',
+      'input[name="code"], input[name="verification_code"], input[name="software_token_mfa_code"], input[inputmode="numeric"]',
       5_000,
     );
   } catch {
     codeInput = undefined;
   }
   if (codeInput) {
-    if (!mfaCode) {
+    if (!totpSecret) {
       throw new Error(
-        `${label} requested MFA. Provide an approved short-lived MFA code through the environment, never in source.`,
+        `${label} requested MFA, but its TOTP seed is not configured. Configure the appropriate GitHub Environment secret.`,
       );
     }
-    await codeInput.fill(mfaCode);
+    await codeInput.fill(generateTotp(totpSecret));
     await (await visibleInput(
       page,
       'button[name="verifyCode"], button[type="submit"], input[type="submit"]',
@@ -80,7 +81,13 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   if (new URL(page.url()).origin === applicationOrigin) {
     throw new Error('The protected environment did not redirect to its perimeter Cognito sign-in.');
   }
-  await completeCognitoLogin(page, perimeterUsername, perimeterPassword, perimeterMfaCode, 'Perimeter');
+  await completeCognitoLogin(
+    page,
+    perimeterUsername,
+    perimeterPassword,
+    perimeterTotpSecret,
+    'Perimeter',
+  );
   await page.waitForURL((url) => url.origin === applicationOrigin, { timeout: 30_000 });
 
   // The perimeter session only grants access to the deployed application. It
@@ -94,7 +101,7 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
     page,
     applicationUsername,
     applicationPassword,
-    applicationMfaCode,
+    applicationTotpSecret,
     'Application',
   );
 

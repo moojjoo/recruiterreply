@@ -9,7 +9,7 @@ on:
         type: string
 
 permissions:
-  actions: read
+  actions: write
   id-token: write
   contents: read
   deployments: read
