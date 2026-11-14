@@ -24,25 +24,39 @@ npx playwright install chromium
 npx playwright test --config=playwright.auth.config.ts
 ```
 
-If Cognito requests email MFA, provide the current one-time code through `PLAYWRIGHT_MFA_CODE` for that run only. Do not place an OTP in source, a committed `.env` file, a test fixture, a URL, or a persistent artifact. The default storage state is written under the operating system temporary directory. Override `PLAYWRIGHT_AUTH_DIR` only with a local ignored directory.
+The automated path uses a dedicated CI account and `PLAYWRIGHT_TOTP_SECRET`.
+Playwright generates the six-digit code in memory at runtime. Do not place an
+OTP or TOTP seed in source, a committed `.env` file, a test fixture, a URL, or
+a persistent artifact. The default storage state is written under the
+operating system temporary directory. Override `PLAYWRIGHT_AUTH_DIR` only with
+a local ignored directory.
 
 The authenticated setup stores only the browser state needed by the dependent tests. Delete the temporary directory after use and never upload it. Playwright reports may contain screenshots and traces, but must not contain credentials, tokens, authorization codes, or storage state.
 
 ## GitHub Actions
 
-`.github/workflows/playwright-authenticated.yml` runs automatically after a successful Dev/Test deployment status and can also be dispatched manually. The deployment event supplies the target environment, so the same workflow cannot accidentally use Test credentials against Dev. Configure these secrets separately in the GitHub `dev` and `test` Environments:
+`.github/workflows/playwright-authenticated.yml` runs automatically after the
+promotion workflow explicitly dispatches it for a successful Dev/Test
+deployment, and can also be dispatched manually. Configure these secrets
+separately in the GitHub `dev` and `test` Environments:
 
 - `PLAYWRIGHT_USERNAME`
 - `PLAYWRIGHT_PASSWORD`
-- `PLAYWRIGHT_MFA_CODE` only when an approved, short-lived code-injection process exists
+- `PLAYWRIGHT_TOTP_SECRET`
 - `PLAYWRIGHT_APP_USERNAME` and `PLAYWRIGHT_APP_PASSWORD` when the application Cognito account differs from the perimeter account
-- `PLAYWRIGHT_APP_MFA_CODE` only when the application account requires an approved, short-lived code-injection process
+- `PLAYWRIGHT_APP_TOTP_SECRET` when the application account differs and requires MFA
 
 The existing `PLAYWRIGHT_USERNAME` and `PLAYWRIGHT_PASSWORD` secrets are always used for the perimeter gate. The optional `PLAYWRIGHT_APP_*` secrets are used for the application login; if they are absent, the test falls back to the perimeter pair so a shared native-Cognito test account remains supported. Google is never used by the perimeter setup.
 
 This means a successful perimeter redirect alone is not an authenticated application test: the setup must complete the second application sign-in before the tools, refresh, deep-link, logout, and session-safety assertions run.
 
-Use dedicated invited accounts with the minimum lower-environment access. A static MFA code is not acceptable. If the environment requires interactive email verification, the job must fail with a clear prerequisite message rather than weakening MFA or guessing a code.
+Use dedicated invited accounts with the minimum lower-environment access. Enroll
+the TOTP seeds once with Cognito's `AssociateSoftwareToken` and
+`VerifySoftwareToken` APIs, then store them only as GitHub Environment
+secrets. They must never be placed in Terraform state, logs, or artifacts. A
+static MFA code is not acceptable. If the environment still requires
+interactive email verification, the job must fail with a clear prerequisite
+message rather than weakening MFA or guessing a code.
 
 The workflow does not upload the temporary authentication directory. It retains only the HTML report, screenshots, and traces needed to diagnose a failed run.
 
