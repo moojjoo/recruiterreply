@@ -103,13 +103,19 @@ resource "aws_iam_role_policy" "bff_runtime" {
         Sid      = "BffSessionStore"
         Effect   = "Allow"
         Action   = ["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem"]
-        Resource = var.bff_session_table_arn
+        Resource = concat(
+          var.bff_session_table_arn != null ? [var.bff_session_table_arn] : [],
+          var.additional_bff_session_table_arns,
+        )
       },
       {
         Sid      = "BffSessionEnvelopeKeys"
         Effect   = "Allow"
         Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
-        Resource = var.bff_session_kms_key_arn
+        Resource = concat(
+          var.bff_session_kms_key_arn != null ? [var.bff_session_kms_key_arn] : [],
+          var.additional_bff_session_kms_key_arns,
+        )
       },
       {
         Sid      = "ReadBackendConfiguration"

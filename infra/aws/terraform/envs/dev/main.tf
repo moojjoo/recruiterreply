@@ -48,6 +48,8 @@ module "compute" {
   backup_environment                    = "dev"
   bff_session_table_arn                 = var.bff_session_table_arn
   bff_session_kms_key_arn               = var.bff_session_kms_key_arn
+  additional_bff_session_table_arns     = var.additional_bff_session_table_arns
+  additional_bff_session_kms_key_arns   = var.additional_bff_session_kms_key_arns
   backend_secret_arn                    = module.secrets.secret_arn
   private_api_origin_signing_secret_arn = var.private_api_origin_signing_secret_arn
   log_group_arns                        = values(module.logging.backend_log_group_arns)
