@@ -61,6 +61,18 @@ variable "bff_session_kms_key_arn" {
   default     = null
 }
 
+variable "additional_bff_session_table_arns" {
+  description = "Additional BFF session table ARNs used by this shared runtime."
+  type        = list(string)
+  default     = []
+}
+
+variable "additional_bff_session_kms_key_arns" {
+  description = "Additional BFF session KMS key ARNs used by this shared runtime."
+  type        = list(string)
+  default     = []
+}
+
 variable "backend_secret_arn" {
   description = "Optional backend Secrets Manager ARN."
   type        = string

@@ -21,4 +21,6 @@ db_deletion_protection = false
 # preserves the live BFF and private-origin IAM policies.
 bff_session_table_arn                 = "arn:aws:dynamodb:us-east-1:178522450316:table/recruiterreply-dev-bff-sessions"
 bff_session_kms_key_arn               = "arn:aws:kms:us-east-1:178522450316:key/bb06d97f-8dfb-42a2-b750-f24d9b89d32f"
+additional_bff_session_table_arns     = ["arn:aws:dynamodb:us-east-1:178522450316:table/recruiterreply-test-bff-sessions"]
+additional_bff_session_kms_key_arns   = ["arn:aws:kms:us-east-1:178522450316:key/b94e1435-c3a7-4e05-b957-90e4ced213b0"]
 private_api_origin_signing_secret_arn = "arn:aws:secretsmanager:us-east-1:178522450316:secret:recruiterreply/test/edge-auth-signing-keys-uuOyxN"

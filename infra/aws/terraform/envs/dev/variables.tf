@@ -160,6 +160,18 @@ variable "bff_session_kms_key_arn" {
   default     = null
 }
 
+variable "additional_bff_session_table_arns" {
+  description = "Additional BFF session tables used by the shared Dev/Test runtime."
+  type        = list(string)
+  default     = []
+}
+
+variable "additional_bff_session_kms_key_arns" {
+  description = "Additional BFF session KMS keys used by the shared Dev/Test runtime."
+  type        = list(string)
+  default     = []
+}
+
 variable "private_api_origin_signing_secret_arn" {
   description = "Optional ARN of the shared Test API origin-signing secret read by the Dev host."
   type        = string
