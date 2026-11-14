@@ -108,7 +108,14 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with email' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continue with email' }).click();
+  // The button first requests an authorization URL from the BFF and then
+  // assigns window.location. Wait for the cross-origin navigation before
+  // looking for Cognito's controls; otherwise the old app page is still
+  // active and the test races the browser navigation.
+  await Promise.all([
+    page.waitForURL((url) => url.origin !== applicationOrigin, { timeout: 30_000 }),
+    page.getByRole('button', { name: 'Continue with email' }).click(),
+  ]);
 
   await completeCognitoLogin(
     page,
