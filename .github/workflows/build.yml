@@ -301,6 +301,7 @@ jobs:
       sha: ${{ github.sha }}
       build_run_id: ${{ github.run_id }}
       api_base_url: /api
+      auth_mode: cookie
       frontend_url: https://dev.recruiterreply.com
       api_url: https://api-dev.recruiterreply.com
       robots_txt: |

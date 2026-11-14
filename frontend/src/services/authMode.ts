@@ -1,11 +1,15 @@
 const configuredAuthMode = import.meta.env.VITE_AUTH_MODE;
+const runtimeAuthMode = typeof window !== "undefined" ? window.__APP_CONFIG__?.AUTH_MODE : undefined;
+const effectiveAuthMode = runtimeAuthMode && !runtimeAuthMode.startsWith("__RUNTIME_")
+  ? runtimeAuthMode
+  : configuredAuthMode;
 /**
- * Keep email/password and legacy Google authentication available by default
- * in every environment. The Cognito BFF remains available through the explicit
- * VITE_AUTH_MODE=cookie switch.
+ * Local builds remain on legacy auth unless VITE_AUTH_MODE is set. Deployed
+ * environments receive their approved mode through the runtime config so the
+ * same immutable frontend artifact can use Cognito in Dev/Test.
  */
 export const isCookieAuthEnabled = (): boolean => {
-  return configuredAuthMode === "cookie";
+  return effectiveAuthMode === "cookie";
 };
 
 export const clearLegacyAuthState = (): void => {

@@ -11,6 +11,7 @@ interface ImportMeta {
 
 interface AppRuntimeConfig {
   readonly API_BASE_URL?: string;
+  readonly AUTH_MODE?: string;
 }
 
 interface Window {

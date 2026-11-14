@@ -26,6 +26,10 @@ on:
       api_base_url:
         required: true
         type: string
+      auth_mode:
+        required: false
+        default: legacy
+        type: string
       frontend_url:
         required: true
         type: string
@@ -322,6 +326,7 @@ jobs:
         if: steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
+          AUTH_MODE: ${{ inputs.auth_mode }}
           ROBOTS_TXT: ${{ inputs.robots_txt }}
         run: |
           set -euo pipefail
@@ -330,6 +335,11 @@ jobs:
             exit 1
           fi
           sed -i "s|__RUNTIME_API_BASE_URL__|${API_BASE_URL}|" promoted-dist/config.js
+          if [[ "$AUTH_MODE" != "cookie" && "$AUTH_MODE" != "legacy" ]]; then
+            echo "::error::AUTH_MODE must be cookie or legacy"
+            exit 1
+          fi
+          sed -i "s|__RUNTIME_AUTH_MODE__|${AUTH_MODE}|" promoted-dist/config.js
           printf '%s\n' "$ROBOTS_TXT" > promoted-dist/robots.txt
 
       - name: Validate frontend deployment configuration

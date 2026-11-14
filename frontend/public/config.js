@@ -1,3 +1,4 @@
 window.__APP_CONFIG__ = {
   API_BASE_URL: "__RUNTIME_API_BASE_URL__",
+  AUTH_MODE: "__RUNTIME_AUTH_MODE__",
 };
