@@ -9,12 +9,17 @@ const applicationUsername = process.env.PLAYWRIGHT_APP_USERNAME || perimeterUser
 const applicationPassword = process.env.PLAYWRIGHT_APP_PASSWORD || perimeterPassword;
 const applicationMfaCode = process.env.PLAYWRIGHT_APP_MFA_CODE || perimeterMfaCode;
 
-async function visibleInput(page: Page, selectors: string) {
-  const matches = page.locator(selectors);
-  for (let index = 0; index < await matches.count(); index += 1) {
-    const match = matches.nth(index);
-    if (await match.isVisible().catch(() => false)) return match;
-  }
+async function visibleInput(page: Page, selectors: string, timeout = 0) {
+  const deadline = Date.now() + timeout;
+  do {
+    const matches = page.locator(selectors);
+    for (let index = 0; index < await matches.count(); index += 1) {
+      const match = matches.nth(index);
+      if (await match.isVisible().catch(() => false)) return match;
+    }
+    if (Date.now() < deadline) await page.waitForTimeout(250);
+  } while (Date.now() < deadline);
+
   throw new Error(`No visible control matched: ${selectors}`);
 }
 
@@ -43,6 +48,7 @@ async function completeCognitoLogin(
     codeInput = await visibleInput(
       page,
       'input[name="code"], input[name="verification_code"], input[inputmode="numeric"]',
+      5_000,
     );
   } catch {
     codeInput = undefined;
