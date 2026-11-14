@@ -113,17 +113,22 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   // looking for Cognito's controls; otherwise the old app page is still
   // active and the test races the browser navigation.
   await Promise.all([
-    page.waitForURL((url) => url.origin !== applicationOrigin, { timeout: 30_000 }),
+    page.waitForURL((url) => (
+      url.origin !== applicationOrigin ||
+      !/^\/(?:login|register)(?:$|[?#])/.test(url.pathname)
+    ), { timeout: 30_000 }),
     page.getByRole('button', { name: 'Continue with email' }).click(),
   ]);
 
-  await completeCognitoLogin(
-    page,
-    applicationUsername,
-    applicationPassword,
-    applicationTotpSecret,
-    'Application',
-  );
+  if (new URL(page.url()).origin !== applicationOrigin) {
+    await completeCognitoLogin(
+      page,
+      applicationUsername,
+      applicationPassword,
+      applicationTotpSecret,
+      'Application',
+    );
+  }
 
   await page.waitForURL((url) => (
     url.origin === applicationOrigin &&
