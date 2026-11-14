@@ -96,6 +96,7 @@ jobs:
       environment: test
       sha: ${{ needs.resolve-source.outputs.sha }}
       api_base_url: /api
+      auth_mode: cookie
       frontend_url: https://test.recruiterreply.com
       api_url: https://test.recruiterreply.com
       robots_txt: |

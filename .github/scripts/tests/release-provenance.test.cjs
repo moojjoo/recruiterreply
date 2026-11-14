@@ -48,3 +48,12 @@ test('promotion idempotency requires the verified environment release manifest',
   assert.doesNotMatch(promote, /listDeployments/);
   assert.match(promote, /skipping redeployment/);
 });
+
+test('Dev and Test promotions configure the runtime frontend for Cognito auth', () => {
+  const buildWorkflow = readFileSync(join(root, 'workflows/build.yml'), 'utf8');
+  const testWorkflow = readFileSync(join(root, 'workflows/promote-test.yml'), 'utf8');
+  assert.match(buildWorkflow, /auth_mode: cookie/);
+  assert.match(testWorkflow, /auth_mode: cookie/);
+  assert.match(promote, /__RUNTIME_AUTH_MODE__/);
+  assert.match(promote, /AUTH_MODE must be cookie or legacy/);
+});
