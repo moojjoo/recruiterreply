@@ -40,8 +40,11 @@ test('all shared-host promotions use one non-canceling lock', () => {
   assert.doesNotMatch(readFileSync(join(root, 'workflows/promote-prod.yml'), 'utf8'), /group: promote-prod/);
 });
 
-test('promotion detects a successful same-SHA deployment before mutation', () => {
+test('promotion idempotency requires the verified environment release manifest', () => {
   assert.match(promote, /name: Detect already deployed release/);
-  assert.match(promote, /already_deployed.*true/);
+  assert.match(promote, /release-manifest-\$\{process\.env\.ENVIRONMENT\}-\$\{process\.env\.SHA\}/);
+  assert.match(promote, /actions\.listArtifactsForRepo/);
+  assert.match(promote, /artifact\.expired === false/);
+  assert.doesNotMatch(promote, /listDeployments/);
   assert.match(promote, /skipping redeployment/);
 });
