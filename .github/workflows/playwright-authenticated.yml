@@ -39,6 +39,12 @@ jobs:
       PLAYWRIGHT_USERNAME: ${{ secrets.PLAYWRIGHT_USERNAME }}
       PLAYWRIGHT_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
       PLAYWRIGHT_MFA_CODE: ${{ secrets.PLAYWRIGHT_MFA_CODE }}
+      # Optional application-pool credentials. If omitted, the setup falls
+      # back to the perimeter credentials for environments that intentionally
+      # use the same native Cognito account in both layers.
+      PLAYWRIGHT_APP_USERNAME: ${{ secrets.PLAYWRIGHT_APP_USERNAME }}
+      PLAYWRIGHT_APP_PASSWORD: ${{ secrets.PLAYWRIGHT_APP_PASSWORD }}
+      PLAYWRIGHT_APP_MFA_CODE: ${{ secrets.PLAYWRIGHT_APP_MFA_CODE }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7

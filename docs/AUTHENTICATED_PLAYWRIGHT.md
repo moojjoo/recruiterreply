@@ -7,13 +7,19 @@ The repository has two Playwright entry points:
 
 ## Local authenticated run
 
-Use a dedicated lower-environment account. Do not use a personal account or save credentials in the repository.
+Use dedicated lower-environment accounts. Do not use a personal account or save credentials in the repository. Authenticated validation has two deliberate phases:
+
+1. The Dev/Test perimeter redirects to its native Cognito username/password UI. This account is an environment gate and must not use Google.
+2. After the perimeter session is established, the browser opens RecruiterReply's application login and selects `Continue with email`. The application account is then authenticated separately. The application UI may also offer `Continue with Google` for real users.
 
 ```bash
 export PLAYWRIGHT_ENV=dev
 export BASE_URL=https://dev.recruiterreply.com
 export PLAYWRIGHT_USERNAME='lower-environment-test-user@example.com'
 export PLAYWRIGHT_PASSWORD='use-a-local-secret-store'
+# Optional when the application user is different from the perimeter user.
+export PLAYWRIGHT_APP_USERNAME='lower-environment-app-user@example.com'
+export PLAYWRIGHT_APP_PASSWORD='use-a-local-secret-store'
 npx playwright install chromium
 npx playwright test --config=playwright.auth.config.ts
 ```
@@ -29,6 +35,12 @@ The authenticated setup stores only the browser state needed by the dependent te
 - `PLAYWRIGHT_USERNAME`
 - `PLAYWRIGHT_PASSWORD`
 - `PLAYWRIGHT_MFA_CODE` only when an approved, short-lived code-injection process exists
+- `PLAYWRIGHT_APP_USERNAME` and `PLAYWRIGHT_APP_PASSWORD` when the application Cognito account differs from the perimeter account
+- `PLAYWRIGHT_APP_MFA_CODE` only when the application account requires an approved, short-lived code-injection process
+
+The existing `PLAYWRIGHT_USERNAME` and `PLAYWRIGHT_PASSWORD` secrets are always used for the perimeter gate. The optional `PLAYWRIGHT_APP_*` secrets are used for the application login; if they are absent, the test falls back to the perimeter pair so a shared native-Cognito test account remains supported. Google is never used by the perimeter setup.
+
+This means a successful perimeter redirect alone is not an authenticated application test: the setup must complete the second application sign-in before the tools, refresh, deep-link, logout, and session-safety assertions run.
 
 Use dedicated invited accounts with the minimum lower-environment access. A static MFA code is not acceptable. If the environment requires interactive email verification, the job must fail with a clear prerequisite message rather than weakening MFA or guessing a code.
 
