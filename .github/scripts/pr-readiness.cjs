@@ -71,8 +71,6 @@ function classifyDependabotUpdate(pr, changedFiles = []) {
       (toMajor === fromMajor && toMinor === fromMinor && toPatch < fromPatch)) {
     return {...result, ecosystem, updateType, reason: 'Version update moves backwards'};
   }
-  if (updateType === 'major') return {...result, ecosystem, updateType, reason: 'Major update requires manual review'};
-
   const pathPattern = dependabotEcosystems.get(ecosystem);
   const files = Array.isArray(changedFiles) ? changedFiles : [];
   if (!files.length || files.some(file => {
@@ -81,6 +79,9 @@ function classifyDependabotUpdate(pr, changedFiles = []) {
     return !filename || !pathPattern.test(filename) || (status && !['added', 'modified'].includes(status));
   })) {
     return {...result, ecosystem, updateType, reason: 'Changed files exceed the ecosystem dependency allowlist'};
+  }
+  if (updateType === 'major') {
+    return {...result, ecosystem, updateType, manualReviewRequired: true, reason: 'Major update requires manual review'};
   }
   return {eligible: true, ecosystem, updateType, reason: 'Trusted npm/NuGet patch or minor Dependabot update'};
 }
@@ -175,18 +176,30 @@ function validateOwnerAuthorization({comments = [], repository, issueNumber, pul
   return {authorized:true, record};
 }
 
-function validateReadiness({pr, checks = [], reviews = [], threads = [], dependenciesMerged = true, changedFiles = [], trustedDependabotUpdate = false, ownerAuthorization = false}) {
+function hasCurrentMaintainerApproval({reviews = [], ownerLogin, headSha}) {
+  const latest = new Map();
+  for (const review of reviews) {
+    if (review.user?.login && review.commit_id === headSha && review.state !== 'COMMENTED') {
+      latest.set(review.user.login, review);
+    }
+  }
+  return latest.get(ownerLogin)?.state === 'APPROVED';
+}
+
+function validateReadiness({pr, checks = [], reviews = [], threads = [], dependenciesMerged = true, changedFiles = [], trustedDependabotUpdate = false, ownerAuthorization = false, majorDependabotUpdate = false, maintainerApproved = false}) {
   const reasons = [];
   if (pr.draft) reasons.push('PR is draft');
   const risk = classifyRisk(changedFiles);
-  if (risk === 'high' && !trustedDependabotUpdate && !ownerAuthorization) reasons.push('High/unknown risk change requires owner execute-dev authorization for the current SHA');
+  if (majorDependabotUpdate && !maintainerApproved) reasons.push('Major Dependabot update requires an approving review from the repository maintainer on the current commit');
+  if (risk === 'high' && !trustedDependabotUpdate && !majorDependabotUpdate && !ownerAuthorization) reasons.push('High/unknown risk change requires owner execute-dev authorization for the current SHA');
+  const dependencyUpdateTrusted = trustedDependabotUpdate || majorDependabotUpdate;
   const body = pr.body || '';
   const evidence = body.match(/^## Implementation evidence\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/mi);
-  if (!trustedDependabotUpdate && (!evidence || !/\b(commit|test|verification|workflow)\b/i.test(evidence[1]) || evidence[1].trim().length < 20)) reasons.push('Missing substantive implementation evidence');
+  if (!dependencyUpdateTrusted && (!evidence || !/\b(commit|test|verification|workflow)\b/i.test(evidence[1]) || evidence[1].trim().length < 20)) reasons.push('Missing substantive implementation evidence');
   const criteria = body.match(/^## Acceptance criteria\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/mi);
   const lines = criteria ? criteria[1].split(/\r?\n/).filter(x => /^\s*[-*]\s*\[[ xX]\]/.test(x)) : [];
-  if (!trustedDependabotUpdate && !lines.length) reasons.push('No acceptance criteria checklist');
-  if (!trustedDependabotUpdate && lines.some(x => !/^\s*[-*]\s*\[[xX]\]/.test(x))) reasons.push('Unchecked acceptance criteria');
+  if (!dependencyUpdateTrusted && !lines.length) reasons.push('No acceptance criteria checklist');
+  if (!dependencyUpdateTrusted && lines.some(x => !/^\s*[-*]\s*\[[xX]\]/.test(x))) reasons.push('Unchecked acceptance criteria');
   if (!dependenciesMerged) reasons.push('Unmerged PR dependency');
   const checkState = requiredCheckState({checks, headSha:pr.head.sha, changedFiles});
   for (const name of checkState.pending) reasons.push('Pending current-SHA check: ' + name);
@@ -202,5 +215,5 @@ function validateReadiness({pr, checks = [], reviews = [], threads = [], depende
 module.exports = {
   validateReadiness,classifyRisk,classifyDependabotUpdate,requiredCodeQLChecks,requiredCheckState,
   parseOwnerCommand,createAuthorizationRecord,formatAuthorizationComment,parseAuthorizationComment,
-  validateOwnerAuthorization,authorizationMarker
+  validateOwnerAuthorization,hasCurrentMaintainerApproval,authorizationMarker
 };

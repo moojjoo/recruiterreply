@@ -130,13 +130,15 @@ jobs:
               const changedFiles = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: pr.number, per_page: 100});
               const dependabot = policy.classifyDependabotUpdate(full, changedFiles);
               const trustedDependabotUpdate = dependabot.eligible;
+              const majorDependabotUpdate = dependabot.manualReviewRequired === true;
               core.notice(`PR #${full.number}: Dependabot eligibility=${trustedDependabotUpdate} (${dependabot.reason})`);
-              if (!labeled && !managed && !trustedDependabotUpdate) {
+              if (!labeled && !managed && !trustedDependabotUpdate && !majorDependabotUpdate) {
                 core.notice('PR #' + full.number + ': not an execute-dev PR or eligible Dependabot update (' + dependabot.reason + ')');
                 continue;
               }
               const {data: checkResponse} = await github.rest.checks.listForRef({owner, repo, ref: full.head.sha, per_page: 100, filter:'latest'});
               const {data: reviews} = await github.rest.pulls.listReviews({owner, repo, pull_number: pr.number, per_page: 100});
+              const maintainerApproved = majorDependabotUpdate && policy.hasCurrentMaintainerApproval({reviews, ownerLogin, headSha: full.head.sha});
               const q = await github.graphql(`query($owner:String!, $repo:String!, $number:Int!) {
                 repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
                   id autoMergeRequest { enabledAt }
@@ -170,7 +172,8 @@ jobs:
               const result = policy.validateReadiness({
                 pr:full, checks:checkResponse.check_runs, reviews,
                 changedFiles, ownerAuthorization:authorization.authorized,
-                threads:item.reviewThreads.nodes, dependenciesMerged, trustedDependabotUpdate
+                threads:item.reviewThreads.nodes, dependenciesMerged, trustedDependabotUpdate,
+                majorDependabotUpdate, maintainerApproved
               });
               await publishPolicyCheck(full, result);
               core.notice(`PR #${full.number}: risk=${result.risk}; readiness=${result.eligible ? 'eligible' : 'blocked'}`);
@@ -196,7 +199,7 @@ jobs:
                 core.warning(`PR #${full.number}: head changed during readiness evaluation; restarting on a future event`);
                 continue;
               }
-              if (risk === 'high') {
+              if (risk === 'high' && !majorDependabotUpdate) {
                 // GitHub's auto-merge mutation has no expected-head parameter. For
                 // owner-authorized high-risk changes, use the protected REST merge
                 // endpoint with an expected SHA so a concurrent push fails atomically.
