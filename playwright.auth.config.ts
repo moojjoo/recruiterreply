@@ -30,7 +30,9 @@ export default defineConfig({
     {
       name: `${environment}-auth-setup`,
       testMatch: /.*\.setup\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL },
+      // The setup project creates this file; applying it here would make
+      // Playwright fail before the setup test can authenticate.
+      use: { ...devices['Desktop Chrome'], baseURL, storageState: undefined },
     },
     {
       name: `${environment}-authenticated`,
