@@ -1,9 +1,14 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using RecruiterReply.Data;
 
 #nullable disable
 
 namespace RecruiterReply.Migrations;
 
+[DbContext(typeof(RecruiterReplyDbContext))]
+[Migration("20261018232000_AddUserIdentities")]
 public partial class AddUserIdentities : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
