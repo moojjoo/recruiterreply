@@ -20,9 +20,11 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
     await page.getByRole('button', { name: 'Continue with email' }).click();
   }
 
-  await page.locator('input[name="username"], input[type="email"]').first().fill(username);
-  await page.locator('input[name="password"], input[type="password"]').first().fill(password);
-  await page.locator('button[name="signInSubmit"], button[type="submit"]').first().click();
+  await page.locator('input[name="username"]:visible, input[type="email"]:visible').first().fill(username);
+  await page.locator('input[name="password"]:visible, input[type="password"]:visible').first().fill(password);
+  await page.locator(
+    'button[name="signInSubmit"]:visible, button[type="submit"]:visible, input[name="signInSubmit"]:visible, input[type="submit"]:visible',
+  ).first().click();
 
   const codeInput = page.locator(
     'input[name="code"], input[name="verification_code"], input[inputmode="numeric"]',
@@ -32,7 +34,9 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
       throw new Error('Cognito requested MFA. Provide an approved short-lived PLAYWRIGHT_MFA_CODE through the environment, never in source.');
     }
     await codeInput.fill(mfaCode);
-    await page.locator('button[type="submit"], button[name="verifyCode"]').first().click();
+    await page.locator(
+      'button[type="submit"]:visible, button[name="verifyCode"]:visible, input[type="submit"]:visible',
+    ).first().click();
   }
 
   await page.waitForURL((url) => (
