@@ -34,6 +34,8 @@ Use dedicated invited accounts with the minimum lower-environment access. A stat
 
 The workflow does not upload the temporary authentication directory. It retains only the HTML report, screenshots, and traces needed to diagnose a failed run.
 
+Deployment-status runs are intentionally limited to successful `dev` and `test` deployment records; unrelated environments and failed deployments are ignored.
+
 ## Codex interactive browser validation
 
 For Codex-driven interactive validation, enable the `js_repl` feature in the Codex configuration and start a new Codex session. Use a persistent, isolated Playwright browser context for the selected environment, and keep credentials and storage state outside the repository. The interactive session and the GitHub Actions workflow are separate validation paths: interactive Codex work is useful for investigation and guided acceptance, while CI provides repeatable post-deployment evidence.
