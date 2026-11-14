@@ -38,7 +38,9 @@ variable "logout_urls" {
 variable "supported_identity_providers" {
   description = "Identity providers enabled on the BFF app client. Provider resources must already exist in the user pool."
   type        = list(string)
-  default     = ["COGNITO"]
+  # This module fronts application auth. The separate private environment
+  # identity module deliberately remains native-Cognito-only.
+  default = ["COGNITO", "Google"]
 
   validation {
     condition     = contains(var.supported_identity_providers, "COGNITO")

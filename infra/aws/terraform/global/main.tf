@@ -49,8 +49,10 @@ module "cognito_bff" {
   resource_identifier = var.cognito_bff_resource_identifiers[each.key]
   callback_urls       = var.cognito_bff_callback_urls[each.key]
   logout_urls         = var.cognito_bff_logout_urls[each.key]
-  supported_identity_providers = lookup(var.cognito_bff_supported_identity_providers, each.key, ["COGNITO"])
-  tags                = var.tags
+  # Application BFF only: the private environment edge identity module stays
+  # native-Cognito-only, while the app can offer native email/password and Google.
+  supported_identity_providers = lookup(var.cognito_bff_supported_identity_providers, each.key, ["COGNITO", "Google"])
+  tags                         = var.tags
 }
 
 # Account-wide GitHub Actions OIDC trust + deploy role, shared by deploy-dev.yml,
