@@ -67,7 +67,7 @@ Project 2 has automatic intake and closed-item workflows enabled. New qualifying
 ## Guardrails
 
 - One focused issue and branch per independently reviewable change.
-- PR titles and commit messages have separate contracts: PRs use `RR-<issue>: <summary>`; commits continue to use Conventional Commits such as `docs(workflow): clarify PR titles`.
+- PR titles and commit messages have separate, issue-linked contracts: PRs use `RR-<issue>: <summary>`; commits preserve Conventional Commit parsing by using the identifier as the scope, `<type>(RR-<issue>): <subject>`, such as `docs(RR-695): document commit traceability`. Use the same non-padded repository issue number in the branch, commit, PR title, and PR body marker.
 - Never commit `.env` values or secrets.
 - Dev/test/prod secrets remain in AWS; local secrets remain local.
 - Local HTTPS-only is a **desired future change**, not yet established by the repository.
