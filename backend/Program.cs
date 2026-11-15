@@ -196,11 +196,24 @@ builder.Services.AddAuthentication(options =>
         {
             OnTokenValidated = context =>
             {
-                if (!GitHubActionsOidcPolicy.IsApproved(context.Principal, githubOidcOptions))
+                var rejectionReason = GitHubActionsOidcPolicy.RejectionReason(context.Principal, githubOidcOptions);
+                if (rejectionReason is not null)
                 {
+                    context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("GitHubActionsSmoke")
+                        .LogWarning("Rejected GitHub Actions smoke identity: {Reason}", rejectionReason);
                     context.Fail("GitHub Actions identity is not approved for Dev smoke tests.");
                 }
 
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("GitHubActionsSmoke")
+                    .LogWarning("Rejected GitHub Actions smoke token: token_validation_failed");
                 return Task.CompletedTask;
             }
         };

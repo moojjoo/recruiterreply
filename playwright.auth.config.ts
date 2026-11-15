@@ -8,6 +8,10 @@ if (environment !== 'dev' && environment !== 'test') {
 }
 
 const baseURL = process.env.BASE_URL || `https://${environment}.recruiterreply.com`;
+const expectedOrigin = `https://${environment}.recruiterreply.com`;
+if (new URL(baseURL).origin !== expectedOrigin || new URL(baseURL).pathname !== '/') {
+  throw new Error(`Authenticated validation BASE_URL must be exactly ${expectedOrigin}.`);
+}
 const authDirectory = process.env.PLAYWRIGHT_AUTH_DIR ||
   path.join(os.tmpdir(), `recruiterreply-playwright-${environment}`);
 const storageState = path.join(authDirectory, 'storage-state.json');
@@ -23,8 +27,9 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     baseURL,
     storageState,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    trace: 'off',
+    screenshot: 'off',
+    video: 'off',
   },
   projects: [
     {

@@ -32,7 +32,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Test private Dev deployment verification
-        run: node --test .github/scripts/tests/private-dev-smoke.test.cjs
+        run: >-
+          node --test
+          .github/scripts/tests/private-dev-smoke.test.cjs
+          .github/scripts/tests/private-dev-workflow.test.cjs
+          .github/scripts/tests/exact-release-acceptance.test.cjs
 
       - name: Test CI remediation comments
         run: node --test .github/scripts/tests/ci-remediation-comment.test.cjs
