@@ -822,6 +822,8 @@ jobs:
       - name: Verify private Dev deployed release identity
         if: inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed != 'true'
         env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
           DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
           DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
           DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
