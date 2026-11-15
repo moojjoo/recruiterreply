@@ -41,6 +41,21 @@ function isAuthenticatedApplicationDestination(url: URL, applicationOrigin: stri
     !/^\/(?:login|register)(?:$|[?#])/.test(url.pathname + url.search + url.hash);
 }
 
+async function waitForApprovedNavigation(
+  page: Page,
+  predicate: (url: URL) => boolean,
+  label: string,
+) {
+  try {
+    await page.waitForURL(predicate, { timeout: 30_000, waitUntil: 'commit' });
+  } catch {
+    // Playwright's navigation diagnostics include the complete URL. OAuth
+    // callbacks contain one-time code/state values, so replace those details
+    // with a stable failure message before the reporter can print them.
+    throw new Error(`${label} did not reach an approved destination.`);
+  }
+}
+
 async function visibleInput(page: Page, selectors: string, timeout = 0) {
   const deadline = Date.now() + timeout;
   do {
@@ -147,15 +162,16 @@ setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with email' })).toBeVisible();
   // The button first requests an authorization URL from the BFF and then
-  // assigns window.location. Wait for the hosted-login or final dashboard
-  // navigation before
-  // looking for Cognito's controls; otherwise the old app page is still
-  // active and the test races the browser navigation.
+  // assigns window.location. Resolve as soon as an approved navigation is
+  // committed: a warm Cognito session can immediately continue through the
+  // BFF callback before the hosted page reaches its load event. Waiting for
+  // that transient page to load would miss it and leave this promise blocked
+  // on the (deliberately untrusted for credentials) API callback origin.
   await Promise.all([
-    page.waitForURL((url) => (
+    waitForApprovedNavigation(page, (url) => (
       isAllowedCredentialDestination(url) ||
       isAuthenticatedApplicationDestination(url, applicationOrigin)
-    ), { timeout: 30_000 }),
+    ), 'Application login'),
     page.getByRole('button', { name: 'Continue with email' }).click(),
   ]);
 
@@ -169,9 +185,9 @@ setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
     );
   }
 
-  await page.waitForURL((url) => (
+  await waitForApprovedNavigation(page, (url) => (
     isAuthenticatedApplicationDestination(url, applicationOrigin)
-  ), { timeout: 30_000 });
+  ), 'Cognito callback');
   await mkdir(authDirectory, { recursive: true });
   await page.context().storageState({ path: storageState });
 });

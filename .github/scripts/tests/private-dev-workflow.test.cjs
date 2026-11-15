@@ -40,6 +40,9 @@ test('authenticated acceptance is exact-release bound and shares the deployment 
 test('application login waits for an allowlisted credential destination', () => {
   assert.match(authenticatedSetup, /isAllowedCredentialDestination\(url\) \|\|/);
   assert.match(authenticatedSetup, /isAuthenticatedApplicationDestination\(url, applicationOrigin\)/);
+  assert.match(authenticatedSetup, /waitForApprovedNavigation/);
+  assert.match(authenticatedSetup, /timeout: 30_000, waitUntil: 'commit'/);
+  assert.match(authenticatedSetup, /callbacks contain one-time code\/state values/);
   assert.doesNotMatch(authenticatedSetup, /url\.origin !== applicationOrigin \|\|/);
   assert.match(authenticatedSetup, /testInfo\.retry > 0/);
   assert.match(authenticatedSetup, /setup\.setTimeout\(90_000\)/);
