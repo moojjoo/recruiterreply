@@ -12,9 +12,9 @@ export const Toast: React.FC = () => {
           className={`alert alert-${toast.type} animate-fade-in`}
           role="alert"
         >
-          <span>
+          <span aria-hidden="true">
             {toast.type === "success" && "✓"}
-            {toast.type === "error" && "✕"}
+            {toast.type === "error" && "❗"}
             {toast.type === "info" && "ℹ"}
             {toast.type === "warning" && "⚠"}
           </span>
