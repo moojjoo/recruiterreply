@@ -116,7 +116,8 @@ public sealed class EdgeSessionAuthenticationHandler : AuthenticationHandler<Aut
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}".Trim()),
-                new Claim("identity_provider", "cognito")
+                new Claim("identity_provider", "cognito"),
+                new Claim("auth_time", payload.Iat.ToString())
             };
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name));
             return AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name));

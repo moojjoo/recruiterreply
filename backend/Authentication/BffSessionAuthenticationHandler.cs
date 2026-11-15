@@ -54,6 +54,7 @@ public sealed class BffSessionAuthenticationHandler : AuthenticationHandler<Auth
                 new("cognito_sub", session.ProviderSubject),
                 new("cognito_issuer", session.Issuer),
                 new("cognito_client_id", session.ClientId),
+                new("auth_time", session.CreatedAt.ToUnixTimeSeconds().ToString()),
                 new("scope", session.Scopes)
             };
             claims.AddRange(session.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries)

@@ -188,6 +188,25 @@ public class AuthController : ControllerBase
         catch (InvalidOperationException ex) { _logger.LogWarning(ex, "Cognito BFF is unavailable"); return StatusCode(503); }
     }
 
+    [HttpGet("cognito/link/start")]
+    [Authorize]
+    public IActionResult CognitoLinkStart()
+    {
+        if (_cognitoBff is null) return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        try
+        {
+            var userId = User.GetRequiredUserId();
+            if (!HasRecentAuthentication())
+                return StatusCode(StatusCodes.Status401Unauthorized, new { error = "Recent authentication is required before linking an identity." });
+            return Ok(new CognitoLoginRequest(_cognitoBff.BeginLogin(HttpContext, "Google", userId)));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Cognito identity linking is unavailable");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
     [HttpGet("cognito/callback")]
     [AllowAnonymous]
     public async Task<IActionResult> CognitoCallback([FromQuery] string? code, [FromQuery] string? state, CancellationToken ct)
@@ -198,42 +217,84 @@ public class AuthController : ControllerBase
         try
         {
             var tokens = await _cognitoBff.CompleteLoginAsync(HttpContext, code ?? string.Empty, state ?? string.Empty, ct);
-            var identity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
-                candidate.Provider == "cognito" && candidate.Subject == tokens.Identity.Subject, ct);
-            var user = identity is null
-                ? await _db.Users.FirstOrDefaultAsync(candidate =>
-                    candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct)
-                : await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == identity.UserId, ct);
             var now = _timeProvider.GetUtcNow();
-            if (user is null)
+            UserEntity? user;
+            UserIdentityEntity? identity;
+            if (tokens.LinkUserId is Guid linkUserId)
             {
-                if (await _db.Users.AnyAsync(candidate => candidate.Email == tokens.Identity.Email, ct))
-                    throw new InvalidOperationException("Cognito account requires explicit account linking.");
-                user = new UserEntity
+                var authenticatedUserId = User.GetRequiredUserId();
+                if (authenticatedUserId != linkUserId)
+                    throw new InvalidOperationException("Cognito account linking authorization changed.");
+                user = await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == linkUserId && candidate.IsActive, ct)
+                    ?? throw new InvalidOperationException("The account to link is unavailable.");
+                identity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
+                    candidate.Provider == "cognito" && candidate.Subject == tokens.Identity.Subject, ct);
+                if (identity is not null && identity.UserId != user.Id)
+                    throw new InvalidOperationException("Cognito identity is already linked to another account.");
+                var legacyOwner = await _db.Users.FirstOrDefaultAsync(candidate =>
+                    candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct);
+                if (legacyOwner is not null && legacyOwner.Id != user.Id)
+                    throw new InvalidOperationException("Cognito identity is already linked to another account.");
+                var existingTargetIdentity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
+                    candidate.UserId == user.Id && candidate.Provider == "cognito", ct);
+                if (existingTargetIdentity is not null && existingTargetIdentity.Subject != tokens.Identity.Subject)
+                    throw new InvalidOperationException("The account is already linked to a different Cognito identity.");
+                identity ??= existingTargetIdentity;
+                if (identity is null)
                 {
-                    Id = Guid.NewGuid(), Email = tokens.Identity.Email, PasswordHash = string.Empty,
-                    FirstName = tokens.Identity.FirstName, LastName = tokens.Identity.LastName,
-                    AuthProvider = "cognito", ProviderUserId = tokens.Identity.Subject, IsActive = true,
-                    CreatedAt = now.UtcDateTime, UpdatedAt = now.UtcDateTime, LastLogin = now.UtcDateTime
-                };
-                _db.Users.Add(user);
-            }
-            else if (!user.IsActive) throw new InvalidOperationException("Account is inactive.");
-            if (identity is null)
-            {
-                identity = new UserIdentityEntity
+                    identity = new UserIdentityEntity
+                    {
+                        Id = Guid.NewGuid(), UserId = user.Id, Provider = "cognito",
+                        Subject = tokens.Identity.Subject, Email = tokens.Identity.Email,
+                        CreatedAt = now.UtcDateTime, LastUsedAt = now.UtcDateTime
+                    };
+                    _db.UserIdentities.Add(identity);
+                }
+                else
                 {
-                    Id = Guid.NewGuid(), UserId = user.Id, Provider = "cognito",
-                    Subject = tokens.Identity.Subject, Email = tokens.Identity.Email,
-                    CreatedAt = now.UtcDateTime, LastUsedAt = now.UtcDateTime
-                };
-                _db.UserIdentities.Add(identity);
+                    identity.Email = tokens.Identity.Email;
+                    identity.LastUsedAt = now.UtcDateTime;
+                }
             }
             else
             {
-                identity.Email = tokens.Identity.Email;
-                identity.LastUsedAt = now.UtcDateTime;
+                identity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
+                    candidate.Provider == "cognito" && candidate.Subject == tokens.Identity.Subject, ct);
+                user = identity is null
+                    ? await _db.Users.FirstOrDefaultAsync(candidate =>
+                        candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct)
+                    : await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == identity.UserId, ct);
+                if (user is null)
+                {
+                    if (await _db.Users.AnyAsync(candidate => candidate.Email == tokens.Identity.Email, ct))
+                        throw new InvalidOperationException("Cognito account requires explicit account linking.");
+                    user = new UserEntity
+                    {
+                        Id = Guid.NewGuid(), Email = tokens.Identity.Email, PasswordHash = string.Empty,
+                        FirstName = tokens.Identity.FirstName, LastName = tokens.Identity.LastName,
+                        AuthProvider = "cognito", ProviderUserId = tokens.Identity.Subject, IsActive = true,
+                        CreatedAt = now.UtcDateTime, UpdatedAt = now.UtcDateTime, LastLogin = now.UtcDateTime
+                    };
+                    _db.Users.Add(user);
+                }
+                else if (!user.IsActive) throw new InvalidOperationException("Account is inactive.");
+                if (identity is null)
+                {
+                    identity = new UserIdentityEntity
+                    {
+                        Id = Guid.NewGuid(), UserId = user.Id, Provider = "cognito",
+                        Subject = tokens.Identity.Subject, Email = tokens.Identity.Email,
+                        CreatedAt = now.UtcDateTime, LastUsedAt = now.UtcDateTime
+                    };
+                    _db.UserIdentities.Add(identity);
+                }
+                else
+                {
+                    identity.Email = tokens.Identity.Email;
+                    identity.LastUsedAt = now.UtcDateTime;
+                }
             }
+            if (user is null) throw new InvalidOperationException("Cognito account could not be resolved.");
             user.LastLogin = now.UtcDateTime;
             user.UpdatedAt = now.UtcDateTime;
             await _db.SaveChangesAsync(ct);
@@ -250,7 +311,10 @@ public class AuthController : ControllerBase
         catch (Exception ex) when (ex is InvalidOperationException or SecurityTokenException or HttpRequestException)
         {
             _logger.LogWarning(ex, "Cognito BFF callback failed");
-            return Redirect($"{frontendBase}/login?error=cognito_auth_failed");
+            var failurePath = User.Identity?.IsAuthenticated == true
+                ? "/profile?error=cognito_link_failed"
+                : "/login?error=cognito_auth_failed";
+            return Redirect($"{frontendBase}{failurePath}");
         }
     }
 
@@ -335,6 +399,13 @@ public class AuthController : ControllerBase
         }
 
         return frontendBase.TrimEnd('/');
+    }
+
+    private bool HasRecentAuthentication()
+    {
+        if (!long.TryParse(User.FindFirst("auth_time")?.Value, out var authTime)) return false;
+        var age = _timeProvider.GetUtcNow().ToUnixTimeSeconds() - authTime;
+        return age is >= 0 and <= 900;
     }
 
     private bool IsLegacyAuthEnabled() => _configuration.GetValue("LegacyAuth:Enabled", true);

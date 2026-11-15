@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { MainLayout } from "../components/layout/MainLayout";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
@@ -8,6 +8,8 @@ import { Button } from "../components/common/Button";
 import { Modal } from "../components/common/Modal";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { gmailService } from "../services/api/gmailService";
+import { authService } from "../services/api/authService";
+import { isCookieAuthEnabled } from "../services/authMode";
 import { billingService } from "../services/api/billingService";
 import { GmailStatus, UsageStatus } from "../types/index";
 import { trackProductEvent, trackSubscriptionCancelled } from "../utils/productAnalytics";
@@ -29,11 +31,13 @@ const FEATURE_LABELS: Record<string, string> = {
 export const Profile: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
 
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
@@ -54,6 +58,12 @@ export const Profile: React.FC = () => {
       setIsLoadingStatus(false);
     }
   }, [showToast]);
+
+  useEffect(() => {
+    if (searchParams.get("error") === "cognito_link_failed") {
+      showToast("Google account could not be linked. No account changes were made.", "error", 0);
+    }
+  }, [searchParams, showToast]);
 
   useEffect(() => {
     // loadGmailStatus is shared with handleDisconnect's refresh call, so it can't be
@@ -160,6 +170,19 @@ export const Profile: React.FC = () => {
     }
   };
 
+  const handleLinkGoogle = async () => {
+    const confirmed = window.confirm("Link the currently signed-in Google account to this RecruiterReply account?");
+    if (!confirmed) return;
+    setIsLinkingGoogle(true);
+    try {
+      const response = await authService.cognitoLinkGoogleStart();
+      window.location.href = response.data.authorizationUrl;
+    } catch {
+      showToast("Google account linking is currently unavailable.", "error");
+      setIsLinkingGoogle(false);
+    }
+  };
+
   return (
     <MainLayout>
       <Card elevated>
@@ -185,6 +208,18 @@ export const Profile: React.FC = () => {
           </div>
         </div>
       </Card>
+
+      {isCookieAuthEnabled() && (
+        <Card elevated className="mt-6">
+          <h2 className="text-2xl font-bold mb-2">Sign-in methods</h2>
+          <p className="text-gray-600 mb-4">
+            Link Google to this existing RecruiterReply account so Google sign-in uses this account.
+          </p>
+          <Button type="button" variant="secondary" isLoading={isLinkingGoogle} onClick={handleLinkGoogle}>
+            Link Google account
+          </Button>
+        </Card>
+      )}
 
       <Card elevated className="mt-6">
         <h2 className="text-2xl font-bold mb-4">Billing</h2>

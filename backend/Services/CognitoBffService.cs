@@ -16,11 +16,11 @@ namespace RecruiterReply.Services;
 
 public sealed record CognitoLoginRequest(string AuthorizationUrl);
 public sealed record CognitoIdentity(string Subject, string Email, string? FirstName, string? LastName);
-public sealed record CognitoTokenSet(string AccessToken, string? RefreshToken, string Scope, CognitoIdentity Identity);
+public sealed record CognitoTokenSet(string AccessToken, string? RefreshToken, string Scope, CognitoIdentity Identity, Guid? LinkUserId = null);
 
 public interface ICognitoBffService
 {
-    string BeginLogin(HttpContext context, string? identityProvider = null);
+    string BeginLogin(HttpContext context, string? identityProvider = null, Guid? linkUserId = null);
     Task<CognitoTokenSet> CompleteLoginAsync(HttpContext context, string code, string state, CancellationToken cancellationToken = default);
 }
 
@@ -46,13 +46,13 @@ public sealed class CognitoBffService : ICognitoBffService
             new OpenIdConnectConfigurationRetriever(), new HttpDocumentRetriever { RequireHttps = true });
     }
 
-    public string BeginLogin(HttpContext context, string? identityProvider = null)
+    public string BeginLogin(HttpContext context, string? identityProvider = null, Guid? linkUserId = null)
     {
         EnsureConfigured();
         var state = RandomUrlToken(32);
         var verifier = RandomUrlToken(48);
         var nonce = RandomUrlToken(32);
-        var statePayload = JsonSerializer.Serialize(new OAuthState(state, verifier, nonce, _timeProvider.GetUtcNow().AddMinutes(5)));
+        var statePayload = JsonSerializer.Serialize(new OAuthState(state, verifier, nonce, _timeProvider.GetUtcNow().AddMinutes(5), linkUserId));
         var protectedState = _protector.Protect(statePayload);
         context.Response.Cookies.Append(StateCookie, protectedState, new CookieOptions
         {
@@ -124,7 +124,7 @@ public sealed class CognitoBffService : ICognitoBffService
         if (!scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(scope =>
             scope is not null && (scope == ApiScope("read") || scope == ApiScope("write"))))
             throw new SecurityTokenValidationException("Cognito access token has no usable API scope.");
-        return new CognitoTokenSet(token.AccessToken, token.RefreshToken, scopes, identity);
+        return new CognitoTokenSet(token.AccessToken, token.RefreshToken, scopes, identity, saved.LinkUserId);
     }
 
     private async Task<CognitoIdentity> ValidateIdentityAsync(string idToken, string nonce, CancellationToken cancellationToken)
@@ -189,7 +189,7 @@ public sealed class CognitoBffService : ICognitoBffService
     private static string RandomUrlToken(int bytes) => Convert.ToBase64String(RandomNumberGenerator.GetBytes(bytes))
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    private sealed record OAuthState(string State, string Verifier, string Nonce, DateTimeOffset ExpiresAt);
+    private sealed record OAuthState(string State, string Verifier, string Nonce, DateTimeOffset ExpiresAt, Guid? LinkUserId);
     internal sealed class CognitoTokenResponse
     {
         [JsonPropertyName("access_token")]
