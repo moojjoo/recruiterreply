@@ -635,7 +635,7 @@ jobs:
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --id "$INVALIDATION_ID"
 
-      - name: Verify private Dev frontend deployment
+      - name: Verify private Dev frontend artifact and boundary
         if: inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed != 'true'
         env:
           API_BASE_URL: ${{ inputs.api_base_url }}
@@ -643,16 +643,8 @@ jobs:
           DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
           DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
           DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
-          DEV_SMOKE_API_URL: ${{ vars.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health/ci' }}
         run: |
-          set -euo pipefail
-          response=$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=recruiterreply-dev-smoke")
-          token=$(jq --exit-status --raw-output '.value' <<< "$response")
-          test -n "$token"
-          echo "::add-mask::$token"
-          DEV_SMOKE_OIDC_TOKEN="$token" node .github/scripts/private-dev-smoke.cjs --authenticated
+          node .github/scripts/private-dev-smoke.cjs
 
       - name: Verify private Test frontend deployment
         if: inputs.environment == 'test' && steps.idempotency.outputs.already_deployed != 'true'
@@ -826,6 +818,23 @@ jobs:
             echo "SSM deploy command failed with status: $INVOCATION_STATUS"
             exit 1
           fi
+
+      - name: Verify private Dev deployed release identity
+        if: inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed != 'true'
+        env:
+          DEV_COGNITO_DOMAIN: ${{ vars.DEV_COGNITO_DOMAIN }}
+          DEV_COGNITO_CLIENT_ID: ${{ vars.DEV_COGNITO_CLIENT_ID }}
+          DEV_CLOUDFRONT_DOMAIN: ${{ vars.DEV_CLOUDFRONT_DOMAIN }}
+          DEV_SMOKE_API_URL: ${{ vars.DEV_SMOKE_API_URL || 'https://api-dev.recruiterreply.com/api/health/ci' }}
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=recruiterreply-dev-smoke")
+          token=$(jq --exit-status --raw-output '.value' <<< "$response")
+          test -n "$token"
+          echo "::add-mask::$token"
+          DEV_SMOKE_OIDC_TOKEN="$token" node .github/scripts/private-dev-smoke.cjs --authenticated
 
       - name: Preview backend image retention
         if: steps.idempotency.outputs.already_deployed != 'true'
@@ -1024,6 +1033,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOYED_SHA: ${{ inputs.sha }}
+          BACKEND_DIGEST: ${{ steps.image-digest.outputs.digest }}
         run: |
           set -euo pipefail
           curl --fail-with-body --silent --show-error \
@@ -1032,5 +1043,5 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/playwright-authenticated.yml/dispatches" \
-            --data "$(jq -cn --arg environment "$ENVIRONMENT" '{ref:"main",inputs:{environment:$environment}}')"
+            --data "$(jq -cn --arg environment "$ENVIRONMENT" --arg deployed_sha "$DEPLOYED_SHA" --arg backend_digest "$BACKEND_DIGEST" --arg test_revision "$DEPLOYED_SHA" '{ref:"main",inputs:{environment:$environment,deployed_sha:$deployed_sha,backend_digest:$backend_digest,test_revision:$test_revision}}')"
           echo "Dispatched authenticated Playwright validation for $ENVIRONMENT."

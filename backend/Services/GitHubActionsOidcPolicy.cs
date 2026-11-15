@@ -13,18 +13,29 @@ public sealed record GitHubActionsOidcPolicyOptions(
 
 public static class GitHubActionsOidcPolicy
 {
-    public static bool IsApproved(ClaimsPrincipal? principal, GitHubActionsOidcPolicyOptions options)
+    public static string? RejectionReason(ClaimsPrincipal? principal, GitHubActionsOidcPolicyOptions options)
     {
-        if (!options.Enabled || principal is null)
+        if (!options.Enabled) return "disabled";
+        if (principal is null) return "missing_principal";
+
+        foreach (var (claim, expected, reason) in new[]
         {
-            return false;
+            ("iss", options.Issuer, "issuer_mismatch"),
+            ("aud", options.Audience, "audience_mismatch"),
+            ("repository", options.Repository, "repository_mismatch"),
+            ("job_workflow_ref", options.WorkflowRef, "workflow_mismatch"),
+            ("ref", options.Ref, "ref_mismatch"),
+            ("environment", options.Environment, "environment_mismatch")
+        })
+        {
+            if (principal.FindFirst(claim)?.Value != expected) return reason;
         }
 
-        return principal.FindFirst("iss")?.Value == options.Issuer
-            && principal.FindFirst("aud")?.Value == options.Audience
-            && principal.FindFirst("repository")?.Value == options.Repository
-            && principal.FindFirst("job_workflow_ref")?.Value == options.WorkflowRef
-            && principal.FindFirst("ref")?.Value == options.Ref
-            && principal.FindFirst("environment")?.Value == options.Environment;
+        return null;
+    }
+
+    public static bool IsApproved(ClaimsPrincipal? principal, GitHubActionsOidcPolicyOptions options)
+    {
+        return RejectionReason(principal, options) is null;
     }
 }
