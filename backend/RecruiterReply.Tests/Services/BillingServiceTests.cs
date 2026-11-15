@@ -167,6 +167,10 @@ public class BillingServiceTests
             .OfType<Stripe.Checkout.SessionCreateOptions>()
             .Single();
         Assert.Equal(expectedPriceId, sessionRequest.LineItems.Single().Price);
+        Assert.Equal("always", sessionRequest.PaymentMethodCollection);
+        Assert.Equal(7, sessionRequest.SubscriptionData.TrialPeriodDays);
+        Assert.Equal("cancel", sessionRequest.SubscriptionData.TrialSettings?.EndBehavior?.MissingPaymentMethod);
+        Assert.True(sessionRequest.AutomaticTax?.Enabled);
     }
 
     [Fact]
