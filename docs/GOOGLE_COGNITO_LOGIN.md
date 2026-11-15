@@ -39,6 +39,14 @@ approved.
 - A Google identity whose email already belongs to another account is not
   silently linked; explicit account-linking work is required separately.
 
+## Existing-account linking
+
+An existing authenticated user can link Google from Profile using the explicit
+`/api/auth/cognito/link/start` flow. The link target is bound into protected
+OAuth state and the callback requires the same authenticated user. The backend
+rejects identities already linked to another user or a different Cognito
+subject. Matching email addresses alone never link accounts.
+
 ## Validation
 
 1. Confirm the target Cognito app client lists `COGNITO` and `Google`.
