@@ -41,11 +41,13 @@ approved.
 
 ## Existing-account linking
 
-An existing authenticated user can link Google from Profile using the explicit
-`/api/auth/cognito/link/start` flow. The link target is bound into protected
-OAuth state and the callback requires the same authenticated user. The backend
-rejects identities already linked to another user or a different Cognito
-subject. Matching email addresses alone never link accounts.
+An existing authenticated user can link or replace Google from Profile using
+the explicit `POST /api/auth/cognito/link/start` flow. The link target and the
+replacement intent are bound into protected OAuth state, and the callback
+requires the same recently authenticated user. The backend rejects identities
+already linked to another user. A different Cognito subject on the same account
+can be replaced only after explicit confirmation. Matching email addresses
+alone never link accounts, and sessions for the replaced subject are rejected.
 
 ## Validation
 

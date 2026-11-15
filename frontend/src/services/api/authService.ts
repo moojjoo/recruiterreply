@@ -23,7 +23,8 @@ export const authService = {
     '/auth/cognito/start',
     provider ? { params: { provider } } : undefined,
   ),
-  cognitoLinkGoogleStart: () => apiClient.get<{ authorizationUrl: string }>('/auth/cognito/link/start'),
+  cognitoLinkGoogleStart: (replaceExisting = false) => apiClient.post<{ authorizationUrl: string }>(
+    `/auth/cognito/link/start?replaceExisting=${replaceExisting ? 'true' : 'false'}`),
   getCurrentUser: () => apiClient.get<User>("/auth/me"),
   logout: () => apiClient.post("/auth/logout"),
 };

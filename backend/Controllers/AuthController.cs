@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -188,9 +190,9 @@ public class AuthController : ControllerBase
         catch (InvalidOperationException ex) { _logger.LogWarning(ex, "Cognito BFF is unavailable"); return StatusCode(503); }
     }
 
-    [HttpGet("cognito/link/start")]
+    [HttpPost("cognito/link/start")]
     [Authorize]
-    public IActionResult CognitoLinkStart()
+    public IActionResult CognitoLinkStart([FromQuery] bool replaceExisting = false)
     {
         if (_cognitoBff is null) return StatusCode(StatusCodes.Status503ServiceUnavailable);
         try
@@ -198,7 +200,7 @@ public class AuthController : ControllerBase
             var userId = User.GetRequiredUserId();
             if (!HasRecentAuthentication())
                 return StatusCode(StatusCodes.Status401Unauthorized, new { error = "Recent authentication is required before linking an identity." });
-            return Ok(new CognitoLoginRequest(_cognitoBff.BeginLogin(HttpContext, "Google", userId)));
+            return Ok(new CognitoLoginRequest(_cognitoBff.BeginLogin(HttpContext, "Google", userId, replaceExisting)));
         }
         catch (InvalidOperationException ex)
         {
@@ -237,7 +239,9 @@ public class AuthController : ControllerBase
                     throw new InvalidOperationException("Cognito identity is already linked to another account.");
                 var existingTargetIdentity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
                     candidate.UserId == user.Id && candidate.Provider == "cognito", ct);
-                if (existingTargetIdentity is not null && existingTargetIdentity.Subject != tokens.Identity.Subject)
+                var previousSubject = existingTargetIdentity?.Subject;
+                if (existingTargetIdentity is not null && existingTargetIdentity.Subject != tokens.Identity.Subject
+                    && !tokens.ReplaceExistingIdentity)
                     throw new InvalidOperationException("The account is already linked to a different Cognito identity.");
                 identity ??= existingTargetIdentity;
                 if (identity is null)
@@ -253,7 +257,14 @@ public class AuthController : ControllerBase
                 else
                 {
                     identity.Email = tokens.Identity.Email;
+                    identity.Subject = tokens.Identity.Subject;
                     identity.LastUsedAt = now.UtcDateTime;
+                }
+                if (!string.IsNullOrWhiteSpace(previousSubject) && previousSubject != tokens.Identity.Subject)
+                {
+                    _logger.LogInformation(
+                        "Cognito identity replaced for user {UserId}; previous identity {PreviousIdentity}, new identity {NewIdentity}",
+                        user.Id, IdentityFingerprint(previousSubject), IdentityFingerprint(tokens.Identity.Subject));
                 }
             }
             else
@@ -407,6 +418,9 @@ public class AuthController : ControllerBase
         var age = _timeProvider.GetUtcNow().ToUnixTimeSeconds() - authTime;
         return age is >= 0 and <= 900;
     }
+
+    private static string IdentityFingerprint(string subject)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(subject)))[..16];
 
     private bool IsLegacyAuthEnabled() => _configuration.GetValue("LegacyAuth:Enabled", true);
 }

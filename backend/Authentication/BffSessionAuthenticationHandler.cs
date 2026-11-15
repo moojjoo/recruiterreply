@@ -45,6 +45,10 @@ public sealed class BffSessionAuthenticationHandler : AuthenticationHandler<Auth
             var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(
                 candidate => candidate.Id == session.UserId && candidate.IsActive, Context.RequestAborted);
             if (user is null) return AuthenticateResult.Fail("BFF session user is inactive.");
+            var identityStillLinked = await _db.UserIdentities.AsNoTracking().AnyAsync(identity =>
+                identity.UserId == session.UserId && identity.Provider == "cognito" &&
+                identity.Subject == session.ProviderSubject, Context.RequestAborted);
+            if (!identityStillLinked) return AuthenticateResult.Fail("BFF session identity is no longer linked.");
 
             var claims = new List<Claim>
             {
