@@ -116,6 +116,13 @@ public class BillingService : IBillingService
             SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
             {
                 TrialPeriodDays = TrialPeriodDays,
+                TrialSettings = new Stripe.Checkout.SessionSubscriptionDataTrialSettingsOptions
+                {
+                    EndBehavior = new Stripe.Checkout.SessionSubscriptionDataTrialSettingsEndBehaviorOptions
+                    {
+                        MissingPaymentMethod = "cancel",
+                    },
+                },
             },
             SuccessUrl = $"{frontendBaseUrl}/dashboard?checkout=success",
             CancelUrl = $"{frontendBaseUrl}/pricing?checkout=cancelled",
