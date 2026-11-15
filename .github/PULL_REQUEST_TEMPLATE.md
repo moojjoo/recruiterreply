@@ -2,7 +2,7 @@
 Describe the implementation, commits, tests and verification workflow links. Do not claim a check passed without evidence.
 
 ## Pull request title
-Use `RR-<linked-issue>: <summary>` with the repository issue number and no zero padding, for example `RR-544: Optimize RecruiterReply pricing`. Commits use the related Conventional Commit form `<type>(RR-<linked-issue>): <subject>`.
+Use `RR-<linked-issue>: <summary>` with the repository issue number and no zero padding, for example `RR-544: Optimize RecruiterReply pricing`. This is a PR-title convention, not a Conventional Commit message.
 
 ## Acceptance criteria
 - [ ] All issue acceptance criteria implemented and verified
