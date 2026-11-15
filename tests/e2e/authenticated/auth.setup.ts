@@ -31,6 +31,16 @@ function assertCredentialDestination(page: Page, label: string) {
   }
 }
 
+function isAllowedCredentialDestination(url: URL) {
+  return url.protocol === 'https:' && !url.username && !url.password &&
+    !url.port && allowedAuthHosts.has(url.hostname);
+}
+
+function isAuthenticatedApplicationDestination(url: URL, applicationOrigin: string) {
+  return url.origin === applicationOrigin &&
+    !/^\/(?:login|register)(?:$|[?#])/.test(url.pathname + url.search + url.hash);
+}
+
 async function visibleInput(page: Page, selectors: string, timeout = 0) {
   const deadline = Date.now() + timeout;
   do {
@@ -103,7 +113,8 @@ async function completeCognitoLogin(
   }
 }
 
-setup('authenticate with Cognito Hosted UI', async ({ page }) => {
+setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
+  setup.setTimeout(90_000);
   if (!perimeterUsername || !perimeterPassword) {
     throw new Error('PLAYWRIGHT_USERNAME and PLAYWRIGHT_PASSWORD are required for perimeter validation.');
   }
@@ -115,6 +126,11 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   // account must never use Google or any other external identity provider.
   if (new URL(page.url()).origin === applicationOrigin) {
     throw new Error('The protected environment did not redirect to its perimeter Cognito sign-in.');
+  }
+  if (testInfo.retry > 0 && perimeterTotpSecret) {
+    // A failed attempt can consume the current one-time code. A retry runs in
+    // a fresh worker, so deliberately cross the TOTP boundary before reuse.
+    await new Promise(resolve => setTimeout(resolve, 30_000 - (Date.now() % 30_000) + 250));
   }
   await completeCognitoLogin(
     page,
@@ -137,13 +153,13 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   // active and the test races the browser navigation.
   await Promise.all([
     page.waitForURL((url) => (
-      url.origin !== applicationOrigin ||
-      !/^\/(?:login|register)(?:$|[?#])/.test(url.pathname)
+      isAllowedCredentialDestination(url) ||
+      isAuthenticatedApplicationDestination(url, applicationOrigin)
     ), { timeout: 30_000 }),
     page.getByRole('button', { name: 'Continue with email' }).click(),
   ]);
 
-  if (new URL(page.url()).origin !== applicationOrigin) {
+  if (isAllowedCredentialDestination(new URL(page.url()))) {
     await completeCognitoLogin(
       page,
       applicationUsername,
@@ -154,8 +170,7 @@ setup('authenticate with Cognito Hosted UI', async ({ page }) => {
   }
 
   await page.waitForURL((url) => (
-    url.origin === applicationOrigin &&
-    !/^\/(?:login|register)(?:$|[?#])/.test(url.pathname)
+    isAuthenticatedApplicationDestination(url, applicationOrigin)
   ), { timeout: 30_000 });
   await mkdir(authDirectory, { recursive: true });
   await page.context().storageState({ path: storageState });

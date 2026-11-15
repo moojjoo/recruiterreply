@@ -8,6 +8,7 @@ const root = join(__dirname, '../..');
 const build = readFileSync(join(root, 'workflows/build.yml'), 'utf8');
 const promote = readFileSync(join(root, 'workflows/promote.yml'), 'utf8');
 const authenticated = readFileSync(join(root, 'workflows/playwright-authenticated.yml'), 'utf8');
+const authenticatedSetup = readFileSync(join(root, '../tests/e2e/authenticated/auth.setup.ts'), 'utf8');
 
 test('Dev deployment remains opt-in and mints only short-lived OIDC smoke credentials', () => {
   assert.match(build, /DEV_AUTHENTICATED_SMOKE_READY == 'true'/);
@@ -34,6 +35,14 @@ test('authenticated acceptance is exact-release bound and shares the deployment 
   assert.doesNotMatch(authenticated, /\$\{\{ runner\.temp \}\}/);
   assert.match(authenticated, /name: exact-release-acceptance-\$\{\{ inputs\.environment \}\}-\$\{\{ inputs\.deployed_sha \}\}/);
   assert.doesNotMatch(authenticated, /deployment_status:/);
+});
+
+test('application login waits for an allowlisted credential destination', () => {
+  assert.match(authenticatedSetup, /isAllowedCredentialDestination\(url\) \|\|/);
+  assert.match(authenticatedSetup, /isAuthenticatedApplicationDestination\(url, applicationOrigin\)/);
+  assert.doesNotMatch(authenticatedSetup, /url\.origin !== applicationOrigin \|\|/);
+  assert.match(authenticatedSetup, /testInfo\.retry > 0/);
+  assert.match(authenticatedSetup, /setup\.setTimeout\(90_000\)/);
 });
 
 test('Production promotion retains its independent public smoke path', () => {
