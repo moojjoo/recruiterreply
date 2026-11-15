@@ -17,6 +17,9 @@ test('Dev deployment remains opt-in and mints only short-lived OIDC smoke creden
   const deploy = promote.indexOf('- name: Deploy backend container on EC2');
   const authenticatedSmoke = promote.indexOf('- name: Verify private Dev deployed release identity');
   assert.ok(deploy >= 0 && authenticatedSmoke > deploy, 'machine OIDC health must run after the selected backend is deployed');
+  const deployedIdentityStep = promote.slice(authenticatedSmoke, promote.indexOf('\n      - name:', authenticatedSmoke + 1));
+  assert.match(deployedIdentityStep, /API_BASE_URL: \$\{\{ inputs\.api_base_url \}\}/);
+  assert.match(deployedIdentityStep, /S3_FRONTEND_BUCKET: \$\{\{ vars\.S3_FRONTEND_BUCKET \}\}/);
   assert.match(promote, /DEV_SMOKE_OIDC_TOKEN="\$token" node \.github\/scripts\/private-dev-smoke\.cjs --authenticated/);
   assert.match(promote, /deployed_sha:\$deployed_sha,backend_digest:\$backend_digest,test_revision:\$test_revision/);
   assert.match(promote, /DEV_CLOUDFRONT_DOMAIN: \$\{\{ vars\.DEV_CLOUDFRONT_DOMAIN \}\}/);
@@ -28,6 +31,7 @@ test('authenticated acceptance is exact-release bound and shares the deployment 
   }
   assert.match(authenticated, /ref: \$\{\{ inputs\.test_revision \}\}/);
   assert.match(authenticated, /group: recruiterreply-shared-host-promotions/);
+  assert.doesNotMatch(authenticated, /\$\{\{ runner\.temp \}\}/);
   assert.match(authenticated, /name: exact-release-acceptance-\$\{\{ inputs\.environment \}\}-\$\{\{ inputs\.deployed_sha \}\}/);
   assert.doesNotMatch(authenticated, /deployment_status:/);
 });

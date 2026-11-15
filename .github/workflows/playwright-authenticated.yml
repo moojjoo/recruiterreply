@@ -49,7 +49,7 @@ jobs:
       PLAYWRIGHT_USERNAME: ${{ secrets.PLAYWRIGHT_USERNAME }}
       PLAYWRIGHT_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
       PLAYWRIGHT_TOTP_SECRET: ${{ secrets.PLAYWRIGHT_TOTP_SECRET }}
-      PLAYWRIGHT_AUTH_DIR: ${{ runner.temp }}/recruiterreply-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+      PLAYWRIGHT_AUTH_DIR: ${{ github.workspace }}/.playwright-auth-${{ github.run_id }}-${{ github.run_attempt }}
       PLAYWRIGHT_ALLOWED_AUTH_HOSTS: ${{ (inputs.environment == 'dev' && vars.DEV_COGNITO_DOMAIN) || vars.TEST_COGNITO_DOMAIN }}
       DEPLOYED_SHA: ${{ inputs.deployed_sha }}
       BACKEND_DIGEST: ${{ inputs.backend_digest }}
