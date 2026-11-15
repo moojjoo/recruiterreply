@@ -11,7 +11,7 @@
 1. **Android / ChatGPT:** describe the idea; ask ChatGPT to inspect the latest GitHub files and existing issues before planning.
 2. **Discuss:** define user value, scope, non-goals, acceptance criteria, affected frontend/backend/database components, security, cost and tests.
 3. **Approve:** review the proposed Issue body before ChatGPT creates the issue.
-4. **Implement:** after explicit approval, create a feature branch from `main` (or assign an authorized coding agent). Reference the issue number in the branch and PR.
+4. **Implement:** after explicit approval, create a feature branch from `main` (or assign an authorized coding agent). Reference the issue number in the branch and PR. Title the PR `RR-<issue>: <summary>` using the linked RecruiterReply issue number without zero padding. Keep `Refs #<issue>` or `Dev-Completes: #<issue>` in the PR body because title prefixes do not drive issue reconciliation.
 5. **Review:** coding agent opens a ready-for-review PR, addresses any review findings and passes required checks; Copilot review is optional, not a blocking requirement for a solo developer. For `/execute`, the owner's instruction authorizes merge and deployment to **dev** so the owner can inspect the running feature there; Windows + VS Code review is optional for dev.
 6. **Release:** follow the repository's **existing** GitHub Actions build and promotion process; do not alter workflows or promote to production without explicit authorization.
 7. **Close:** merge the validated PR under the authorized `/execute` dev workflow, link it to the issue, and close the issue when acceptance criteria are met. Test and production require separate explicit owner approval.
@@ -67,6 +67,7 @@ Project 2 has automatic intake and closed-item workflows enabled. New qualifying
 ## Guardrails
 
 - One focused issue and branch per independently reviewable change.
+- PR titles and commit messages have separate contracts: PRs use `RR-<issue>: <summary>`; commits continue to use Conventional Commits such as `docs(workflow): clarify PR titles`.
 - Never commit `.env` values or secrets.
 - Dev/test/prod secrets remain in AWS; local secrets remain local.
 - Local HTTPS-only is a **desired future change**, not yet established by the repository.
