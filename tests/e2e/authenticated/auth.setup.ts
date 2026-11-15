@@ -10,6 +10,26 @@ const applicationUsername = process.env.PLAYWRIGHT_APP_USERNAME || perimeterUser
 const applicationPassword = process.env.PLAYWRIGHT_APP_PASSWORD || perimeterPassword;
 const applicationTotpSecret = process.env.PLAYWRIGHT_APP_TOTP_SECRET || perimeterTotpSecret;
 const lastTotpCodes = new Map<string, string>();
+const allowedAuthHosts = new Set((process.env.PLAYWRIGHT_ALLOWED_AUTH_HOSTS || '')
+  .split(',')
+  .map(host => host.trim())
+  .filter(Boolean));
+
+function assertCredentialDestination(page: Page, label: string) {
+  if (allowedAuthHosts.size === 0) {
+    throw new Error('PLAYWRIGHT_ALLOWED_AUTH_HOSTS must contain exact approved Cognito hostnames.');
+  }
+  for (const host of allowedAuthHosts) {
+    if (!/^[a-z0-9-]+\.auth\.[a-z0-9-]+\.amazoncognito\.com$/.test(host)) {
+      throw new Error('PLAYWRIGHT_ALLOWED_AUTH_HOSTS contains an invalid hostname.');
+    }
+  }
+  const destination = new URL(page.url());
+  if (destination.protocol !== 'https:' || destination.username || destination.password ||
+      destination.port || !allowedAuthHosts.has(destination.hostname)) {
+    throw new Error(`${label} credential destination is not allowlisted.`);
+  }
+}
 
 async function visibleInput(page: Page, selectors: string, timeout = 0) {
   const deadline = Date.now() + timeout;
@@ -49,6 +69,8 @@ async function completeCognitoLogin(
       `${label} credentials are required. Configure the appropriate GitHub Environment secrets without storing them in source.`,
     );
   }
+
+  assertCredentialDestination(page, label);
 
   await (await visibleInput(page, 'input[name="username"], input[type="email"]')).fill(username);
   await (await visibleInput(page, 'input[name="password"], input[type="password"]')).fill(password);

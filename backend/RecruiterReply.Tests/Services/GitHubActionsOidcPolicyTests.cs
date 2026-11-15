@@ -40,6 +40,21 @@ public sealed class GitHubActionsOidcPolicyTests
     public void Disabled_policy_rejects_even_valid_identity()
     {
         Assert.False(GitHubActionsOidcPolicy.IsApproved(Principal(), Options with {Enabled = false}));
+        Assert.Equal("disabled", GitHubActionsOidcPolicy.RejectionReason(Principal(), Options with {Enabled = false}));
+    }
+
+    [Theory]
+    [InlineData("repository", "attacker/repo", "repository_mismatch")]
+    [InlineData("job_workflow_ref", "other", "workflow_mismatch")]
+    [InlineData("environment", "prod", "environment_mismatch")]
+    public void Reports_sanitized_rejection_reason_without_claim_values(string claim, string value, string reason)
+    {
+        var claims = Principal().Claims
+            .Where(existing => existing.Type != claim)
+            .Append(new Claim(claim, value));
+
+        Assert.Equal(reason, GitHubActionsOidcPolicy.RejectionReason(
+            new ClaimsPrincipal(new ClaimsIdentity(claims)), Options));
     }
 
     private static ClaimsPrincipal Principal() => new(new ClaimsIdentity([
