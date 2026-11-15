@@ -15,14 +15,15 @@ Generate a commit message from staged changes and commit.
 3. Generate a commit message in this exact format:
 
    ```
-   type(scope): short subject
+   type(RR-issue): short subject
 
    - bullet of what changed
    - bullet of why
    ```
 
    - `type` is one of: `feat`, `fix`, `refactor`, `chore`, `docs`, `style`, `test`.
-   - `scope` is a short identifier for the affected area (directory, module, or component name) — omit the `(scope)` parens only if no single scope fits.
+   - The scope is the linked RecruiterReply repository issue identifier, such as `RR-695`. Use the same issue as the branch and PR body, and never zero-pad it.
+   - Example: `docs(RR-695): document commit traceability`.
    - Subject line (including `type(scope): `) must be under 60 characters, imperative mood, no trailing period.
    - Body bullets are optional but encouraged — include them when the diff is non-trivial. Keep bullets factual and grounded in the actual diff content, not speculative.
    - Never include a `Co-Authored-By` trailer or any other attribution trailer.

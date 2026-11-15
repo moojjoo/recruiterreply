@@ -1,6 +1,9 @@
 ## Implementation evidence
 Describe the implementation, commits, tests and verification workflow links. Do not claim a check passed without evidence.
 
+## Pull request title
+Use `RR-<linked-issue>: <summary>` with the repository issue number and no zero padding, for example `RR-544: Optimize RecruiterReply pricing`. Commits use the related Conventional Commit form `<type>(RR-<linked-issue>): <subject>`.
+
 ## Acceptance criteria
 - [ ] All issue acceptance criteria implemented and verified
 - [ ] CI, CodeQL and applicable security checks pass on current SHA
@@ -8,6 +11,7 @@ Describe the implementation, commits, tests and verification workflow links. Do 
 
 ## Issue linking
 Use `Refs #123` for partial implementation. Only the final PR that fully satisfies an issue may include `Dev-Completes: #123`.
+The body marker remains required; the `RR-123` title prefix does not replace issue linking.
 
 ## Closure approval
 The trusted post-Dev-deployment reconciler closes eligible issues after final PR checks, deployed SHA, smoke verification and project membership checks pass. The optional `dev-acceptance-verified` label can trigger a retry for product acceptance, but is not required for routine Dev completion.
