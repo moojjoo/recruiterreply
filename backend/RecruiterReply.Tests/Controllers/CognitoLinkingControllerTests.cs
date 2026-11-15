@@ -102,6 +102,35 @@ public sealed class CognitoLinkingControllerTests
         Assert.Equal(owner.Id, db.UserIdentities.Single().UserId);
     }
 
+    [Fact]
+    public async Task CognitoCallback_LinkFlowReplacesExistingIdentityOnlyWithExplicitIntent()
+    {
+        await using var db = TestDb.Create();
+        var user = new UserEntity
+        {
+            Id = Guid.NewGuid(), Email = "existing@example.com", PasswordHash = "hash",
+            IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        db.Users.Add(user);
+        db.UserIdentities.Add(new UserIdentityEntity
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, Provider = "cognito", Subject = "old-subject",
+            Email = user.Email, CreatedAt = DateTime.UtcNow, LastUsedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, new CognitoTokenSet(
+            "access", "refresh", "api/read", new CognitoIdentity("new-subject", user.Email, null, null),
+            user.Id, ReplaceExistingIdentity: true));
+        controller.SetUser(user.Id);
+
+        var result = await controller.CognitoCallback("code", "state", CancellationToken.None);
+
+        Assert.Equal("https://dev.example.test/dashboard", Assert.IsType<RedirectResult>(result).Url);
+        var identity = Assert.Single(db.UserIdentities);
+        Assert.Equal("new-subject", identity.Subject);
+    }
+
     private static AuthController CreateController(RecruiterReplyDbContext db, CognitoTokenSet tokens)
         => CreateController(db, new FakeCognitoBff(tokens));
 
@@ -125,7 +154,8 @@ public sealed class CognitoLinkingControllerTests
         public Guid? LastLinkUserId { get; private set; }
         public string? LastProvider { get; private set; }
 
-        public string BeginLogin(HttpContext context, string? identityProvider = null, Guid? linkUserId = null)
+        public string BeginLogin(HttpContext context, string? identityProvider = null, Guid? linkUserId = null,
+            bool replaceExistingIdentity = false)
         {
             LastProvider = identityProvider;
             LastLinkUserId = linkUserId;

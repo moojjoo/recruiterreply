@@ -171,11 +171,12 @@ export const Profile: React.FC = () => {
   };
 
   const handleLinkGoogle = async () => {
-    const confirmed = window.confirm("Link the currently signed-in Google account to this RecruiterReply account?");
+    const confirmed = window.confirm(
+      "Link this Google account to your RecruiterReply account? If a different Google account is already linked, it will be replaced.");
     if (!confirmed) return;
     setIsLinkingGoogle(true);
     try {
-      const response = await authService.cognitoLinkGoogleStart();
+      const response = await authService.cognitoLinkGoogleStart(true);
       window.location.href = response.data.authorizationUrl;
     } catch {
       showToast("Google account linking is currently unavailable.", "error");
@@ -213,10 +214,10 @@ export const Profile: React.FC = () => {
         <Card elevated className="mt-6">
           <h2 className="text-2xl font-bold mb-2">Sign-in methods</h2>
           <p className="text-gray-600 mb-4">
-            Link Google to this existing RecruiterReply account so Google sign-in uses this account.
+            Link Google to this existing RecruiterReply account. If another Google account is already linked, this will replace it.
           </p>
           <Button type="button" variant="secondary" isLoading={isLinkingGoogle} onClick={handleLinkGoogle}>
-            Link Google account
+            Link or replace Google account
           </Button>
         </Card>
       )}
