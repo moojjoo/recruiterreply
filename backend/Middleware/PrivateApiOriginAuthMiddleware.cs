@@ -41,6 +41,17 @@ public sealed class PrivateApiOriginAuthMiddleware
             return;
         }
 
+        // The browser returns from Cognito directly to this API route, so it
+        // cannot carry the edge-generated origin signature. Keep the exception
+        // to the exact GET callback; CognitoBffService then requires the
+        // protected state cookie, constant-time state match, PKCE verifier,
+        // nonce, and validated tokens before creating a session.
+        if (IsCognitoCallback(context))
+        {
+            await _next(context);
+            return;
+        }
+
         // The shared deployment workflow probes the Test container directly on
         // its loopback-published port. Nginx adds X-Forwarded-For to every
         // externally reachable request, so this exception is host-local only.
@@ -74,6 +85,10 @@ public sealed class PrivateApiOriginAuthMiddleware
     public static bool IsStripeWebhook(HttpContext context) =>
         HttpMethods.IsPost(context.Request.Method) &&
         context.Request.Path == "/api/billing/webhook";
+
+    public static bool IsCognitoCallback(HttpContext context) =>
+        HttpMethods.IsGet(context.Request.Method) &&
+        context.Request.Path == "/api/auth/cognito/callback";
 
     public static bool IsValidSignature(
         string? supplied,

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using RecruiterReply.Middleware;
 
 namespace RecruiterReply.Tests.Middleware;
@@ -40,6 +41,43 @@ public class PrivateApiOriginAuthMiddlewareTests
 
         context.Request.Path = "/billing/webhook";
         Assert.False(PrivateApiOriginAuthMiddleware.IsStripeWebhook(context));
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/auth/cognito/callback")]
+    [InlineData("GET", "/api/auth/cognito/callback/")]
+    [InlineData("GET", "/api/auth/cognito/callback-extra")]
+    [InlineData("GET", "/api/auth/cognito/start")]
+    [InlineData("GET", "/auth/cognito/callback")]
+    public void IsCognitoCallback_RejectsMethodAndPathNearMisses(string method, string path)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = method;
+        context.Request.Path = path;
+        Assert.False(PrivateApiOriginAuthMiddleware.IsCognitoCallback(context));
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ExactGetCognitoCallbackReachesStateValidatedControllerPath()
+    {
+        var reachedNext = false;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["PrivateApiOriginAuth:Enabled"] = "true",
+            ["apiOriginSigningKey"] = "test-only-origin-signing-key-with-32-bytes"
+        }).Build();
+        var middleware = new PrivateApiOriginAuthMiddleware(_ =>
+        {
+            reachedNext = true;
+            return Task.CompletedTask;
+        }, configuration);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/api/auth/cognito/callback";
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(reachedNext);
     }
 
     [Fact]
