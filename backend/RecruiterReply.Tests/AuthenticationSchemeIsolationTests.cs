@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -54,6 +56,57 @@ public sealed class AuthenticationSchemeIsolationTests
     }
 
     [Fact]
+    public async Task ProtectedEndpoint_BffMode_PerimeterCookieIsChallengedWithoutExecutingEndpoint()
+    {
+        var tracker = new SchemeTracker();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(tracker);
+        services.AddRouting();
+        services.AddAuthorization();
+        services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = "Application";
+                options.DefaultChallengeScheme = "Application";
+            })
+            .AddPolicyScheme("Application", null, options =>
+            {
+                options.ForwardDefaultSelector = context =>
+                    ApplicationAuthenticationSchemeSelector.Select(context, legacyAuthEnabled: false, cognitoBffEnabled: true);
+            })
+            .AddScheme<AuthenticationSchemeOptions, NoResultBffHandler>(BffSessionAuthenticationHandler.SchemeName, _ => { })
+            .AddScheme<AuthenticationSchemeOptions, ProvisioningEdgeHandler>("EdgeSession", _ => { });
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+
+        var app = new ApplicationBuilder(scope.ServiceProvider);
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.Run(context =>
+        {
+            tracker.ProtectedEndpointExecutions++;
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            return Task.CompletedTask;
+        });
+
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Request.Headers.Cookie = "rr_session=synthetic-valid-perimeter-session";
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new AuthorizeAttribute()),
+            "protected-application-endpoint"));
+
+        await app.Build()(context);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.False(context.User.Identity?.IsAuthenticated ?? false);
+        Assert.Equal(1, tracker.BffAttempts);
+        Assert.Equal(0, tracker.EdgeAttempts);
+        Assert.Equal(0, tracker.ProvisionedProfiles);
+        Assert.Equal(0, tracker.ProtectedEndpointExecutions);
+    }
+
+    [Fact]
     public void Selector_RetainsEdgeSessionOnlyOutsideBffMode()
     {
         var context = new DefaultHttpContext();
@@ -100,6 +153,7 @@ public sealed class AuthenticationSchemeIsolationTests
         public int BffAttempts { get; set; }
         public int EdgeAttempts { get; set; }
         public int ProvisionedProfiles { get; set; }
+        public int ProtectedEndpointExecutions { get; set; }
     }
 
     private sealed class NoResultBffHandler : AuthenticationHandler<AuthenticationSchemeOptions>

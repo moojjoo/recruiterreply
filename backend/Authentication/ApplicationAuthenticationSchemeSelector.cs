@@ -14,9 +14,10 @@ public static class ApplicationAuthenticationSchemeSelector
             value is not null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase));
         if (hasBearerToken) return JwtBearerDefaults.AuthenticationScheme;
 
-        // In BFF mode, only the application BFF cookie may establish an
-        // application principal. The independent perimeter rr_session grants
-        // access to the site but must never provision or authenticate an app user.
+        // In BFF mode, requests that were not already routed to explicitly
+        // enabled legacy bearer authentication use the application BFF scheme.
+        // The independent perimeter rr_session grants access to the site but
+        // must never provision or authenticate an app user.
         if (cognitoBffEnabled) return BffSessionAuthenticationHandler.SchemeName;
 
         // Edge-session application identity is retained only for deployments
