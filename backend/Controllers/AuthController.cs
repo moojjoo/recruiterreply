@@ -225,7 +225,9 @@ public class AuthController : ControllerBase
             if (tokens.LinkUserId is Guid linkUserId)
             {
                 var authenticatedUserId = User.GetRequiredUserId();
-                if (authenticatedUserId != linkUserId)
+                if (authenticatedUserId != linkUserId || !HasRecentAuthentication()
+                    || tokens.Identity.Issuer != _configuration["CognitoBff:Issuer"]
+                    || !AuthenticationFreshness.IsRecent(tokens.Identity.AuthenticatedAt, now))
                     throw new InvalidOperationException("Cognito account linking authorization changed.");
                 user = await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == linkUserId && candidate.IsActive, ct)
                     ?? throw new InvalidOperationException("The account to link is unavailable.");
@@ -311,8 +313,10 @@ public class AuthController : ControllerBase
             await _db.SaveChangesAsync(ct);
 
             var sessionId = await _bffSessions.CreateAsync(new BffSession(user.Id, tokens.Identity.Subject,
-                _configuration["CognitoBff:Issuer"] ?? string.Empty, _configuration["CognitoBff:ClientId"] ?? string.Empty,
-                tokens.Scope, now, now, now.AddMinutes(30), now.AddHours(8), tokens.AccessToken, tokens.RefreshToken), ct);
+                tokens.Identity.Issuer ?? _configuration["CognitoBff:Issuer"] ?? string.Empty, _configuration["CognitoBff:ClientId"] ?? string.Empty,
+                tokens.Scope, now, now, now.AddMinutes(30), now.AddHours(8), tokens.AccessToken, tokens.RefreshToken,
+                tokens.Identity.Issuer == _configuration["CognitoBff:Issuer"]
+                    ? tokens.Identity.AuthenticatedAt : null), ct);
             Response.Cookies.Append(BffSessionAuthenticationHandler.CookieName, sessionId, new CookieOptions
             {
                 HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, Path = "/", MaxAge = TimeSpan.FromHours(8)
@@ -414,9 +418,13 @@ public class AuthController : ControllerBase
 
     private bool HasRecentAuthentication()
     {
-        if (!long.TryParse(User.FindFirst("auth_time")?.Value, out var authTime)) return false;
-        var age = _timeProvider.GetUtcNow().ToUnixTimeSeconds() - authTime;
-        return age is >= 0 and <= 900;
+        if (User.Identity?.AuthenticationType != BffSessionAuthenticationHandler.SchemeName
+            || string.IsNullOrWhiteSpace(_configuration["CognitoBff:Issuer"])
+            || User.FindFirst("cognito_issuer")?.Value != _configuration["CognitoBff:Issuer"])
+            return false;
+        var now = _timeProvider.GetUtcNow();
+        return AuthenticationFreshness.IsRecent(
+            AuthenticationFreshness.ReadSignedAuthTime(User.FindFirst("auth_time")?.Value, now), now);
     }
 
     private static string IdentityFingerprint(string subject)
