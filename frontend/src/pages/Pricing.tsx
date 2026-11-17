@@ -84,6 +84,7 @@ export const Pricing: React.FC = () => {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: plan.currency.toUpperCase(),
+      minimumFractionDigits: plan.unitAmount % 100 === 0 ? 0 : 2,
       maximumFractionDigits: 2,
     }).format(plan.unitAmount / 100);
   };

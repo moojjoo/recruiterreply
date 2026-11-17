@@ -36,15 +36,15 @@ test.describe('pricing and billing', () => {
     await page.goto('/pricing');
 
     await expect(page.getByRole('heading', { name: 'Simple, Transparent Pricing' })).toBeVisible();
-    await expect(page.getByText('$24').first()).toBeVisible();
-    await expect(page.getByText('$49').first()).toBeVisible();
+    await expect(page.getByText('$24', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('$49', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('7-day free trial — no charge today').first()).toBeVisible();
     await expect(page.getByText('first charge occurs after the trial ends')).toBeVisible();
 
     await page.getByRole('button', { name: /Annual — save 20%/ }).click();
 
-    await expect(page.getByText('$229').first()).toBeVisible();
-    await expect(page.getByText('$469').first()).toBeVisible();
+    await expect(page.getByText('$229', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('$469', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('/year').first()).toBeVisible();
   });
 
@@ -113,7 +113,7 @@ test.describe('pricing and billing', () => {
     });
     await page.goto('/profile');
 
-    await expect(page.getByText('Professional')).toBeVisible();
+    await expect(page.getByText('Professional', { exact: true })).toBeVisible();
     await expect(page.getByText(/Free trial — first charge on/)).toBeVisible();
     await expect(page.getByText(/nearing this month\'s limit/)).toBeVisible();
     await page.getByRole('button', { name: 'Cancel subscription' }).click();
