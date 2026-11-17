@@ -53,3 +53,40 @@ test('Production promotion retains its independent public smoke path', () => {
   assert.match(promote, /FRONTEND_URL: \$\{\{ inputs\.frontend_url \}\}/);
   assert.doesNotMatch(promote, /DEV_SMOKE_(SESSION_COOKIE|API_TOKEN)/);
 });
+
+test('Dev no-op promotions never dispatch acceptance for an undeployed rebuilt digest', () => {
+  const start = promote.indexOf('- name: Dispatch authenticated lower-environment validation');
+  assert.ok(start >= 0);
+  const dispatch = promote.slice(start);
+  const condition = dispatch.match(/\n        if: ([^\n]+)/)?.[1];
+  assert.equal(condition, "inputs.environment == 'test' || (inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed == 'false')");
+  // Evaluate the actual YAML expression against the GitHub Actions string outputs.
+  const evaluate = (environment, alreadyDeployed) => {
+    const expression = condition
+      .replaceAll('inputs.environment', JSON.stringify(environment))
+      .replaceAll('steps.idempotency.outputs.already_deployed', JSON.stringify(alreadyDeployed));
+    return require('node:vm').runInNewContext(expression);
+  };
+  assert.equal(evaluate('dev', 'false'), true, 'fresh/forced Dev promotion dispatches');
+  assert.equal(evaluate('dev', 'true'), false, 'no-op Dev promotion must not dispatch');
+  assert.equal(evaluate('dev', ''), false, 'missing decision fails closed');
+  assert.equal(evaluate('dev', 'unknown'), false, 'unknown decision fails closed');
+  assert.equal(evaluate('prod', 'false'), false);
+  assert.equal(evaluate('test', 'false'), true, 'existing Test behavior is unchanged');
+  assert.equal(evaluate('test', 'true'), true, 'Test policy changes are out of scope');
+});
+
+test('Dev no-op reports not-run without manufacturing acceptance and keeps deliberate revalidation', () => {
+  const start = promote.indexOf('- name: Report Dev no-op acceptance status');
+  const end = promote.indexOf('- name: Dispatch authenticated lower-environment validation', start);
+  assert.ok(start >= 0 && end > start);
+  const step = promote.slice(start, end);
+  assert.match(step, /if: inputs\.environment == 'dev' && steps\.idempotency\.outputs\.already_deployed == 'true'/);
+  assert.match(step, /not run \(idempotent promotion\)/);
+  assert.match(step, /not a new acceptance pass/);
+  assert.doesNotMatch(step, /record passed|createWorkflowDispatch|curl|upload-artifact/);
+  assert.match(authenticated, /workflow_dispatch:/);
+  for (const field of ['deployed_sha', 'backend_digest', 'test_revision']) {
+    assert.match(authenticated, new RegExp(field + ':\\n[^\\n]*\\n        required: true'));
+  }
+});
