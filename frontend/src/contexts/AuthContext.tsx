@@ -91,15 +91,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     );
 
     if (cookieAuthEnabled) {
-      // Revoke the BFF session before leaving the app. The hosted edge logout
-      // then clears Cognito's Hosted UI session as well.
-      await authService.logout().catch(() => undefined);
+      // Revoke only the application BFF session. The independent hosted edge
+      // session remains valid until its own explicit perimeter logout.
+      await authService.logout();
     }
     setUser(null);
     clearLegacyAuthState();
 
     if (hostedCookieAuth) {
-      window.location.assign("/_auth/logout");
+      window.location.assign("/login");
     }
   }, []);
 

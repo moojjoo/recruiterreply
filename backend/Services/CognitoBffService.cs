@@ -87,6 +87,14 @@ public sealed class CognitoBffService : ICognitoBffService
         {
             query["identity_provider"] = identityProvider;
         }
+        else
+        {
+            // The independent Dev/Test perimeter establishes a Cognito managed-login
+            // session before the application login begins. Force an interactive
+            // native sign-in here so "Continue with email" cannot silently reuse
+            // that perimeter SSO session as the application identity.
+            query["prompt"] = "login";
+        }
         return $"{_options.Domain.TrimEnd('/')}/oauth2/authorize?{string.Join('&', query.Select(pair =>
             $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"))}";
     }
