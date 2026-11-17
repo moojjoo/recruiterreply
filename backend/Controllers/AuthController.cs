@@ -344,9 +344,9 @@ public class AuthController : ControllerBase
             Path = "/"
         };
 
-        // rr_session is the current Dev/Test edge gate. The production BFF
-        // uses a host-only cookie and will adopt this same logout contract.
-        Response.Cookies.Delete("rr_session", cookieOptions);
+        // Application logout must not clear the independent Dev/Test perimeter
+        // session (rr_session). The edge gateway owns that cookie and its own
+        // explicit /_auth/logout operation.
         Response.Cookies.Delete("__Host-rr_session", cookieOptions);
 
         return NoContent();
