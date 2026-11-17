@@ -56,7 +56,7 @@ public static class SubscriptionEconomicsReportBuilder
 
         return new(period.StartUtc, period.EndUtc, period.Environment, mrr,
             mrr is null ? (long?)null : checked(mrr.Value * 12), paidActive, currencies,
-            candidates.Count == 0 ? null : candidates.Max(f => f.OccurredAt),
+            candidates.All(f => f.OccurredAt >= period.EndUtc) ? null : candidates.Where(f => f.OccurredAt < period.EndUtc).Max(f => f.OccurredAt),
             warnings.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList());
     }
 

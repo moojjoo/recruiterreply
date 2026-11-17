@@ -29,6 +29,14 @@ The deterministic calculator accepts normalized synthetic facts containing event
 
 Synthetic tests use invented identifiers and amounts only. They do not establish correctness of live Stripe configuration or customer figures.
 
+## Period comparison and freshness
+
+The owner-report comparison uses the requested current half-open UTC window and an immediately preceding window of equal duration. It reports current value, prior value, absolute change, and percentage change for contracted MRR/ARR, paid active, and each currency-specific cash/refund/AI-cost/contribution value. Unknown inputs keep the related trend unknown. A zero prior value produces an absolute change plus a `TREND_BASELINE_ZERO` warning, never an invented percentage.
+
+Freshness is measured from the current period end to the latest included fact before that end. Callers supply the maximum acceptable age. The result is `Fresh`, `Stale`, or `Unknown`; stale and missing data add stable warnings. Facts outside the current report window cannot make it appear fresh.
+
+This comparison is a tested reporting contract, not yet an owner-facing route or materialized daily report. It uses synthetic facts and does not read customer or Stripe data.
+
 ## Current gaps and warnings
 
 The current `stripe_paid_invoices` table records positive invoice amount, currency, event ID, customer ID, and processing time with invoice-ID idempotency. It lacks subscription ID, plan, Stripe event occurrence time, environment/mode, refunds, and failed-payment recovery. `usage_records` stores feature counts but not model, tokens, or cost. Refund, AI-cost, margin, churn, conversion, and CAC values must therefore remain unknown until their complete sources exist.
