@@ -1,0 +1,125 @@
+{
+  "version": "2026-11-17.synthetic.1",
+  "status": "draft-owner-review-required",
+  "articles": [
+    {
+      "id": "service",
+      "category": "product",
+      "questions": [
+        "What does RecruiterReply do?",
+        "What tools are included?",
+        "Can it compare job offers?",
+        "Can it draft replies?"
+      ],
+      "answer": "RecruiterReply provides tools for organizing recruiting information, analyzing messages, comparing opportunities, and drafting replies. Review generated output before using it.",
+      "escalate": false,
+      "sources": [
+        {
+          "path": "frontend/src/pages/Terms.tsx",
+          "section": "3. The Service"
+        },
+        {
+          "path": "frontend/src/pages/Terms.tsx",
+          "section": "5. AI-Generated and Informational Output"
+        }
+      ]
+    },
+    {
+      "id": "ai-review",
+      "category": "product",
+      "questions": [
+        "Should I review AI replies?",
+        "Can AI output be inaccurate?",
+        "Does RecruiterReply make hiring decisions?"
+      ],
+      "answer": "AI-assisted output may be incomplete or inaccurate. You are responsible for reviewing, editing, and approving output before relying on it or sending it. RecruiterReply does not make hiring decisions for you.",
+      "escalate": false,
+      "sources": [
+        {
+          "path": "frontend/src/pages/Terms.tsx",
+          "section": "5. AI-Generated and Informational Output"
+        }
+      ]
+    },
+    {
+      "id": "gmail",
+      "category": "privacy",
+      "questions": [
+        "Is Gmail access separate from Google sign-in?",
+        "Do I have to connect Gmail?",
+        "Can I disconnect Gmail?"
+      ],
+      "answer": "Gmail access is separate from Google sign-in and requires explicit authorization. You can disconnect Gmail through available account controls or revoke access through your Google Account security settings.",
+      "escalate": false,
+      "sources": [
+        {
+          "path": "frontend/src/pages/PrivacyPolicy.tsx",
+          "section": "3. Google and Gmail Access"
+        }
+      ]
+    },
+    {
+      "id": "content",
+      "category": "privacy",
+      "questions": [
+        "Who owns my submitted content?",
+        "Is private recruiting content used for advertising?",
+        "Does RecruiterReply sell my personal information?"
+      ],
+      "answer": "You retain ownership of submitted content. The published privacy policy says RecruiterReply does not sell personal information or use private recruiting content for advertising. This draft summarizes the policy, not an independent compliance audit.",
+      "escalate": false,
+      "sources": [
+        {
+          "path": "frontend/src/pages/Terms.tsx",
+          "section": "4. Your Content"
+        },
+        {
+          "path": "frontend/src/pages/PrivacyPolicy.tsx",
+          "section": "2. How We Use Information"
+        }
+      ]
+    },
+    {
+      "id": "billing",
+      "category": "billing",
+      "questions": [
+        "What does my plan cost?",
+        "How long is my trial?",
+        "Cancel my subscription",
+        "I want a refund",
+        "I was charged twice"
+      ],
+      "answer": "A human support reviewer must verify the applicable plan, trial, or billing record. This pilot cannot quote unverified prices, cancel subscriptions, resolve disputes, or issue refunds.",
+      "escalate": true,
+      "sources": [
+        {
+          "path": "frontend/src/pages/Terms.tsx",
+          "section": "9. Fees and Changes"
+        }
+      ]
+    },
+    {
+      "id": "access",
+      "category": "security",
+      "questions": [
+        "I cannot log in",
+        "My account was hacked",
+        "Reset my password",
+        "Delete my account",
+        "I see an error"
+      ],
+      "answer": "A human support reviewer must investigate this request through an approved support process. Do not share credentials, recovery links, tokens, or private content. This pilot cannot change accounts, bypass authentication, or confirm deletion.",
+      "escalate": true,
+      "sources": [
+        {
+          "path": "frontend/src/pages/Terms.tsx",
+          "section": "2. Eligibility and Accounts"
+        },
+        {
+          "path": "frontend/src/pages/PrivacyPolicy.tsx",
+          "section": "7. Your Privacy Rights"
+        }
+      ]
+    }
+  ]
+}
