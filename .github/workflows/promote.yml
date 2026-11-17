@@ -1030,8 +1030,20 @@ jobs:
           echo "Frontend URL: $FRONTEND_URL"
           echo "API URL: $API_URL"
 
+      - name: Report Dev no-op acceptance status
+        if: inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed == 'true'
+        run: |
+          {
+            echo '### Dev acceptance: not run (idempotent promotion)'
+            echo 'No new Dev release was deployed. A rebuild may have a different backend digest, so this no-op does not dispatch acceptance for the rebuilt image.'
+            echo 'This is not a new acceptance pass. Existing exact-release evidence remains bound to its original deployed SHA and backend digest.'
+            echo 'For deliberate revalidation, run playwright-authenticated.yml with the actual deployed manifest SHA, backend digest, and an explicit test revision.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Dev no-op promotions must not validate an image that was built but never
+      # deployed. Keep the existing Test dispatch behavior outside this Dev fix.
       - name: Dispatch authenticated lower-environment validation
-        if: inputs.environment == 'dev' || inputs.environment == 'test'
+        if: inputs.environment == 'test' || (inputs.environment == 'dev' && steps.idempotency.outputs.already_deployed == 'false')
         env:
           GH_TOKEN: ${{ github.token }}
           ENVIRONMENT: ${{ inputs.environment }}
