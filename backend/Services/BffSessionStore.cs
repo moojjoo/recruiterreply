@@ -21,7 +21,8 @@ public sealed record BffSession(
     DateTimeOffset IdleExpiresAt,
     DateTimeOffset AbsoluteExpiresAt,
     string AccessToken,
-    string? RefreshToken);
+    string? RefreshToken,
+    DateTimeOffset? AuthenticatedAt = null);
 
 public interface IBffSessionStore
 {
