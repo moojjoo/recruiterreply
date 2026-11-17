@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "enabled": false,
+  "repository": "moojjoo/recruiterreply",
+  "controlIssueNumber": null,
+  "githubApp": {
+    "appId": null,
+    "installationId": null,
+    "botUserId": null,
+    "botLogin": null
+  },
+  "limits": {
+    "maxGrantHours": 8,
+    "maxSuccessfulMerges": 5,
+    "maxChangedFiles": 40,
+    "maxChangedLines": 1200
+  }
+}

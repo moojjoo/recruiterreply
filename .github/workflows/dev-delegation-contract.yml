@@ -1,0 +1,39 @@
+name: Dev Delegation Contract (Disabled)
+
+on:
+  issue_comment:
+    types: [created]
+
+# Repository-wide serialization is required before any future implementation may
+# reserve grant quota. This disabled contract workflow never writes or merges.
+concurrency:
+  group: dev-delegation-contract-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  fail-closed-contract:
+    if: startsWith(github.event.comment.body, '/guru-execute-dev ') || startsWith(github.event.comment.body, '/grant-guru-dev ') || startsWith(github.event.comment.body, '/revoke-guru-dev ')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout trusted default-branch policy only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Confirm delegation remains disabled
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const config = require('./.github/config/dev-delegation-policy.json');
+          const {validateConfiguration} = require('./.github/scripts/dev-delegation-policy.cjs');
+          const result = validateConfiguration(config);
+          if (result.valid || config.enabled !== false) {
+            throw new Error('Draft contract must remain explicitly disabled');
+          }
+          console.log('Dev delegation is disabled; no authorization or merge action was taken.');
+          NODE

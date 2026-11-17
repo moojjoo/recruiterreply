@@ -83,3 +83,7 @@ Project 2 has automatic intake and closed-item workflows enabled. New qualifying
 - PRs may include a `Post-merge validation` checklist for evidence that can only exist after deployment or a protected canary merge. Those items do not bypass pre-merge checks and reviews; reconciliation must keep the linked issue open until the post-merge checklist is complete.
 - `/execute test` and `/execute prod` require separate owner commands and promote the approved immutable SHA; never automatically promote them.
 - If required GitHub rules/settings cannot be verified through repository permissions, validate them in repository Settings before claiming enforcement.
+
+## Disabled delegated Dev authorization proposal (#704)
+
+The repository contains an inert, read-only contract for a possible distinct GitHub App delegated Dev identity. It is explicitly disabled, has no live App identifiers, cannot merge or dispatch workflows, and does not change the owner-only `/execute-dev` policy. See [the security design](security/guru-dev-delegation.md). Creating/installing an App, adding write capability, pinning live identifiers, or activating delegation requires a separate security review and explicit owner approval. Test and Production remain owner-only.
