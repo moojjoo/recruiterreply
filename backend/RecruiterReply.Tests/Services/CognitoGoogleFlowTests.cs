@@ -65,6 +65,7 @@ public sealed class CognitoGoogleFlowTests
         Assert.NotEqual(query["code_challenge"].ToString(), next["code_challenge"].ToString());
         var email = QueryHelpers.ParseQuery(new Uri(service.BeginLogin(new DefaultHttpContext())).Query);
         Assert.False(email.ContainsKey("identity_provider"));
+        Assert.Equal("login", email["prompt"]);
         Assert.Equal(Callback, email["redirect_uri"]);
     }
 

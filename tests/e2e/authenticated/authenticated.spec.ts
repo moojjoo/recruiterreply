@@ -20,14 +20,34 @@ test('refreshing an authenticated deep link keeps the session', async ({ page })
   await expect(page).not.toHaveURL(/\/login(?:$|[?#])/i);
 });
 
-test('hosted logout leaves the protected application', async ({ page }) => {
+test('application logout retains the independent perimeter session', async ({ page, context }) => {
   await page.goto('/dashboard');
+  const beforeNames = (await context.cookies()).map(cookie => cookie.name);
+  expect(beforeNames).toContain('rr_session');
+  expect(beforeNames).toContain('__Host-rr_session');
+
+  await page.getByRole('button', { name: 'Logout' }).click();
+  await expect(page).toHaveURL(/\/login(?:$|[?#])/i, { timeout: 30_000 });
+
+  const afterNames = (await context.cookies()).map(cookie => cookie.name);
+  expect(afterNames).toContain('rr_session');
+  expect(afterNames).not.toContain('__Host-rr_session');
+
+  // The edge still admits the browser, but the application route remains
+  // protected because its independent BFF session was revoked.
+  await page.goto('/dashboard');
+  await expect(page).toHaveURL(/\/login(?:$|[?#])/i);
+});
+
+test('failed application logout keeps the application session active', async ({ page, context }) => {
+  await page.route('**/api/auth/logout', route => route.abort('failed'));
+  await page.goto('/dashboard');
+
   await page.getByRole('button', { name: 'Logout' }).click();
 
-  // A protected lower environment may return either to its public root or to
-  // the perimeter Cognito sign-in page after clearing the edge session. Both
-  // outcomes prove that the authenticated application is no longer reachable.
-  await expect(page).not.toHaveURL(/\/dashboard(?:$|[?#])/i, { timeout: 30_000 });
-  await page.goto('/dashboard');
-  await expect(page).not.toHaveURL(/\/dashboard(?:$|[?#])/i);
+  await expect(page).toHaveURL(/\/dashboard(?:$|[?#])/i);
+  await expect(page.getByText('Logout could not be completed. Please try again.')).toBeVisible();
+  const cookieNames = (await context.cookies()).map(cookie => cookie.name);
+  expect(cookieNames).toContain('rr_session');
+  expect(cookieNames).toContain('__Host-rr_session');
 });

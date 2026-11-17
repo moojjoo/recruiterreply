@@ -75,6 +75,7 @@ DeploymentConfigurationOverrides.ApplyLegacyAuth(
 const bool legacyAuthEnabledByDefault = true;
 var legacyAuthEnabled = builder.Configuration.GetValue(
     "LegacyAuth:Enabled", legacyAuthEnabledByDefault);
+var cognitoBffEnabled = builder.Configuration.GetValue<bool>("CognitoBff:Enabled");
 
 // Add services to the container
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -140,23 +141,7 @@ builder.Services.AddAuthentication(options =>
     .AddPolicyScheme("Application", null, options =>
     {
         options.ForwardDefaultSelector = context =>
-        {
-            // Google login stores a legacy JWT while the private Dev boundary
-            // also supplies rr_session. Prefer the explicit bearer token so
-            // /auth/me resolves the account that just completed Google login.
-            var hasBearerToken = legacyAuthEnabled && context.Request.Headers.Authorization.Any(value =>
-                value is not null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase));
-
-            return hasBearerToken
-                ? JwtBearerDefaults.AuthenticationScheme
-                : context.Request.Cookies.ContainsKey(BffSessionAuthenticationHandler.CookieName)
-                    ? BffSessionAuthenticationHandler.SchemeName
-                    : context.Request.Cookies.ContainsKey("rr_session")
-                        ? "EdgeSession"
-                        : legacyAuthEnabled
-                            ? JwtBearerDefaults.AuthenticationScheme
-                            : BffSessionAuthenticationHandler.SchemeName;
-        };
+            ApplicationAuthenticationSchemeSelector.Select(context, legacyAuthEnabled, cognitoBffEnabled);
     })
     .AddJwtBearer(options =>
     {
