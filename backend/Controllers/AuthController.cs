@@ -239,8 +239,9 @@ public class AuthController : ControllerBase
                     throw new InvalidOperationException("Cognito identity is already linked to another account.");
                 var existingTargetIdentity = await _db.UserIdentities.FirstOrDefaultAsync(candidate =>
                     candidate.UserId == user.Id && candidate.Provider == "cognito", ct);
-                var previousSubject = existingTargetIdentity?.Subject;
-                if (existingTargetIdentity is not null && existingTargetIdentity.Subject != tokens.Identity.Subject
+                var previousSubject = existingTargetIdentity?.Subject
+                    ?? (user.AuthProvider == "cognito" ? user.ProviderUserId : null);
+                if (!string.IsNullOrWhiteSpace(previousSubject) && previousSubject != tokens.Identity.Subject
                     && !tokens.ReplaceExistingIdentity)
                     throw new InvalidOperationException("The account is already linked to a different Cognito identity.");
                 identity ??= existingTargetIdentity;
@@ -260,6 +261,10 @@ public class AuthController : ControllerBase
                     identity.Subject = tokens.Identity.Subject;
                     identity.LastUsedAt = now.UtcDateTime;
                 }
+                // Keep the legacy compatibility pointer consistent with the canonical
+                // mapping. Both writes commit in the same SaveChanges transaction.
+                if (user.AuthProvider == "cognito")
+                    user.ProviderUserId = tokens.Identity.Subject;
                 if (!string.IsNullOrWhiteSpace(previousSubject) && previousSubject != tokens.Identity.Subject)
                 {
                     _logger.LogInformation(
@@ -275,6 +280,12 @@ public class AuthController : ControllerBase
                     ? await _db.Users.FirstOrDefaultAsync(candidate =>
                         candidate.AuthProvider == "cognito" && candidate.ProviderUserId == tokens.Identity.Subject, ct)
                     : await _db.Users.FirstOrDefaultAsync(candidate => candidate.Id == identity.UserId, ct);
+                // A canonical mapping supersedes the legacy pointer. Never resurrect
+                // a displaced subject, including records replaced before this fix.
+                if (identity is null && user is not null &&
+                    await _db.UserIdentities.AnyAsync(candidate =>
+                        candidate.UserId == user.Id && candidate.Provider == "cognito", ct))
+                    throw new InvalidOperationException("Cognito identity is no longer linked to this account.");
                 if (user is null)
                 {
                     if (await _db.Users.AnyAsync(candidate => candidate.Email == tokens.Identity.Email, ct))
