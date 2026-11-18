@@ -49,6 +49,12 @@ test('promotion idempotency requires the verified environment release manifest',
   assert.match(promote, /skipping redeployment/);
 });
 
+test('deployed release manifests bind the exact workflow run attempt', () => {
+  assert.match(promote, /run_id:\(\$run_id\|tonumber\)/);
+  assert.match(promote, /run_attempt:\(\$run_attempt\|tonumber\)/);
+  assert.match(promote, /GITHUB_RUN_ATTEMPT/);
+});
+
 test('Dev and Test promotions configure the runtime frontend for Cognito auth', () => {
   const buildWorkflow = readFileSync(join(root, 'workflows/build.yml'), 'utf8');
   const testWorkflow = readFileSync(join(root, 'workflows/promote-test.yml'), 'utf8');
