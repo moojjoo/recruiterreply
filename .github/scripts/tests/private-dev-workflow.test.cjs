@@ -45,7 +45,7 @@ test('application login waits for an allowlisted credential destination', () => 
   assert.match(authenticatedSetup, /callbacks contain one-time code\/state values/);
   assert.doesNotMatch(authenticatedSetup, /url\.origin !== applicationOrigin \|\|/);
   assert.match(authenticatedSetup, /testInfo\.retry > 0/);
-  assert.match(authenticatedSetup, /setup\.setTimeout\(90_000\)/);
+  assert.match(authenticatedSetup, /setup\.setTimeout\(180_000\)/);
 });
 
 test('Production promotion retains its independent public smoke path', () => {
