@@ -1,6 +1,7 @@
 import { test, expect } from '../support/test';
 
 test('navigation returns to a light surface after dark to light toggle', async ({ mockedPage: page }) => {
+  await page.addInitScript(() => localStorage.setItem('recruiterreply-theme', 'light'));
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Primary navigation' });
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
@@ -14,6 +15,7 @@ test('navigation returns to a light surface after dark to light toggle', async (
 
 test('mobile menu returns to white after theme change while open', async ({ mockedPage: page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem('recruiterreply-theme', 'light'));
   await page.goto('/');
   await page.getByRole('button', { name: 'Open navigation menu' }).click();
   const menu = page.locator('#primary-navigation-links');

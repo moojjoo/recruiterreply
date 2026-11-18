@@ -29,6 +29,7 @@ test.describe('message analyzer', () => {
 
 test.describe('reply generator', () => {
   test('keeps reply options readable across theme interaction states', async ({ authedPage: page }) => {
+    await page.addInitScript(() => localStorage.setItem('recruiterreply-theme', 'light'));
     await page.goto('/reply');
 
     const option = page.getByText('Decline Politely').locator('..').locator('..');

@@ -40,7 +40,7 @@
         var theme;
         try { theme = localStorage.getItem("recruiterreply-theme"); } catch (e) {}
         if (theme !== "dark" && theme !== "light") {
-          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          theme = "dark";
         }
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;
