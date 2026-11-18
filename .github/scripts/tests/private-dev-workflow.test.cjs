@@ -30,11 +30,35 @@ test('authenticated acceptance is exact-release bound and shares the deployment 
   for (const input of ['deployed_sha', 'backend_digest', 'test_revision']) {
     assert.match(authenticated, new RegExp(`\\n      ${input}:`));
   }
-  assert.match(authenticated, /ref: \$\{\{ inputs\.test_revision \}\}/);
+  assert.match(authenticated, /ref: \$\{\{ github\.sha \}\}/);
+  assert.match(authenticated, /ref: \$\{\{ needs\.preflight\.outputs\.test_revision \}\}/);
+  assert.doesNotMatch(authenticated, /ref: \$\{\{ inputs\.test_revision \}\}/);
   assert.match(authenticated, /group: recruiterreply-shared-host-promotions/);
   assert.doesNotMatch(authenticated, /\$\{\{ runner\.temp \}\}/);
   assert.match(authenticated, /name: exact-release-acceptance-\$\{\{ inputs\.environment \}\}-\$\{\{ inputs\.deployed_sha \}\}/);
   assert.doesNotMatch(authenticated, /deployment_status:/);
+});
+
+test('credentialed acceptance executes only a main-ancestor revision after secretless provenance checks', () => {
+  const preflight = authenticated.slice(authenticated.indexOf('  preflight:'), authenticated.indexOf('\n  test:'));
+  const credentialed = authenticated.slice(authenticated.indexOf('\n  test:'));
+  const browserStep = credentialed.indexOf('- name: Run authenticated browser validation');
+  assert.ok(browserStep > 0);
+  assert.doesNotMatch(preflight, /environment: \$\{\{ inputs\.environment \}\}/);
+  assert.doesNotMatch(preflight, /secrets\./);
+  assert.match(preflight, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(preflight, /github\.repository == 'moojjoo\/recruiterreply'/);
+  assert.match(preflight, /--arg expectedRepository "moojjoo\/recruiterreply"/);
+  assert.match(preflight, /--argjson expectedRepositoryId 1273232896/);
+  assert.match(preflight, /compare\/\$\{TEST_REVISION\}\.\.\.\$\{GITHUB_SHA\}/);
+  assert.match(preflight, /verify-trust/);
+  assert.match(preflight, /workflow_run\.head_branch == "main"/);
+  assert.match(preflight, /workflow_run\.head_sha == \$sha/);
+  assert.match(credentialed, /npm ci --ignore-scripts/);
+  assert.doesNotMatch(credentialed.slice(0, browserStep), /secrets\./);
+  assert.match(credentialed.slice(browserStep), /PLAYWRIGHT_USERNAME: \$\{\{ secrets\.PLAYWRIGHT_USERNAME \}\}/);
+  assert.match(credentialed, /EXPECTED_MANIFEST_HASH/);
+  assert.match(credentialed, /test "\$actual_hash" = "\$EXPECTED_MANIFEST_HASH"/);
 });
 
 test('application login waits for an allowlisted credential destination', () => {
