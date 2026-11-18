@@ -28,12 +28,12 @@ public sealed class ProtectedApiDocumentationTests
     private const string SigningKey = "synthetic-private-origin-signing-key-for-tests";
 
     [Theory]
-    [InlineData(Environments.Development, true, true)]
-    [InlineData(Environments.Development, false, false)]
-    [InlineData(Environments.Staging, true, true)]
-    [InlineData(Environments.Staging, false, false)]
-    [InlineData(Environments.Production, true, false)]
-    [InlineData(Environments.Production, false, false)]
+    [InlineData("Development", true, true)]
+    [InlineData("Development", false, false)]
+    [InlineData("Staging", true, true)]
+    [InlineData("Staging", false, false)]
+    [InlineData("Production", true, false)]
+    [InlineData("Production", false, false)]
     [InlineData("Preview", true, false)]
     public void IsEnabled_RequiresExplicitSupportedNonProductionEnvironment(
         string environmentName, bool flag, bool expected)
@@ -105,9 +105,9 @@ public sealed class ProtectedApiDocumentationTests
     }
 
     [Theory]
-    [InlineData(Environments.Development, false)]
-    [InlineData(Environments.Staging, false)]
-    [InlineData(Environments.Production, true)]
+    [InlineData("Development", false)]
+    [InlineData("Staging", false)]
+    [InlineData("Production", true)]
     public async Task DisabledOrProduction_DocumentationReturnsNotFound(string environment, bool flag)
     {
         await using var host = await DocumentationHost.StartAsync(environment, flag);
