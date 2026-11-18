@@ -64,14 +64,18 @@ validation step. Fork commits, unmerged PR commits, ref drift, expired or
 mismatched artifacts, and non-build workflow artifacts fail closed without
 materializing browser credentials.
 
+If promotion dispatches acceptance before the artifact-owning build run reaches a
+terminal state, the secretless preflight polls that exact immutable run attempt
+for a bounded five-minute retry window. It proceeds only after `completed/success`; failure, cancellation,
+timeout, provenance drift, or an unsupported state remains blocked before the
+environment job and browser credentials are materialized.
+
 GitHub Environment deployment-branch protection must also restrict both `dev`
-and `test` to the default branch before this hardening is treated as active.
-Repository workflow code cannot revoke historical branch copies of an older
-credentialed workflow. At the time this source change was prepared, the GitHub
-API reported no deployment-branch policy for either environment (Test retained
-its separate required-reviewer rule). Configuring those live protection rules
-is a security-setting change and requires separate action-time owner approval;
-do not dispatch credentialed acceptance until it is verified.
+and `test` to the default branch because repository workflow code cannot revoke
+historical branch copies of an older credentialed workflow. Under separate
+action-time owner approval, both environments were restricted to the branch
+named `main`; Test retained its separate required-reviewer rule. Verify those
+live policies remain in force before credentialed acceptance.
 
 The existing `PLAYWRIGHT_USERNAME` and `PLAYWRIGHT_PASSWORD` secrets are always used for the perimeter gate. The optional `PLAYWRIGHT_APP_*` secrets are used for the application login; if they are absent, the test falls back to the perimeter pair so a shared native-Cognito test account remains supported. Google is never used by the perimeter setup.
 

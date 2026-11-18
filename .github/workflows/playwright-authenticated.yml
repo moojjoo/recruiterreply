@@ -93,11 +93,30 @@ jobs:
               > "$manifest_dir/artifact.json"
           artifact_id=$(jq -er '.id | select(type == "number")' "$manifest_dir/artifact.json")
           build_run_id=$(jq -er '.workflow_run.id | select(type == "number")' "$manifest_dir/artifact.json")
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${build_run_id}" > "$manifest_dir/build-run.json"
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
             > "$manifest_dir/manifest.zip"
           unzip -q "$manifest_dir/manifest.zip" -d "$manifest_dir/release"
           test -f "$manifest_dir/release/release-manifest.json"
+          build_run_attempt=$(jq -er \
+            '.run_attempt | select(type == "number" and floor == . and . >= 1)' \
+            "$manifest_dir/release/release-manifest.json")
+          build_run_state=pending
+          for attempt in $(seq 1 31); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${build_run_id}/attempts/${build_run_attempt}" \
+              > "$manifest_dir/build-run.json"
+            build_run_state=$(node .github/scripts/exact-release-acceptance.cjs assess-build-run \
+              "$manifest_dir/build-run.json" "$manifest_dir/artifact.json" \
+              "$manifest_dir/repository.json" "$manifest_dir/release/release-manifest.json")
+            if [ "$build_run_state" = success ]; then
+              break
+            fi
+            if [ "$attempt" -eq 31 ]; then
+              echo "Trusted build run did not complete successfully within the five-minute retry window" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          test "$build_run_state" = success
 
           jq -n \
             --arg eventName "$GITHUB_EVENT_NAME" \

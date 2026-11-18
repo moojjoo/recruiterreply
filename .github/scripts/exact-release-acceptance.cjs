@@ -9,6 +9,7 @@ const outcomes = new Set(['passed', 'failed', 'blocked', 'skipped', 'not-run']);
 const outcomePath = () => process.env.ACCEPTANCE_OUTCOME_PATH || 'exact-release-acceptance.json';
 const shaPattern = /^[0-9a-f]{40}$/;
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
+const pendingRunStatuses = new Set(['queued', 'in_progress', 'requested', 'waiting', 'pending']);
 
 function releaseIdentity(env = process.env) {
   const environment = env.PLAYWRIGHT_ENV;
@@ -67,15 +68,10 @@ function verifyTrustedContext(context, env = process.env) {
   assert.equal(context.artifact?.workflow_run?.head_repository_id, context.repositoryId,
     'Release artifact repository mismatch');
 
-  assert.equal(context.buildRun?.id, context.artifact?.workflow_run?.id,
-    'Release artifact run mismatch');
-  assert.equal(context.buildRun?.head_sha, identity.deployedSha, 'Build run SHA mismatch');
-  assert.equal(context.buildRun?.head_branch, 'main', 'Build run branch mismatch');
-  assert.equal(context.buildRun?.conclusion, 'success', 'Build run did not succeed');
-  assert.ok(context.buildRun?.event === 'push' || context.buildRun?.event === 'workflow_dispatch',
-    'Release artifact came from an unsupported event');
-  assert.equal((context.buildRun?.path || '').split('@')[0], '.github/workflows/build.yml',
-    'Release artifact did not originate from the trusted build workflow');
+  assert.equal(assessBuildRun(
+    context.buildRun, context.artifact, context.repositoryId, context.manifest, env,
+  ), 'success',
+    'Build run did not reach trusted success');
 
   assert.equal(context.manifest?.environment, identity.environment, 'Release environment mismatch');
   assert.equal(context.manifest?.sha, identity.deployedSha, 'Release manifest SHA mismatch');
@@ -85,6 +81,37 @@ function verifyTrustedContext(context, env = process.env) {
     `https://github.com/${context.repository}/actions/runs/${context.buildRun.id}`,
     'Release manifest run URL mismatch');
   return {identity, artifactId: context.artifact.id, buildRunId: context.buildRun.id};
+}
+
+function assessBuildRun(buildRun, artifact, repositoryId, manifest, env = process.env) {
+  const identity = releaseIdentity(env);
+  assert.equal(artifact?.name, `release-manifest-${identity.environment}-${identity.deployedSha}`,
+    'Release artifact name mismatch');
+  assert.equal(artifact?.expired, false, 'Release artifact is expired');
+  assert.equal(artifact?.workflow_run?.head_sha, identity.deployedSha, 'Release artifact SHA mismatch');
+  assert.equal(artifact?.workflow_run?.head_branch, 'main', 'Release artifact did not originate from main');
+  assert.equal(artifact?.workflow_run?.head_repository_id, repositoryId,
+    'Release artifact repository mismatch');
+  assert.equal(buildRun?.id, artifact?.workflow_run?.id, 'Release artifact run mismatch');
+  assert.equal(manifest?.run_id, buildRun?.id, 'Release manifest run mismatch');
+  assert.equal(manifest?.run_attempt, buildRun?.run_attempt, 'Release manifest run attempt mismatch');
+  assert.ok(Number.isInteger(buildRun?.run_attempt) && buildRun.run_attempt >= 1,
+    'Build run attempt must be a positive integer');
+  assert.equal(buildRun?.repository?.id, repositoryId, 'Build run repository mismatch');
+  assert.equal(buildRun?.head_sha, identity.deployedSha, 'Build run SHA mismatch');
+  assert.equal(buildRun?.head_branch, 'main', 'Build run branch mismatch');
+  assert.ok(buildRun?.event === 'push' || buildRun?.event === 'workflow_dispatch',
+    'Release artifact came from an unsupported event');
+  assert.equal((buildRun?.path || '').split('@')[0], '.github/workflows/build.yml',
+    'Release artifact did not originate from the trusted build workflow');
+
+  if (buildRun.status === 'completed') {
+    assert.equal(buildRun.conclusion, 'success', 'Build run completed without success');
+    return 'success';
+  }
+  assert.ok(pendingRunStatuses.has(buildRun.status), 'Build run has an unsupported nonterminal status');
+  assert.equal(buildRun.conclusion, null, 'Nonterminal build run unexpectedly has a conclusion');
+  return 'pending';
 }
 
 function verify(env = process.env) {
@@ -116,9 +143,21 @@ if (require.main === module) {
     assert.ok(value, 'verify-trust requires a context JSON path');
     verifyTrustedContext(JSON.parse(readFileSync(value, 'utf8')));
   }
+  else if (command === 'assess-build-run') {
+    const [artifactPath, repositoryPath, manifestPath] = process.argv.slice(4);
+    assert.ok(value && artifactPath && repositoryPath && manifestPath,
+      'assess-build-run requires build run, artifact, repository, and manifest JSON paths');
+    const repository = JSON.parse(readFileSync(repositoryPath, 'utf8'));
+    process.stdout.write(`${assessBuildRun(
+      JSON.parse(readFileSync(value, 'utf8')),
+      JSON.parse(readFileSync(artifactPath, 'utf8')),
+      repository.id,
+      JSON.parse(readFileSync(manifestPath, 'utf8')),
+    )}\n`);
+  }
   else if (command === 'initialize') writeOutcome('not-run');
   else if (command === 'record') record(value);
-  else throw new Error('Usage: exact-release-acceptance.cjs verify|initialize|record <outcome>');
+  else throw new Error('Usage: exact-release-acceptance.cjs verify|verify-trust|assess-build-run|initialize|record');
 }
 
-module.exports = {outcomes, releaseIdentity, verifyTrustedContext, writeOutcome, record};
+module.exports = {outcomes, releaseIdentity, assessBuildRun, verifyTrustedContext, writeOutcome, record};
