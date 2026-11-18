@@ -76,7 +76,11 @@ public sealed class ProtectedApiDocumentationMiddleware
         }
 
         context.User = authentication.Principal;
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            return Task.CompletedTask;
+        });
         await _next(context);
     }
 
