@@ -15,7 +15,8 @@ using RecruiterReply.Models;
 namespace RecruiterReply.Services;
 
 public sealed record CognitoLoginRequest(string AuthorizationUrl);
-public sealed record CognitoIdentity(string Subject, string Email, string? FirstName, string? LastName);
+public sealed record CognitoIdentity(string Subject, string Email, string? FirstName, string? LastName,
+    string? Issuer = null, DateTimeOffset? AuthenticatedAt = null);
 public sealed record CognitoTokenSet(string AccessToken, string? RefreshToken, string Scope, CognitoIdentity Identity,
     Guid? LinkUserId = null, bool ReplaceExistingIdentity = false);
 
@@ -33,17 +34,18 @@ public sealed class CognitoBffService : ICognitoBffService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IDataProtector _protector;
     private readonly CognitoBffOptions _options;
-    private readonly ConfigurationManager<OpenIdConnectConfiguration> _metadata;
+    private readonly IConfigurationManager<OpenIdConnectConfiguration> _metadata;
     private readonly TimeProvider _timeProvider;
 
     public CognitoBffService(IHttpClientFactory httpClientFactory, IDataProtectionProvider dataProtection,
-        IOptions<CognitoBffOptions> options, TimeProvider? timeProvider = null)
+        IOptions<CognitoBffOptions> options, TimeProvider? timeProvider = null,
+        IConfigurationManager<OpenIdConnectConfiguration>? metadata = null)
     {
         _httpClientFactory = httpClientFactory;
         _protector = dataProtection.CreateProtector(StatePurpose);
         _options = options.Value;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _metadata = new ConfigurationManager<OpenIdConnectConfiguration>(
+        _metadata = metadata ?? new ConfigurationManager<OpenIdConnectConfiguration>(
             $"{_options.Issuer.TrimEnd('/')}/.well-known/openid-configuration",
             new OpenIdConnectConfigurationRetriever(), new HttpDocumentRetriever { RequireHttps = true });
     }
@@ -86,6 +88,14 @@ public sealed class CognitoBffService : ICognitoBffService
         if (!string.IsNullOrWhiteSpace(identityProvider))
         {
             query["identity_provider"] = identityProvider;
+        }
+        else
+        {
+            // The independent Dev/Test perimeter establishes a Cognito managed-login
+            // session before the application login begins. Force an interactive
+            // native sign-in here so "Continue with email" cannot silently reuse
+            // that perimeter SSO session as the application identity.
+            query["prompt"] = "login";
         }
         return $"{_options.Domain.TrimEnd('/')}/oauth2/authorize?{string.Join('&', query.Select(pair =>
             $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"))}";
@@ -132,7 +142,7 @@ public sealed class CognitoBffService : ICognitoBffService
             saved.ReplaceExistingIdentity);
     }
 
-    private async Task<CognitoIdentity> ValidateIdentityAsync(string idToken, string nonce, CancellationToken cancellationToken)
+    internal async Task<CognitoIdentity> ValidateIdentityAsync(string idToken, string nonce, CancellationToken cancellationToken)
     {
         var configuration = await _metadata.GetConfigurationAsync(cancellationToken);
         var validation = new TokenValidationParameters
@@ -154,7 +164,8 @@ public sealed class CognitoBffService : ICognitoBffService
             !string.Equals(principal.FindFirst("email_verified")?.Value, "true", StringComparison.OrdinalIgnoreCase))
             throw new SecurityTokenValidationException("Cognito identity is incomplete or unverified.");
         return new CognitoIdentity(subject, email.Trim().ToLowerInvariant(), principal.FindFirst("given_name")?.Value,
-            principal.FindFirst("family_name")?.Value);
+            principal.FindFirst("family_name")?.Value, _options.Issuer,
+            AuthenticationFreshness.ReadSignedAuthTime(principal.FindFirst("auth_time")?.Value, _timeProvider.GetUtcNow()));
     }
 
     private async Task<ClaimsPrincipal> ValidateAccessTokenAsync(string accessToken, CancellationToken cancellationToken)

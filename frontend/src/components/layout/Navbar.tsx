@@ -3,11 +3,26 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../common/Button";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { useToast } from "../../hooks/useToast";
 
 export const Navbar: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const brandDestination = isAuthenticated ? "/dashboard" : "/";
+
+  const handleLogout = async () => {
+    if (logoutLoading) return;
+    setMenuOpen(false);
+    setLogoutLoading(true);
+    try {
+      await logout();
+    } catch {
+      showToast("Logout could not be completed. Please try again.", "error", 0);
+      setLogoutLoading(false);
+    }
+  };
 
   return (
     <nav aria-label="Primary navigation" className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-200">
@@ -41,7 +56,7 @@ export const Navbar: React.FC = () => {
                   Profile & billing
                 </Link>
                 <span className="text-sm text-gray-600">Welcome, {user.name}</span>
-                <Button variant="secondary" size="sm" onClick={() => { setMenuOpen(false); logout(); }}>Logout</Button>
+                <Button variant="secondary" size="sm" isLoading={logoutLoading} disabled={logoutLoading} onClick={handleLogout}>Logout</Button>
               </>
             ) : (
               <>
