@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using RecruiterReply.Authentication;
 
 namespace RecruiterReply.Documentation;
 
@@ -38,6 +39,8 @@ public sealed class ProtectedApiDocumentationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly bool _enabled;
+    private readonly bool _legacyAuthEnabled;
+    private readonly bool _cognitoBffEnabled;
 
     public ProtectedApiDocumentationMiddleware(
         RequestDelegate next,
@@ -46,6 +49,8 @@ public sealed class ProtectedApiDocumentationMiddleware
     {
         _next = next;
         _enabled = ProtectedApiDocumentation.IsEnabled(environment, configuration);
+        _legacyAuthEnabled = configuration.GetValue("LegacyAuth:Enabled", true);
+        _cognitoBffEnabled = configuration.GetValue<bool>("CognitoBff:Enabled");
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -68,7 +73,19 @@ public sealed class ProtectedApiDocumentationMiddleware
             return;
         }
 
-        var authentication = await context.AuthenticateAsync("Application");
+        // The independent perimeter cookie is not an application session. In
+        // legacy non-BFF mode the global Application selector deliberately
+        // routes rr_session to EdgeSession, whose handler may provision an app
+        // profile. Documentation must never invoke that side-effecting path.
+        var selectedScheme = ApplicationAuthenticationSchemeSelector.Select(
+            context, _legacyAuthEnabled, _cognitoBffEnabled);
+        if (selectedScheme == "EdgeSession")
+        {
+            Reject(context, StatusCodes.Status401Unauthorized);
+            return;
+        }
+
+        var authentication = await context.AuthenticateAsync(selectedScheme);
         if (!authentication.Succeeded || authentication.Principal?.Identity?.IsAuthenticated != true)
         {
             Reject(context, StatusCodes.Status401Unauthorized);

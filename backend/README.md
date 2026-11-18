@@ -109,7 +109,8 @@ backend/
 
 ## 📡 API Endpoints
 
-All endpoints are `POST` and return JSON. Full docs at: `http://localhost:5000/swagger`
+All endpoints are `POST` and return JSON. When explicitly enabled and using a
+supported application session, protected docs are at: `http://localhost:5000/api/swagger`
 
 | Endpoint                         | Purpose                     | Input                                 |
 | -------------------------------- | --------------------------- | ------------------------------------- |
