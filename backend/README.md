@@ -21,7 +21,7 @@ dotnet run
 ```
 
 ✅ Backend ready at: **http://localhost:5000**
-📚 Swagger UI: **http://localhost:5000/swagger**
+📚 Protected Swagger UI (when explicitly enabled): **http://localhost:5000/api/swagger**
 
 ## 📋 Prerequisites
 
@@ -311,7 +311,7 @@ Solution: Ensure frontend is on http://localhost:3000 or http://localhost:5173
 ```
 Error: Backend not responding
 Solution:
-1. Check backend is running: http://localhost:5000/swagger
+1. Check backend is running: http://localhost:5000/health
 2. Check port 5000 is not in use: netstat -an | grep 5000
 3. Change port in Program.cs if needed
 ```
@@ -323,7 +323,7 @@ Solution:
 | POST   | `/api/analyze-recruiter-message` | AnalysisController.AnalyzeRecruiterMessage |
 | POST   | `/api/generate-reply`            | ReplyController.GenerateReply              |
 | POST   | `/api/compare-offers`            | ComparisonController.CompareOffers         |
-| GET    | `/swagger`                       | Swagger UI (development only)              |
+| GET    | `/api/swagger`                   | Authenticated, read-only Swagger UI (explicit Dev/Test opt-in) |
 
 ## 🧪 Testing Endpoints
 
@@ -351,12 +351,7 @@ curl -X POST http://localhost:5000/api/generate-reply \
 
 ### Using Swagger UI
 
-Navigate to: http://localhost:5000/swagger
-
-- Click endpoint
-- Click "Try it out"
-- Enter request body
-- Click "Execute"
+Set `Swagger:Enabled=true`, authenticate through the application, and navigate to `http://localhost:5000/api/swagger`. Interactive submit methods are disabled; use reviewed API clients that preserve the existing authorization and CSRF controls for requests.
 
 ## 📈 Performance & Costs
 
@@ -424,7 +419,7 @@ dotnet watch run
 ### View Swagger docs
 
 ```
-http://localhost:5000/swagger
+http://localhost:5000/api/swagger
 ```
 
 ## Notes
