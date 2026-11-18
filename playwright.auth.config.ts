@@ -14,7 +14,12 @@ if (new URL(baseURL).origin !== expectedOrigin || new URL(baseURL).pathname !== 
 }
 const authDirectory = process.env.PLAYWRIGHT_AUTH_DIR ||
   path.join(os.tmpdir(), `recruiterreply-playwright-${environment}`);
-const storageState = path.join(authDirectory, 'storage-state.json');
+const storageStates = {
+  baseline: path.join(authDirectory, 'storage-state.json'),
+  successfulLogout: path.join(authDirectory, 'successful-logout-storage-state.json'),
+  failedLogout: path.join(authDirectory, 'failed-logout-storage-state.json'),
+} as const;
+const storageState = storageStates.baseline;
 
 export default defineConfig({
   testDir: './tests/e2e/authenticated',
@@ -48,4 +53,4 @@ export default defineConfig({
   ],
 });
 
-export { authDirectory, baseURL, environment, storageState };
+export { authDirectory, baseURL, environment, storageState, storageStates };
