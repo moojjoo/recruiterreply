@@ -1,5 +1,7 @@
 # Database Schema - RecruiterReply.com MVP
 
+> **Historical design document.** For the current source-aligned EF model and maintained ER diagram, see [PostgreSQL schema](POSTGRESQL_SCHEMA.md). The SQL and operational notes below are earlier design material, not verified live schema or deployment evidence.
+
 ## Complete PostgreSQL Schema
 
 ### Table 1: Users
