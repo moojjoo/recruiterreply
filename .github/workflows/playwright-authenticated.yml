@@ -23,7 +23,7 @@ on:
         required: true
         type: string
       test_revision:
-        description: Deliberately selected revision containing the acceptance tests
+        description: Exact deployed revision recorded as acceptance evidence
         required: true
         type: string
 
@@ -38,67 +38,159 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'moojjoo/recruiterreply'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PLAYWRIGHT_ENV: ${{ inputs.environment }}
+      DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+      BACKEND_DIGEST: ${{ inputs.backend_digest }}
+      TEST_REVISION: ${{ inputs.test_revision }}
+      ACCEPTANCE_REVISION: ${{ github.sha }}
+    outputs:
+      artifact_id: ${{ steps.trust.outputs.artifact_id }}
+      manifest_hash: ${{ steps.trust.outputs.manifest_hash }}
+      test_revision: ${{ steps.trust.outputs.test_revision }}
+      acceptance_revision: ${{ steps.trust.outputs.acceptance_revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # workflow_dispatch can target a ref. Execute the preflight only from
+          # the immutable commit selected for this trusted main run, never from
+          # the caller-supplied test revision.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify trusted test and release provenance before credentials
+        id: trust
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          node .github/scripts/exact-release-acceptance.cjs initialize
+          record_blocked() {
+            trap - ERR
+            node .github/scripts/exact-release-acceptance.cjs record blocked || true
+          }
+          trap record_blocked ERR
+
+          manifest_dir=$(mktemp -d)
+          trap 'rm -rf -- "$manifest_dir"' EXIT
+          artifact_name="release-manifest-${PLAYWRIGHT_ENV}-${DEPLOYED_SHA}"
+
+          gh api "repos/${GITHUB_REPOSITORY}" > "$manifest_dir/repository.json"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" > "$manifest_dir/workflow-commit.json"
+          gh api "repos/${GITHUB_REPOSITORY}/compare/${TEST_REVISION}...${GITHUB_SHA}" \
+            > "$manifest_dir/comparison.json"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=100" \
+            | jq -s --arg name "$artifact_name" --arg sha "$DEPLOYED_SHA" \
+              '[.[].artifacts[] | select(.name == $name and .expired == false and
+                .workflow_run.head_branch == "main" and .workflow_run.head_sha == $sha)] |
+                sort_by(.created_at) | last // error("No trusted release artifact candidate")' \
+              > "$manifest_dir/artifact.json"
+          artifact_id=$(jq -er '.id | select(type == "number")' "$manifest_dir/artifact.json")
+          build_run_id=$(jq -er '.workflow_run.id | select(type == "number")' "$manifest_dir/artifact.json")
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${build_run_id}" > "$manifest_dir/build-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            > "$manifest_dir/manifest.zip"
+          unzip -q "$manifest_dir/manifest.zip" -d "$manifest_dir/release"
+          test -f "$manifest_dir/release/release-manifest.json"
+
+          jq -n \
+            --arg eventName "$GITHUB_EVENT_NAME" \
+            --arg ref "$GITHUB_REF" \
+            --arg workflowSha "$GITHUB_SHA" \
+            --arg checkedOutSha "$(git rev-parse HEAD)" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg expectedRepository "moojjoo/recruiterreply" \
+            --arg defaultBranch "$(jq -r '.default_branch' "$manifest_dir/repository.json")" \
+            --argjson repositoryId "$(jq '.id' "$manifest_dir/repository.json")" \
+            --argjson expectedRepositoryId 1273232896 \
+            --slurpfile comparison "$manifest_dir/comparison.json" \
+            --slurpfile workflowCommit "$manifest_dir/workflow-commit.json" \
+            --slurpfile artifact "$manifest_dir/artifact.json" \
+            --slurpfile buildRun "$manifest_dir/build-run.json" \
+            --slurpfile manifest "$manifest_dir/release/release-manifest.json" \
+            '{eventName:$eventName,ref:$ref,workflowSha:$workflowSha,checkedOutSha:$checkedOutSha,
+              repository:$repository,expectedRepository:$expectedRepository,
+              repositoryId:$repositoryId,expectedRepositoryId:$expectedRepositoryId,
+              defaultBranch:$defaultBranch,comparison:$comparison[0],workflowCommit:$workflowCommit[0],artifact:$artifact[0],
+              buildRun:$buildRun[0],manifest:$manifest[0]}' \
+            > "$manifest_dir/trust-context.json"
+          node .github/scripts/exact-release-acceptance.cjs verify-trust "$manifest_dir/trust-context.json"
+
+          trap - ERR
+          echo "artifact_id=${artifact_id}" >> "$GITHUB_OUTPUT"
+          echo "manifest_hash=$(sha256sum "$manifest_dir/release/release-manifest.json" | cut -d " " -f 1)" >> "$GITHUB_OUTPUT"
+          echo "test_revision=${TEST_REVISION}" >> "$GITHUB_OUTPUT"
+          echo "acceptance_revision=${ACCEPTANCE_REVISION}" >> "$GITHUB_OUTPUT"
+      - name: Upload sanitized blocked outcome
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: exact-release-acceptance-${{ inputs.environment }}-${{ inputs.deployed_sha }}
+          path: exact-release-acceptance.json
+          if-no-files-found: warn
+          retention-days: 90
+
   test:
-    if: github.event_name == 'workflow_dispatch'
+    needs: preflight
     runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
     timeout-minutes: 30
     env:
       PLAYWRIGHT_ENV: ${{ inputs.environment }}
-      BASE_URL: ${{ inputs.base_url }}
-      PLAYWRIGHT_USERNAME: ${{ secrets.PLAYWRIGHT_USERNAME }}
-      PLAYWRIGHT_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
-      PLAYWRIGHT_TOTP_SECRET: ${{ secrets.PLAYWRIGHT_TOTP_SECRET }}
-      PLAYWRIGHT_AUTH_DIR: ${{ github.workspace }}/.playwright-auth-${{ github.run_id }}-${{ github.run_attempt }}
-      PLAYWRIGHT_ALLOWED_AUTH_HOSTS: ${{ (inputs.environment == 'dev' && vars.DEV_COGNITO_DOMAIN) || vars.TEST_COGNITO_DOMAIN }}
       DEPLOYED_SHA: ${{ inputs.deployed_sha }}
       BACKEND_DIGEST: ${{ inputs.backend_digest }}
-      TEST_REVISION: ${{ inputs.test_revision }}
-      # Optional application-pool credentials. If omitted, the setup falls
-      # back to the perimeter credentials for environments that intentionally
-      # use the same native Cognito account in both layers.
-      PLAYWRIGHT_APP_USERNAME: ${{ secrets.PLAYWRIGHT_APP_USERNAME }}
-      PLAYWRIGHT_APP_PASSWORD: ${{ secrets.PLAYWRIGHT_APP_PASSWORD }}
-      PLAYWRIGHT_APP_TOTP_SECRET: ${{ secrets.PLAYWRIGHT_APP_TOTP_SECRET }}
+      TEST_REVISION: ${{ needs.preflight.outputs.test_revision }}
+      ACCEPTANCE_REVISION: ${{ needs.preflight.outputs.acceptance_revision }}
+      PLAYWRIGHT_AUTH_DIR: ${{ github.workspace }}/.playwright-auth-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.test_revision }}
+          # Execute only the immutable harness from the trusted main snapshot.
+          # TEST_REVISION remains exact-release evidence, not executable code.
+          ref: ${{ needs.preflight.outputs.acceptance_revision }}
           persist-credentials: false
-      - name: Verify exact release and deliberate test revision
+      - name: Reverify immutable release artifact and checked-out tests
         env:
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_MANIFEST_HASH: ${{ needs.preflight.outputs.manifest_hash }}
+          RELEASE_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
         run: |
           set -euo pipefail
           node .github/scripts/exact-release-acceptance.cjs initialize
-          if ! node .github/scripts/exact-release-acceptance.cjs verify; then
-            node .github/scripts/exact-release-acceptance.cjs record blocked
-            exit 1
-          fi
+          node .github/scripts/exact-release-acceptance.cjs verify
           manifest_dir=$(mktemp -d)
           trap 'rm -rf -- "$manifest_dir"' EXIT
-          artifact_name="release-manifest-${PLAYWRIGHT_ENV}-${DEPLOYED_SHA}"
-          artifact_id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=100" \
-            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id')
-          if [[ ! "$artifact_id" =~ ^[0-9]+$ ]] ||
-             ! gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$manifest_dir/manifest.zip" ||
-             ! unzip -q "$manifest_dir/manifest.zip" -d "$manifest_dir/release" ||
-             ! jq -e --arg environment "$PLAYWRIGHT_ENV" --arg sha "$DEPLOYED_SHA" --arg digest "$BACKEND_DIGEST" \
-               '.environment == $environment and .sha == $sha and .backend_digest == $digest and .status == "success"' \
-               "$manifest_dir/release/release-manifest.json" >/dev/null; then
-            node .github/scripts/exact-release-acceptance.cjs record blocked
-            echo '::error::Exact deployed release manifest is missing or does not match the requested identity.'
-            exit 1
-          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${RELEASE_ARTIFACT_ID}/zip" \
+            > "$manifest_dir/manifest.zip"
+          unzip -q "$manifest_dir/manifest.zip" -d "$manifest_dir/release"
+          actual_hash=$(sha256sum "$manifest_dir/release/release-manifest.json" | cut -d " " -f 1)
+          test "$actual_hash" = "$EXPECTED_MANIFEST_HASH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: lts/*
           cache: npm
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run authenticated browser validation
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          PLAYWRIGHT_USERNAME: ${{ secrets.PLAYWRIGHT_USERNAME }}
+          PLAYWRIGHT_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
+          PLAYWRIGHT_TOTP_SECRET: ${{ secrets.PLAYWRIGHT_TOTP_SECRET }}
+          PLAYWRIGHT_ALLOWED_AUTH_HOSTS: ${{ (inputs.environment == 'dev' && vars.DEV_COGNITO_DOMAIN) || vars.TEST_COGNITO_DOMAIN }}
+          # Optional application-pool credentials. If omitted, the setup falls
+          # back to the perimeter credentials only where that is intentional.
+          PLAYWRIGHT_APP_USERNAME: ${{ secrets.PLAYWRIGHT_APP_USERNAME }}
+          PLAYWRIGHT_APP_PASSWORD: ${{ secrets.PLAYWRIGHT_APP_PASSWORD }}
+          PLAYWRIGHT_APP_TOTP_SECRET: ${{ secrets.PLAYWRIGHT_APP_TOTP_SECRET }}
         run: |
           set -euo pipefail
           if npx playwright test --config=playwright.auth.config.ts; then

@@ -20,6 +20,7 @@ using Amazon.DynamoDBv2;
 using Amazon.KeyManagementService;
 using System.Diagnostics;
 using RecruiterReply.Serialization;
+using RecruiterReply.Documentation;
 
 var envCandidates = new[]
 {
@@ -221,7 +222,6 @@ builder.Services.AddAuthorization(options =>
 
 // Add Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
 // Add CORS
@@ -316,15 +316,6 @@ if (shouldAutoMigrate)
 }
 
 // Configure the HTTP request pipeline
-// Development mode is also used by the hosted Dev container. Swagger must be
-// an explicit local opt-in so it is not exposed by environment name alone.
-if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Swagger:Enabled"))
-{
-    app.MapOpenApi();
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.Use(async (context, next) =>
@@ -338,6 +329,10 @@ app.Use(async (context, next) =>
 });
 app.UseForwardedHeaders();
 app.UseMiddleware<PrivateApiOriginAuthMiddleware>();
+// Reject disabled/alias documentation routes before fallback authorization can
+// reveal them. Enabled documentation still performs explicit Application
+// authentication and then continues through the normal auth pipeline.
+app.UseProtectedApiDocumentationGuard();
 
 // Redirecting the CORS preflight to HTTPS breaks the browser's http://localhost:5002 calls in dev.
 if (!app.Environment.IsDevelopment())
@@ -349,6 +344,10 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<BffCsrfMiddleware>();
 app.UseAuthorization();
+// Documentation middleware runs only after private-origin validation, its
+// explicit Application authentication guard, and the normal auth pipeline.
+// Production remains hard-disabled even if configuration enables the flag.
+app.UseProtectedApiDocumentation();
 
 app.MapGet("/", () => Results.Ok(new { service = "recruiterreply-backend", status = "ok" }))
     .AllowAnonymous();

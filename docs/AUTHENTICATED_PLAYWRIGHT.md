@@ -46,6 +46,33 @@ separately in the GitHub `dev` and `test` Environments:
 - `PLAYWRIGHT_APP_USERNAME` and `PLAYWRIGHT_APP_PASSWORD` when the application Cognito account differs from the perimeter account
 - `PLAYWRIGHT_APP_TOTP_SECRET` when the application account differs and requires MFA
 
+Before an environment job or credential-bearing step can start, a separate
+secretless preflight checks out the immutable workflow-dispatch commit from
+`main`. It requires the selected test revision to equal the deployed SHA and
+independently be an ancestor of that trusted snapshot; SHA equality alone is
+not a trust decision. The selected test revision remains release-evidence
+metadata only. The executable lockfile, Playwright configuration, setup, and
+tests are pinned to a separately recorded `acceptanceRevision` equal to the
+trusted workflow snapshot, so a caller cannot select an older merged harness
+that predates current credential-destination protections. The preflight also binds the
+release manifest to a successful `build.yml` run on `main`, the same repository
+ID, deployed SHA, backend digest, environment, artifact ID, and run URL. The
+credentialed job then checks out only `acceptanceRevision`, the trusted main
+snapshot, and rechecks the manifest hash before dependency installation. Repository lifecycle scripts are
+disabled during `npm ci`; Dev/Test secrets are scoped only to the final browser
+validation step. Fork commits, unmerged PR commits, ref drift, expired or
+mismatched artifacts, and non-build workflow artifacts fail closed without
+materializing browser credentials.
+
+GitHub Environment deployment-branch protection must also restrict both `dev`
+and `test` to the default branch before this hardening is treated as active.
+Repository workflow code cannot revoke historical branch copies of an older
+credentialed workflow. At the time this source change was prepared, the GitHub
+API reported no deployment-branch policy for either environment (Test retained
+its separate required-reviewer rule). Configuring those live protection rules
+is a security-setting change and requires separate action-time owner approval;
+do not dispatch credentialed acceptance until it is verified.
+
 The existing `PLAYWRIGHT_USERNAME` and `PLAYWRIGHT_PASSWORD` secrets are always used for the perimeter gate. The optional `PLAYWRIGHT_APP_*` secrets are used for the application login; if they are absent, the test falls back to the perimeter pair so a shared native-Cognito test account remains supported. Google is never used by the perimeter setup.
 
 This means a successful perimeter redirect alone is not an authenticated application test: the setup must complete the second application sign-in before the tools, refresh, deep-link, logout, and session-safety assertions run.
