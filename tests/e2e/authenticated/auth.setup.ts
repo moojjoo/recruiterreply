@@ -1,6 +1,6 @@
-import { test as setup, expect, type Locator, type Page } from '@playwright/test';
+import { test as setup, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
-import { authDirectory, baseURL, storageState } from '../../../playwright.auth.config';
+import { authDirectory, baseURL, storageStates } from '../../../playwright.auth.config';
 import { generateTotp } from './totp';
 
 const perimeterUsername = process.env.PLAYWRIGHT_USERNAME;
@@ -70,8 +70,12 @@ async function visibleInput(page: Page, selectors: string, timeout = 0) {
   throw new Error(`No visible control matched: ${selectors}`);
 }
 
-async function freshTotpCode(secret: string, label: string): Promise<string> {
-  const key = `${label}:${secret}`;
+async function freshTotpCode(secret: string): Promise<string> {
+  // Cognito rejects reuse for the same seed even when separate application
+  // sessions are being prepared. Track the seed, not the human-readable
+  // session label, so independently authenticated fixtures never reuse a
+  // still-current code.
+  const key = secret;
   let code = generateTotp(secret);
   if (lastTotpCodes.get(key) === code) {
     const remaining = 30_000 - (Date.now() % 30_000) + 250;
@@ -120,7 +124,7 @@ async function completeCognitoLogin(
         `${label} requested MFA, but its TOTP seed is not configured. Configure the appropriate GitHub Environment secret.`,
       );
     }
-    await codeInput.fill(await freshTotpCode(totpSecret, label));
+    await codeInput.fill(await freshTotpCode(totpSecret));
     await (await visibleInput(
       page,
       'button[name="verifyCode"], button[type="submit"], input[type="submit"]',
@@ -128,8 +132,16 @@ async function completeCognitoLogin(
   }
 }
 
-setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
-  setup.setTimeout(90_000);
+async function authenticateSession(
+  page: Page,
+  testInfo: TestInfo,
+  sessionLabel: string,
+  storageStatePath: string,
+) {
+  // Each fixture authenticates both security boundaries. When both layers
+  // intentionally share a TOTP seed, freshTotpCode can wait across two code
+  // windows before Cognito/network latency is considered.
+  setup.setTimeout(180_000);
   if (!perimeterUsername || !perimeterPassword) {
     throw new Error('PLAYWRIGHT_USERNAME and PLAYWRIGHT_PASSWORD are required for perimeter validation.');
   }
@@ -142,7 +154,7 @@ setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
   if (new URL(page.url()).origin === applicationOrigin) {
     throw new Error('The protected environment did not redirect to its perimeter Cognito sign-in.');
   }
-  if (testInfo.retry > 0 && perimeterTotpSecret) {
+  if (testInfo.retry > 0 && (perimeterTotpSecret || applicationTotpSecret)) {
     // A failed attempt can consume the current one-time code. A retry runs in
     // a fresh worker, so deliberately cross the TOTP boundary before reuse.
     await new Promise(resolve => setTimeout(resolve, 30_000 - (Date.now() % 30_000) + 250));
@@ -152,7 +164,7 @@ setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
     perimeterUsername,
     perimeterPassword,
     perimeterTotpSecret,
-    'Perimeter',
+    `Perimeter (${sessionLabel})`,
   );
   await page.waitForURL((url) => url.origin === applicationOrigin, { timeout: 30_000 });
 
@@ -181,7 +193,7 @@ setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
       applicationUsername,
       applicationPassword,
       applicationTotpSecret,
-      'Application',
+      `Application (${sessionLabel})`,
     );
   }
 
@@ -189,5 +201,11 @@ setup('authenticate with Cognito Hosted UI', async ({ page }, testInfo) => {
     isAuthenticatedApplicationDestination(url, applicationOrigin)
   ), 'Cognito callback');
   await mkdir(authDirectory, { recursive: true });
-  await page.context().storageState({ path: storageState });
-});
+  await page.context().storageState({ path: storageStatePath });
+}
+
+for (const [sessionLabel, storageStatePath] of Object.entries(storageStates)) {
+  setup(`authenticate ${sessionLabel} session with Cognito Hosted UI`, async ({ page }, testInfo) => {
+    await authenticateSession(page, testInfo, sessionLabel, storageStatePath);
+  });
+}
