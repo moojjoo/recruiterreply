@@ -77,14 +77,14 @@ public sealed class ProtectedApiDocumentationTests
         Assert.Equal(HttpStatusCode.OK, ui.StatusCode);
         Assert.Equal("no-store", ui.Headers.CacheControl?.ToString());
 
-        var initializer = await host.SendAsync(
-            "/api/swagger/swagger-initializer.js", appAuthenticated: true, signOrigin: true);
-        Assert.Equal(HttpStatusCode.OK, initializer.StatusCode);
-        var initializerBody = await initializer.Content.ReadAsStringAsync();
-        Assert.Contains("v1/swagger.json", initializerBody);
-        Assert.DoesNotContain("http://", initializerBody, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("https://", initializerBody, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("supportedSubmitMethods: []", initializerBody);
+        var indexScript = await host.SendAsync(
+            "/api/swagger/index.js", appAuthenticated: true, signOrigin: true);
+        Assert.Equal(HttpStatusCode.OK, indexScript.StatusCode);
+        var indexScriptBody = await indexScript.Content.ReadAsStringAsync();
+        Assert.Contains("./v1/swagger.json", indexScriptBody);
+        Assert.DoesNotContain("url: \"http://", indexScriptBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("url: \"https://", indexScriptBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"supportedSubmitMethods\":[]", indexScriptBody);
 
         var specification = await host.SendAsync(
             ProtectedApiDocumentation.DocumentRoute, appAuthenticated: true, signOrigin: true);
