@@ -23,7 +23,7 @@ on:
         required: true
         type: string
       test_revision:
-        description: Deliberately selected revision containing the acceptance tests
+        description: Exact deployed revision recorded as acceptance evidence
         required: true
         type: string
 

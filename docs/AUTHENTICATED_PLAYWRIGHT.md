@@ -57,8 +57,8 @@ trusted workflow snapshot, so a caller cannot select an older merged harness
 that predates current credential-destination protections. The preflight also binds the
 release manifest to a successful `build.yml` run on `main`, the same repository
 ID, deployed SHA, backend digest, environment, artifact ID, and run URL. The
-credentialed job then checks out only the verified test SHA and rechecks the
-manifest hash before dependency installation. Repository lifecycle scripts are
+credentialed job then checks out only `acceptanceRevision`, the trusted main
+snapshot, and rechecks the manifest hash before dependency installation. Repository lifecycle scripts are
 disabled during `npm ci`; Dev/Test secrets are scoped only to the final browser
 validation step. Fork commits, unmerged PR commits, ref drift, expired or
 mismatched artifacts, and non-build workflow artifacts fail closed without
