@@ -54,6 +54,10 @@ test('credentialed acceptance executes only a main-ancestor revision after secre
   assert.match(preflight, /compare\/\$\{TEST_REVISION\}\.\.\.\$\{GITHUB_SHA\}/);
   assert.match(preflight, /commits\/\$\{GITHUB_SHA\}/);
   assert.match(preflight, /verify-trust/);
+  assert.match(preflight, /assess-build-run/);
+  assert.match(preflight, /for attempt in \$\(seq 1 31\)/);
+  assert.match(preflight, /actions\/runs\/\$\{build_run_id\}\/attempts\/\$\{build_run_attempt\}/);
+  assert.match(preflight, /Trusted build run did not complete successfully within the five-minute retry window/);
   assert.match(preflight, /workflow_run\.head_branch == "main"/);
   assert.match(preflight, /workflow_run\.head_sha == \$sha/);
   assert.match(credentialed, /npm ci --ignore-scripts/);

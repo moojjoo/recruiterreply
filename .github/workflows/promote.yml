@@ -1005,8 +1005,9 @@ jobs:
           jq -n --arg environment "$ENVIRONMENT" --arg sha "$SHA" \
             --arg backend_digest "$BACKEND_DIGEST" --arg frontend_digest "$FRONTEND_DIGEST" \
             --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg run_id "$GITHUB_RUN_ID" --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
             --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{schema_version:1,environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,deployed_at:$deployed_at,status:"success"}' > release-manifest.json
+            '{schema_version:1,environment:$environment,sha:$sha,backend_digest:$backend_digest,frontend_digest:$frontend_digest,run_url:$run_url,run_id:($run_id|tonumber),run_attempt:($run_attempt|tonumber),deployed_at:$deployed_at,status:"success"}' > release-manifest.json
           cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload immutable release manifest

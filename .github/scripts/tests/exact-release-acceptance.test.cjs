@@ -43,12 +43,14 @@ function trustedContext(overrides = {}) {
     },
     buildRun: {
       id: runId, head_sha: env.DEPLOYED_SHA, head_branch: 'main',
-      conclusion: 'success', event: 'workflow_dispatch',
+      status: 'completed', conclusion: 'success', event: 'workflow_dispatch',
+      repository: {id: repositoryId}, run_attempt: 1,
       path: '.github/workflows/build.yml@refs/heads/main',
     },
     manifest: {
       environment: env.PLAYWRIGHT_ENV, sha: env.DEPLOYED_SHA,
       backend_digest: env.BACKEND_DIGEST, status: 'success',
+      run_id: runId, run_attempt: 1,
       run_url: `https://github.com/moojjoo/recruiterreply/actions/runs/${runId}`,
     },
     ...overrides,
@@ -125,7 +127,61 @@ test('rejects mismatched release manifest, deployed SHA, digest and workflow pro
   }), env), /trusted build workflow/);
   assert.throws(() => acceptance.verifyTrustedContext(trustedContext({
     buildRun: {...trustedContext().buildRun, conclusion: 'failure'},
-  }), env), /did not succeed/);
+  }), env), /completed without success/);
+});
+
+test('waits for the exact trusted parent run and accepts only terminal success', () => {
+  const context = trustedContext();
+  const pending = {...context.buildRun, status: 'in_progress', conclusion: null};
+  assert.equal(acceptance.assessBuildRun(
+    pending, context.artifact, context.repositoryId, context.manifest, env,
+  ), 'pending');
+  assert.equal(acceptance.assessBuildRun(
+    context.buildRun, context.artifact, context.repositoryId, context.manifest, env,
+  ), 'success');
+  assert.equal(acceptance.assessBuildRun(
+    pending, context.artifact, context.repositoryId, context.manifest, env,
+  ), 'pending');
+});
+
+test('rejects failed, cancelled and timed-out parent runs before credentials', () => {
+  const context = trustedContext();
+  for (const conclusion of ['failure', 'cancelled', 'timed_out']) {
+    assert.throws(() => acceptance.assessBuildRun(
+      {...context.buildRun, conclusion}, context.artifact, context.repositoryId,
+      context.manifest, env,
+    ), /completed without success/);
+  }
+});
+
+test('rejects wrong parent, repository, ref, workflow and stale event', () => {
+  const context = trustedContext();
+  const assess = (overrides) => acceptance.assessBuildRun(
+    {...context.buildRun, ...overrides}, context.artifact, context.repositoryId, context.manifest, env,
+  );
+  assert.throws(() => assess({id: context.buildRun.id + 1}), /run mismatch/);
+  assert.throws(() => assess({repository: {id: context.repositoryId + 1}}), /repository mismatch/);
+  assert.throws(() => assess({head_branch: 'stale-release'}), /branch mismatch/);
+  assert.throws(() => assess({head_sha: 'e'.repeat(40)}), /SHA mismatch/);
+  assert.throws(() => assess({path: '.github/workflows/untrusted.yml@refs/heads/main'}), /trusted build workflow/);
+  assert.throws(() => assess({event: 'pull_request'}), /unsupported event/);
+});
+
+test('rejects unsupported or inconsistent pending states', () => {
+  const context = trustedContext();
+  const assess = (overrides) => acceptance.assessBuildRun(
+    {...context.buildRun, ...overrides}, context.artifact, context.repositoryId, context.manifest, env,
+  );
+  assert.throws(() => assess({status: 'mystery', conclusion: null}), /unsupported nonterminal/);
+  assert.throws(() => assess({status: 'in_progress', conclusion: 'success'}), /unexpectedly has a conclusion/);
+});
+
+test('rejects a stale artifact from an earlier attempt of the same run', () => {
+  const context = trustedContext();
+  const rerun = {...context.buildRun, run_attempt: 2};
+  assert.throws(() => acceptance.assessBuildRun(
+    rerun, context.artifact, context.repositoryId, context.manifest, env,
+  ), /run attempt mismatch/);
 });
 
 test('records one honest terminal outcome', () => {
