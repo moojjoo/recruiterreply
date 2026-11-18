@@ -8,7 +8,7 @@ function currentTheme(): Theme {
 }
 
 export const ThemeToggle: React.FC = () => {
-  const [theme, setTheme] = useState<Theme>(() => currentTheme());
+  const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
     // Read the theme after hydration to avoid SSR mismatches.
@@ -18,11 +18,13 @@ export const ThemeToggle: React.FC = () => {
 
   useEffect(() => {
     const listener = (event: StorageEvent) => {
-      if (event.key === KEY) {
+      let storage: Storage;
+      try { storage = window.localStorage; } catch { return; }
+      if (event.storageArea === storage && (event.key === KEY || event.key === null)) {
         const stored = event.newValue;
         const next: Theme = stored === "dark" || stored === "light"
           ? stored
-          : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          : "dark";
         document.documentElement.dataset.theme = next;
         document.documentElement.style.colorScheme = next;
         setTheme(next);
