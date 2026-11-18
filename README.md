@@ -54,7 +54,7 @@ dotnet restore
 dotnet run
 ~~~
 
-The development launch profile targets http://localhost:5002 and https://localhost:5003. Swagger is available at /swagger on the running backend.
+The development launch profile targets http://localhost:5002 and https://localhost:5003. API documentation is an explicit opt-in: set `Swagger:Enabled=true`, authenticate as an application user, and use `/api/swagger`. The default `/swagger` and `/openapi` aliases remain unavailable.
 
 ### Start the frontend
 
@@ -83,7 +83,7 @@ npx playwright test
 
 ## API overview
 
-The complete runtime-generated API reference is Swagger at /swagger when the backend is running. Main API areas are:
+When explicitly enabled in Development or Staging, the authenticated read-only API reference is served at `/api/swagger`. Production never serves it. Main API areas are:
 
 | Area | Routes |
 | --- | --- |
