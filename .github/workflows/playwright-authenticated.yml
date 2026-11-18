@@ -50,10 +50,12 @@ jobs:
       DEPLOYED_SHA: ${{ inputs.deployed_sha }}
       BACKEND_DIGEST: ${{ inputs.backend_digest }}
       TEST_REVISION: ${{ inputs.test_revision }}
+      ACCEPTANCE_REVISION: ${{ github.sha }}
     outputs:
       artifact_id: ${{ steps.trust.outputs.artifact_id }}
       manifest_hash: ${{ steps.trust.outputs.manifest_hash }}
       test_revision: ${{ steps.trust.outputs.test_revision }}
+      acceptance_revision: ${{ steps.trust.outputs.acceptance_revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -80,6 +82,7 @@ jobs:
           artifact_name="release-manifest-${PLAYWRIGHT_ENV}-${DEPLOYED_SHA}"
 
           gh api "repos/${GITHUB_REPOSITORY}" > "$manifest_dir/repository.json"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" > "$manifest_dir/workflow-commit.json"
           gh api "repos/${GITHUB_REPOSITORY}/compare/${TEST_REVISION}...${GITHUB_SHA}" \
             > "$manifest_dir/comparison.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=100" \
@@ -107,13 +110,14 @@ jobs:
             --argjson repositoryId "$(jq '.id' "$manifest_dir/repository.json")" \
             --argjson expectedRepositoryId 1273232896 \
             --slurpfile comparison "$manifest_dir/comparison.json" \
+            --slurpfile workflowCommit "$manifest_dir/workflow-commit.json" \
             --slurpfile artifact "$manifest_dir/artifact.json" \
             --slurpfile buildRun "$manifest_dir/build-run.json" \
             --slurpfile manifest "$manifest_dir/release/release-manifest.json" \
             '{eventName:$eventName,ref:$ref,workflowSha:$workflowSha,checkedOutSha:$checkedOutSha,
               repository:$repository,expectedRepository:$expectedRepository,
               repositoryId:$repositoryId,expectedRepositoryId:$expectedRepositoryId,
-              defaultBranch:$defaultBranch,comparison:$comparison[0],artifact:$artifact[0],
+              defaultBranch:$defaultBranch,comparison:$comparison[0],workflowCommit:$workflowCommit[0],artifact:$artifact[0],
               buildRun:$buildRun[0],manifest:$manifest[0]}' \
             > "$manifest_dir/trust-context.json"
           node .github/scripts/exact-release-acceptance.cjs verify-trust "$manifest_dir/trust-context.json"
@@ -122,6 +126,7 @@ jobs:
           echo "artifact_id=${artifact_id}" >> "$GITHUB_OUTPUT"
           echo "manifest_hash=$(sha256sum "$manifest_dir/release/release-manifest.json" | cut -d " " -f 1)" >> "$GITHUB_OUTPUT"
           echo "test_revision=${TEST_REVISION}" >> "$GITHUB_OUTPUT"
+          echo "acceptance_revision=${ACCEPTANCE_REVISION}" >> "$GITHUB_OUTPUT"
       - name: Upload sanitized blocked outcome
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -141,11 +146,14 @@ jobs:
       DEPLOYED_SHA: ${{ inputs.deployed_sha }}
       BACKEND_DIGEST: ${{ inputs.backend_digest }}
       TEST_REVISION: ${{ needs.preflight.outputs.test_revision }}
+      ACCEPTANCE_REVISION: ${{ needs.preflight.outputs.acceptance_revision }}
       PLAYWRIGHT_AUTH_DIR: ${{ github.workspace }}/.playwright-auth-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.preflight.outputs.test_revision }}
+          # Execute only the immutable harness from the trusted main snapshot.
+          # TEST_REVISION remains exact-release evidence, not executable code.
+          ref: ${{ needs.preflight.outputs.acceptance_revision }}
           persist-credentials: false
       - name: Reverify immutable release artifact and checked-out tests
         env:

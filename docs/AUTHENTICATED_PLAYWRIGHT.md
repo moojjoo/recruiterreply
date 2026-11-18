@@ -48,8 +48,13 @@ separately in the GitHub `dev` and `test` Environments:
 
 Before an environment job or credential-bearing step can start, a separate
 secretless preflight checks out the immutable workflow-dispatch commit from
-`main`. It requires the selected test revision to be an ancestor of that
-trusted snapshot; a full SHA alone is not a trust decision. It also binds the
+`main`. It requires the selected test revision to equal the deployed SHA and
+independently be an ancestor of that trusted snapshot; SHA equality alone is
+not a trust decision. The selected test revision remains release-evidence
+metadata only. The executable lockfile, Playwright configuration, setup, and
+tests are pinned to a separately recorded `acceptanceRevision` equal to the
+trusted workflow snapshot, so a caller cannot select an older merged harness
+that predates current credential-destination protections. The preflight also binds the
 release manifest to a successful `build.yml` run on `main`, the same repository
 ID, deployed SHA, backend digest, environment, artifact ID, and run URL. The
 credentialed job then checks out only the verified test SHA and rechecks the

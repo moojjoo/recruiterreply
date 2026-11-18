@@ -10,7 +10,8 @@ const env = {
   PLAYWRIGHT_ENV: 'dev',
   DEPLOYED_SHA: 'a'.repeat(40),
   BACKEND_DIGEST: `sha256:${'b'.repeat(64)}`,
-  TEST_REVISION: 'c'.repeat(40),
+  TEST_REVISION: 'a'.repeat(40),
+  ACCEPTANCE_REVISION: 'd'.repeat(40),
 };
 
 function trustedContext(overrides = {}) {
@@ -20,13 +21,16 @@ function trustedContext(overrides = {}) {
   return {
     eventName: 'workflow_dispatch', ref: 'refs/heads/main', defaultBranch: 'main',
     workflowSha, checkedOutSha: workflowSha,
+    workflowCommit: {sha: workflowSha},
     repository: 'moojjoo/recruiterreply', expectedRepository: 'moojjoo/recruiterreply',
     repositoryId, expectedRepositoryId: repositoryId,
     comparison: {
       status: 'ahead',
       base_commit: {sha: env.TEST_REVISION},
       merge_base_commit: {sha: env.TEST_REVISION},
-      head_commit: {sha: workflowSha},
+      head_commit: null,
+      ahead_by: 1,
+      behind_by: 0,
     },
     artifact: {
       id: 456,
@@ -55,6 +59,7 @@ test('accepts immutable deployed and test identities', () => {
   assert.deepEqual(acceptance.releaseIdentity(env), {
     environment: 'dev', deployedSha: env.DEPLOYED_SHA,
     backendDigest: env.BACKEND_DIGEST, testRevision: env.TEST_REVISION,
+    acceptanceRevision: env.ACCEPTANCE_REVISION,
   });
 });
 
@@ -62,6 +67,7 @@ test('rejects mutable or malformed identities', () => {
   assert.throws(() => acceptance.releaseIdentity({...env, DEPLOYED_SHA: 'main'}), /DEPLOYED_SHA/);
   assert.throws(() => acceptance.releaseIdentity({...env, BACKEND_DIGEST: 'latest'}), /BACKEND_DIGEST/);
   assert.throws(() => acceptance.releaseIdentity({...env, PLAYWRIGHT_ENV: 'prod'}), /dev or test/);
+  assert.throws(() => acceptance.releaseIdentity({...env, ACCEPTANCE_REVISION: 'main'}), /ACCEPTANCE_REVISION/);
 });
 
 test('accepts a merged immutable test revision and trusted exact release artifact', () => {
@@ -74,16 +80,21 @@ test('accepts an identical trusted test and workflow revision without a compare 
   const context = trustedContext();
   context.workflowSha = env.TEST_REVISION;
   context.checkedOutSha = env.TEST_REVISION;
+  context.workflowCommit = {sha: env.TEST_REVISION};
   context.comparison = {
     status: 'identical', ahead_by: 0, behind_by: 0,
     base_commit: {sha: env.TEST_REVISION},
     merge_base_commit: {sha: env.TEST_REVISION},
     head_commit: null,
   };
-  assert.equal(acceptance.verifyTrustedContext(context, env).identity.testRevision, env.TEST_REVISION);
+  const identicalEnv = {...env, ACCEPTANCE_REVISION: env.TEST_REVISION};
+  assert.equal(acceptance.verifyTrustedContext(context, identicalEnv).identity.testRevision, env.TEST_REVISION);
 });
 
 test('rejects fork, arbitrary PR SHA, stale checkout and ref drift before credentials', () => {
+  assert.throws(() => acceptance.verifyTrustedContext(trustedContext(), {
+    ...env, TEST_REVISION: 'c'.repeat(40),
+  }), /must equal DEPLOYED_SHA/);
   assert.throws(() => acceptance.verifyTrustedContext(trustedContext({
     repository: 'attacker/fork',
   }), env), /repository identity/);
@@ -93,6 +104,9 @@ test('rejects fork, arbitrary PR SHA, stale checkout and ref drift before creden
   assert.throws(() => acceptance.verifyTrustedContext(trustedContext({
     checkedOutSha: 'e'.repeat(40),
   }), env), /checkout drifted/);
+  assert.throws(() => acceptance.verifyTrustedContext(trustedContext({
+    workflowCommit: {sha: 'e'.repeat(40)},
+  }), env), /workflow commit metadata/);
   assert.throws(() => acceptance.verifyTrustedContext(trustedContext({
     ref: 'refs/heads/untrusted-pr',
   }), env), /dispatched from main/);

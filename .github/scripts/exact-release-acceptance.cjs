@@ -16,21 +16,29 @@ function releaseIdentity(env = process.env) {
   assert.match(env.DEPLOYED_SHA || '', shaPattern, 'DEPLOYED_SHA must be a full commit SHA');
   assert.match(env.BACKEND_DIGEST || '', digestPattern, 'BACKEND_DIGEST must be immutable');
   assert.match(env.TEST_REVISION || '', shaPattern, 'TEST_REVISION must be a deliberate full commit SHA');
+  assert.match(env.ACCEPTANCE_REVISION || '', shaPattern, 'ACCEPTANCE_REVISION must be a trusted full commit SHA');
   return {
     environment,
     deployedSha: env.DEPLOYED_SHA,
     backendDigest: env.BACKEND_DIGEST,
     testRevision: env.TEST_REVISION,
+    acceptanceRevision: env.ACCEPTANCE_REVISION,
   };
 }
 
 function verifyTrustedContext(context, env = process.env) {
   const identity = releaseIdentity(env);
+  assert.equal(identity.testRevision, identity.deployedSha,
+    'TEST_REVISION must equal DEPLOYED_SHA for exact-release evidence');
+  assert.equal(identity.acceptanceRevision, context.workflowSha,
+    'ACCEPTANCE_REVISION must equal the trusted workflow SHA');
   assert.equal(context.eventName, 'workflow_dispatch', 'Acceptance must be manually or promotion dispatched');
   assert.equal(context.ref, 'refs/heads/main', 'Acceptance executable must be dispatched from main');
   assert.equal(context.defaultBranch, 'main', 'Repository default branch must be main');
   assert.match(context.workflowSha || '', shaPattern, 'Workflow SHA must be immutable');
   assert.equal(context.checkedOutSha, context.workflowSha, 'Trusted preflight checkout drifted from workflow SHA');
+  assert.equal(context.workflowCommit?.sha, context.workflowSha,
+    'Trusted workflow commit metadata does not match the workflow SHA');
   assert.equal(context.repository, context.expectedRepository, 'Acceptance repository identity mismatch');
   assert.equal(context.repositoryId, context.expectedRepositoryId, 'Acceptance repository ID mismatch');
 
@@ -40,15 +48,14 @@ function verifyTrustedContext(context, env = process.env) {
     'TEST_REVISION is not an ancestor of the trusted workflow SHA');
   assert.ok(context.comparison?.status === 'ahead' || context.comparison?.status === 'identical',
     'TEST_REVISION is not merged into the trusted main snapshot');
+  assert.equal(context.comparison?.behind_by, 0,
+    'Trusted main snapshot is behind TEST_REVISION');
   if (context.comparison.status === 'identical') {
     assert.equal(identity.testRevision, context.workflowSha,
       'Identical comparison does not match the trusted workflow SHA');
     assert.equal(context.comparison.ahead_by, 0, 'Identical comparison unexpectedly has ahead commits');
     assert.equal(context.comparison.behind_by, 0, 'Identical comparison unexpectedly has behind commits');
-  } else {
-    assert.equal(context.comparison?.head_commit?.sha, context.workflowSha,
-      'Comparison head is not the trusted workflow SHA');
-  }
+  } else assert.ok(context.comparison.ahead_by > 0, 'Ahead comparison contains no trusted commits');
 
   const expectedArtifact = `release-manifest-${identity.environment}-${identity.deployedSha}`;
   assert.equal(context.artifact?.name, expectedArtifact, 'Release artifact name mismatch');
@@ -83,8 +90,9 @@ function verifyTrustedContext(context, env = process.env) {
 function verify(env = process.env) {
   const identity = releaseIdentity(env);
   const checkedOut = execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim();
-  assert.equal(checkedOut, identity.testRevision, 'Checked-out tests differ from TEST_REVISION');
-  process.stdout.write(`Exact-release inputs verified: environment=${identity.environment}; deployed_sha=${identity.deployedSha}; backend_digest=${identity.backendDigest}; test_revision=${identity.testRevision}\n`);
+  assert.equal(checkedOut, identity.acceptanceRevision,
+    'Checked-out harness differs from ACCEPTANCE_REVISION');
+  process.stdout.write(`Exact-release inputs verified: environment=${identity.environment}; deployed_sha=${identity.deployedSha}; backend_digest=${identity.backendDigest}; test_revision=${identity.testRevision}; acceptance_revision=${identity.acceptanceRevision}\n`);
 }
 
 function writeOutcome(status, env = process.env) {

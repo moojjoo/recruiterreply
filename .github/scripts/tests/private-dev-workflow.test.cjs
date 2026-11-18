@@ -31,7 +31,8 @@ test('authenticated acceptance is exact-release bound and shares the deployment 
     assert.match(authenticated, new RegExp(`\\n      ${input}:`));
   }
   assert.match(authenticated, /ref: \$\{\{ github\.sha \}\}/);
-  assert.match(authenticated, /ref: \$\{\{ needs\.preflight\.outputs\.test_revision \}\}/);
+  assert.match(authenticated, /ref: \$\{\{ needs\.preflight\.outputs\.acceptance_revision \}\}/);
+  assert.doesNotMatch(authenticated, /ref: \$\{\{ needs\.preflight\.outputs\.test_revision \}\}/);
   assert.doesNotMatch(authenticated, /ref: \$\{\{ inputs\.test_revision \}\}/);
   assert.match(authenticated, /group: recruiterreply-shared-host-promotions/);
   assert.doesNotMatch(authenticated, /\$\{\{ runner\.temp \}\}/);
@@ -51,10 +52,12 @@ test('credentialed acceptance executes only a main-ancestor revision after secre
   assert.match(preflight, /--arg expectedRepository "moojjoo\/recruiterreply"/);
   assert.match(preflight, /--argjson expectedRepositoryId 1273232896/);
   assert.match(preflight, /compare\/\$\{TEST_REVISION\}\.\.\.\$\{GITHUB_SHA\}/);
+  assert.match(preflight, /commits\/\$\{GITHUB_SHA\}/);
   assert.match(preflight, /verify-trust/);
   assert.match(preflight, /workflow_run\.head_branch == "main"/);
   assert.match(preflight, /workflow_run\.head_sha == \$sha/);
   assert.match(credentialed, /npm ci --ignore-scripts/);
+  assert.match(credentialed, /TEST_REVISION remains exact-release evidence, not executable code/);
   assert.doesNotMatch(credentialed.slice(0, browserStep), /secrets\./);
   assert.match(credentialed.slice(browserStep), /PLAYWRIGHT_USERNAME: \$\{\{ secrets\.PLAYWRIGHT_USERNAME \}\}/);
   assert.match(credentialed, /EXPECTED_MANIFEST_HASH/);
