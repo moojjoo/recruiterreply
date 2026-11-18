@@ -76,9 +76,13 @@ public sealed class ProtectedApiDocumentationTests
         var ui = await host.SendAsync("/api/swagger/index.html", appAuthenticated: true, signOrigin: true);
         Assert.Equal(HttpStatusCode.OK, ui.StatusCode);
         Assert.Equal("no-store", ui.Headers.CacheControl?.ToString());
-        var uiBody = await ui.Content.ReadAsStringAsync();
-        Assert.Contains("./v1/swagger.json", uiBody);
-        Assert.Contains("supportedSubmitMethods: []", uiBody);
+
+        var initializer = await host.SendAsync(
+            "/api/swagger/swagger-initializer.js", appAuthenticated: true, signOrigin: true);
+        Assert.Equal(HttpStatusCode.OK, initializer.StatusCode);
+        var initializerBody = await initializer.Content.ReadAsStringAsync();
+        Assert.Contains("./v1/swagger.json", initializerBody);
+        Assert.Contains("supportedSubmitMethods: []", initializerBody);
 
         var specification = await host.SendAsync(
             ProtectedApiDocumentation.DocumentRoute, appAuthenticated: true, signOrigin: true);
