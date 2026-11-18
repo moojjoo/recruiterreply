@@ -32,6 +32,22 @@ docs/                    Architecture, security, release, database, and feature 
 
 Important source locations include backend/Controllers/ for HTTP endpoints, backend/Services/ for business logic and OpenAI integration, backend/Data/RecruiterReplyDbContext.cs for EF Core mappings, backend/Migrations/ for database migrations, frontend/src/App.tsx for routes, and frontend/src/components/ plus frontend/src/pages/ for UI features.
 
+## Engineering operating model
+
+### Parallel delivery
+
+Parallel agents may work on independent, approved issues. Each issue uses its own branch and isolated Git worktree; agents do not share a feature branch or modify another agent's worktree. Changes converge through focused pull requests, review, and required checks before they can reach `main`. See [the development workflow](docs/DEVELOPMENT_WORKFLOW.md) for issue metadata, branch naming, PR titles, execution authorization, and reconciliation rules.
+
+### Authorization and release evidence
+
+Repository automation does not grant itself authority to merge or deploy. Owner authorization, current-head checks, branch protection, environment approvals, and the protected execution workflow remain authoritative. A label, PR body, agent instruction, or successful verification run is not a substitute for the required owner-authenticated command or GitHub protection rules.
+
+Feature-branch and pull-request runs verify changes but do not release them. Dev and Test releases originate from verified commits on `main` through the existing workflows. A release is not treated as deployed merely because CI or a build passed: the environment deployment, immutable release identity, and required smoke or boundary verification must succeed for the same SHA. Production remains a separate, explicit promotion with its own approval gates. See [release promotion controls](docs/RELEASE_PROMOTION.md) and the [workflow inventory](docs/GITHUB_ACTIONS_WORKFLOW_INVENTORY.md).
+
+### Environment topology
+
+Dedicated physical Dev/Production isolation is a planned target, not a completed repository claim. The current [shared-host operations runbook](docs/SHARED_EC2_OPERATIONS_RUNBOOK.md) documents one-host safety controls and split criteria. The checked-in multi-environment Compose file defines separate Dev, Test, and Production application/database names while referencing one PostgreSQL service and placeholder superuser settings. That configuration is repository evidence only; it does not by itself verify the live topology or credentials.
+
 ## Local development (Ubuntu/WSL)
 
 Run repository commands in Ubuntu WSL. Prerequisites are .NET 10 SDK, Node.js 24+, npm 11.17+, and PostgreSQL or the repository's local database configuration.
@@ -104,10 +120,12 @@ Protected routes require the application's authentication flow. Do not paste pro
 
 The repository builds once and promotes the same verified commit artifacts between environments:
 
-1. Pull requests and feature-branch pushes run verification checks only.
-2. A merge to main runs [Build and Deploy to Dev](.github/workflows/build.yml), which verifies, builds the backend image and frontend artifact, and deploys that SHA to Dev when enabled.
-3. [Promote to Test](.github/workflows/promote-test.yml) is manual, resolves the latest successful Dev SHA, and promotes its existing artifacts without rebuilding.
-4. [Promote to Prod](.github/workflows/promote-prod.yml) is a separate manual workflow that resolves the latest successful Test SHA and promotes its existing artifacts without rebuilding.
+1. Pull requests and feature-branch pushes run verification checks only; they cannot deploy an environment.
+2. A merge to `main` runs [Build and Deploy to Dev](.github/workflows/build.yml), which verifies, builds the backend image and frontend artifact, and deploys that exact SHA to Dev when enabled. Dev is complete only after the deployment and its required verification succeed.
+3. [Promote to Test](.github/workflows/promote-test.yml) is manually dispatched from `main`, resolves the latest successful Dev SHA, and promotes its existing artifacts without rebuilding. Test requires separate authorization and deployment verification.
+4. [Promote to Prod](.github/workflows/promote-prod.yml) is a separate manual workflow that resolves the latest successful Test SHA and promotes its existing artifacts without rebuilding. Production requires separate explicit authorization and environment approval.
+
+A successful verification or build is not proof of deployment. GitHub deployment status and the workflow's release manifest, release-identity checks, and required smoke/boundary evidence establish whether a specific SHA reached an environment.
 
 Environment URLs:
 
@@ -115,7 +133,7 @@ Environment URLs:
 - Test: https://test.recruiterreply.com
 - Production: https://recruiterreply.com
 
-Read [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) and [docs/RELEASE_PROMOTION.md](docs/RELEASE_PROMOTION.md) before changing or promoting a release. Test and Production always require separate explicit authorization.
+Read [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md), [docs/RELEASE_PROMOTION.md](docs/RELEASE_PROMOTION.md), and [docs/SHARED_EC2_OPERATIONS_RUNBOOK.md](docs/SHARED_EC2_OPERATIONS_RUNBOOK.md) before changing or promoting a release. Test and Production always require separate explicit authorization.
 
 ## Data and security guidance
 
