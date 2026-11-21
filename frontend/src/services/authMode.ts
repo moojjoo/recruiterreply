@@ -23,12 +23,9 @@ let csrfRequest: Promise<string> | null = null;
 export const ensureCsrfToken = async (apiBaseUrl: string): Promise<string | null> => {
   if (!isCookieAuthEnabled() || typeof window === "undefined") return null;
 
-  const existing = document.cookie
-    .split(";")
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith("__Host-rr_csrf="));
-  if (existing) return decodeURIComponent(existing.slice("__Host-rr_csrf=".length));
-
+  // ASP.NET antiforgery uses a cookie token plus a distinct request token.
+  // Only the server-issued request token belongs in the X-CSRF-TOKEN header;
+  // the browser sends the paired cookie independently.
   csrfRequest ??= fetch(`${apiBaseUrl.replace(/\/$/, "")}/auth/csrf`, {
     credentials: "include",
     headers: { Accept: "application/json" },
