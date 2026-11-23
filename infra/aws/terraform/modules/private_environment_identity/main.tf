@@ -23,6 +23,32 @@ variable "domain_prefix" {
   type = string
 }
 
+variable "application_managed_login_domain" {
+  type    = string
+  default = ""
+
+  validation {
+    condition = var.application_managed_login_domain == "" || (
+      var.environment == "dev" &&
+      var.application_managed_login_domain == "app-auth-dev.recruiterreply.com"
+    )
+    error_message = "Managed application login is approved only for the exact Dev hostname."
+  }
+}
+
+variable "application_managed_login_certificate_arn" {
+  type    = string
+  default = ""
+
+  validation {
+    condition = var.application_managed_login_certificate_arn == "" || (
+      var.environment == "dev" &&
+      can(regex("^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$", var.application_managed_login_certificate_arn))
+    )
+    error_message = "Managed application login requires a reviewed us-east-1 ACM certificate ARN for Dev."
+  }
+}
+
 variable "callback_urls" {
   type = list(string)
   validation {
@@ -143,6 +169,22 @@ resource "aws_cognito_user_pool_domain" "hosted" {
   user_pool_id = aws_cognito_user_pool.testers.id
 }
 
+resource "aws_cognito_user_pool_domain" "application_managed" {
+  count = var.application_managed_login_domain == "" ? 0 : 1
+
+  domain                = var.application_managed_login_domain
+  user_pool_id          = aws_cognito_user_pool.testers.id
+  certificate_arn       = var.application_managed_login_certificate_arn
+  managed_login_version = 2
+
+  lifecycle {
+    precondition {
+      condition     = var.application_managed_login_certificate_arn != ""
+      error_message = "A reviewed ACM certificate is required for managed application login."
+    }
+  }
+}
+
 output "user_pool_id" {
   value = aws_cognito_user_pool.testers.id
 }
@@ -153,4 +195,11 @@ output "client_id" {
 
 output "hosted_domain" {
   value = aws_cognito_user_pool_domain.hosted.domain
+}
+
+output "application_managed_login_distribution" {
+  value = var.application_managed_login_domain == "" ? null : {
+    domain_name = aws_cognito_user_pool_domain.application_managed[0].cloudfront_distribution
+    zone_id     = aws_cognito_user_pool_domain.application_managed[0].cloudfront_distribution_zone_id
+  }
 }

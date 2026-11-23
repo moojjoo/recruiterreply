@@ -48,6 +48,17 @@ variable "supported_identity_providers" {
   }
 }
 
+variable "enable_managed_login_branding" {
+  description = "Create default managed-login branding for the interactive BFF client."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.enable_managed_login_branding || var.environment == "dev"
+    error_message = "Managed BFF login branding is approved only for Dev."
+  }
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

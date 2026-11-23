@@ -137,3 +137,16 @@ variable "cognito_bff_supported_identity_providers" {
   type        = map(list(string))
   default     = {}
 }
+
+variable "cognito_bff_managed_login_branding_environments" {
+  description = "Dev-only BFF clients that receive default managed-login branding."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for env in var.cognito_bff_managed_login_branding_environments : env == "dev"
+    ])
+    error_message = "Managed BFF login branding may target only Dev."
+  }
+}

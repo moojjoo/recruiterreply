@@ -65,6 +65,14 @@ resource "aws_cognito_user_pool_client" "bff" {
   depends_on = [aws_cognito_resource_server.api]
 }
 
+resource "aws_cognito_managed_login_branding" "bff" {
+  count = var.enable_managed_login_branding ? 1 : 0
+
+  user_pool_id                = var.user_pool_id
+  client_id                   = aws_cognito_user_pool_client.bff.id
+  use_cognito_provided_values = true
+}
+
 resource "aws_cognito_user_pool_client" "ci" {
   name                                 = "recruiterreply-${var.environment}-ci"
   user_pool_id                         = var.user_pool_id
