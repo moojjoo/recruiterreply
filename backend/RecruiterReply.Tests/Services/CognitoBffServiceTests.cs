@@ -186,6 +186,24 @@ public sealed class CognitoBffServiceTests
         factory.Verify(candidate => candidate.CreateClient(It.IsAny<string>()), Times.Never);
     }
 
+    [Fact]
+    public void NativeFreshness_AcceptsAuthenticationInSameUnixSecond()
+    {
+        var transactionStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(1_800_000_000_900);
+        var authenticatedAt = DateTimeOffset.FromUnixTimeSeconds(transactionStartedAt.ToUnixTimeSeconds());
+
+        Assert.True(CognitoBffService.IsAuthenticationAtOrAfterTransaction(authenticatedAt, transactionStartedAt));
+    }
+
+    [Fact]
+    public void NativeFreshness_RejectsAuthenticationFromPrecedingUnixSecond()
+    {
+        var transactionStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(1_800_000_000_100);
+        var authenticatedAt = DateTimeOffset.FromUnixTimeSeconds(transactionStartedAt.ToUnixTimeSeconds() - 1);
+
+        Assert.False(CognitoBffService.IsAuthenticationAtOrAfterTransaction(authenticatedAt, transactionStartedAt));
+    }
+
     private static IOptions<CognitoBffOptions> CreateOptions() => Options.Create(new CognitoBffOptions
     {
         Enabled = true,

@@ -3,6 +3,10 @@ import { mkdir } from 'node:fs/promises';
 import { authDirectory, baseURL, storageStates } from '../../../playwright.auth.config';
 import { generateTotp } from './totp';
 
+const { approvedAuthenticationHosts } = require('../../../.github/scripts/authenticated-auth-hosts.cjs') as {
+  approvedAuthenticationHosts: (prefixHosts: string, nativeAppHost: string, environment: string) => Set<string>;
+};
+
 const perimeterUsername = process.env.PLAYWRIGHT_USERNAME;
 const perimeterPassword = process.env.PLAYWRIGHT_PASSWORD;
 const perimeterTotpSecret = process.env.PLAYWRIGHT_TOTP_SECRET;
@@ -10,20 +14,13 @@ const applicationUsername = process.env.PLAYWRIGHT_APP_USERNAME || perimeterUser
 const applicationPassword = process.env.PLAYWRIGHT_APP_PASSWORD || perimeterPassword;
 const applicationTotpSecret = process.env.PLAYWRIGHT_APP_TOTP_SECRET || perimeterTotpSecret;
 const lastTotpCodes = new Map<string, string>();
-const allowedAuthHosts = new Set((process.env.PLAYWRIGHT_ALLOWED_AUTH_HOSTS || '')
-  .split(',')
-  .map(host => host.trim())
-  .filter(Boolean));
+const allowedAuthHosts = approvedAuthenticationHosts(
+  process.env.PLAYWRIGHT_ALLOWED_AUTH_HOSTS || '',
+  process.env.PLAYWRIGHT_NATIVE_APP_AUTH_HOST || '',
+  process.env.PLAYWRIGHT_ENV || '',
+);
 
 function assertCredentialDestination(page: Page, label: string) {
-  if (allowedAuthHosts.size === 0) {
-    throw new Error('PLAYWRIGHT_ALLOWED_AUTH_HOSTS must contain exact approved Cognito hostnames.');
-  }
-  for (const host of allowedAuthHosts) {
-    if (!/^[a-z0-9-]+\.auth\.[a-z0-9-]+\.amazoncognito\.com$/.test(host)) {
-      throw new Error('PLAYWRIGHT_ALLOWED_AUTH_HOSTS contains an invalid hostname.');
-    }
-  }
   const destination = new URL(page.url());
   if (destination.protocol !== 'https:' || destination.username || destination.password ||
       destination.port || !allowedAuthHosts.has(destination.hostname)) {
