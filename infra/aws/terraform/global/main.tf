@@ -51,8 +51,12 @@ module "cognito_bff" {
   logout_urls         = var.cognito_bff_logout_urls[each.key]
   # Application BFF only: the private environment edge identity module stays
   # native-Cognito-only, while the app can offer native email/password and Google.
-  supported_identity_providers = lookup(var.cognito_bff_supported_identity_providers, each.key, ["COGNITO", "Google"])
-  tags                         = var.tags
+  supported_identity_providers  = lookup(var.cognito_bff_supported_identity_providers, each.key, ["COGNITO", "Google"])
+  enable_managed_login_branding = contains(var.cognito_bff_managed_login_branding_environments, each.key)
+  tags                          = var.tags
+
+  # Branding must not be created before the v2 custom domain and its DNS alias.
+  depends_on = [aws_route53_record.application_managed_login]
 }
 
 # Account-wide GitHub Actions OIDC trust + deploy role, shared by deploy-dev.yml,

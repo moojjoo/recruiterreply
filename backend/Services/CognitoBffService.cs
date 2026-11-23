@@ -29,6 +29,7 @@ public interface ICognitoBffService
 
 public sealed class CognitoBffService : ICognitoBffService
 {
+    private const string ApprovedDevNativeOrigin = "https://app-auth-dev.recruiterreply.com";
     private const string StateCookie = "__Host-rr_oauth_state";
     private const string StatePurpose = "recruiterreply-cognito-bff-state-v1";
     private readonly IHttpClientFactory _httpClientFactory;
@@ -54,11 +55,17 @@ public sealed class CognitoBffService : ICognitoBffService
         bool replaceExistingIdentity = false)
     {
         EnsureConfigured();
+        var endpointKind = identityProvider is null && linkUserId is null && _options.NativeEndpointEnabled
+            ? OAuthEndpointKind.Native
+            : OAuthEndpointKind.Primary;
+        var endpoint = ResolveEndpoint(endpointKind);
+        var startedAt = _timeProvider.GetUtcNow();
         var state = RandomUrlToken(32);
         var verifier = RandomUrlToken(48);
         var nonce = RandomUrlToken(32);
         var statePayload = JsonSerializer.Serialize(new OAuthState(state, verifier, nonce,
-            _timeProvider.GetUtcNow().AddMinutes(5), linkUserId, replaceExistingIdentity));
+            startedAt.AddMinutes(5), linkUserId, replaceExistingIdentity, startedAt, endpointKind, endpoint,
+            endpointKind == OAuthEndpointKind.Native ? _options.NativeDomainVerifiedUserPoolId : null));
         var protectedState = _protector.Protect(statePayload);
         context.Response.Cookies.Append(StateCookie, protectedState, new CookieOptions
         {
@@ -97,7 +104,7 @@ public sealed class CognitoBffService : ICognitoBffService
             // that perimeter SSO session as the application identity.
             query["prompt"] = "login";
         }
-        return $"{_options.Domain.TrimEnd('/')}/oauth2/authorize?{string.Join('&', query.Select(pair =>
+        return $"{endpoint}/oauth2/authorize?{string.Join('&', query.Select(pair =>
             $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"))}";
     }
 
@@ -117,8 +124,17 @@ public sealed class CognitoBffService : ICognitoBffService
         if (saved is null || saved.ExpiresAt <= _timeProvider.GetUtcNow() || !CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(saved.State), Encoding.UTF8.GetBytes(state)))
             throw new InvalidOperationException("Invalid Cognito callback state.");
+        var endpoint = ResolveEndpoint(saved.EndpointKind);
+        if (saved.Endpoint is not null && !string.Equals(saved.Endpoint, endpoint, StringComparison.Ordinal)
+            || saved.Endpoint is null && saved.EndpointKind != OAuthEndpointKind.Primary
+            || saved.EndpointKind == OAuthEndpointKind.Native
+                && (!string.Equals(saved.UserPoolId, _options.NativeDomainVerifiedUserPoolId, StringComparison.Ordinal)
+                    || saved.StartedAt is null))
+            throw new InvalidOperationException("Cognito endpoint binding changed.");
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.Domain.TrimEnd('/')}/oauth2/token")
+        // Endpoint and same-pool ownership are validated before the request body
+        // materializes the client secret or an HTTP client is created.
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{endpoint}/oauth2/token")
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
@@ -133,6 +149,9 @@ public sealed class CognitoBffService : ICognitoBffService
         var token = await response.Content.ReadFromJsonAsync<CognitoTokenResponse>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Cognito token response was empty.");
         var identity = await ValidateIdentityAsync(token.IdToken, saved.Nonce, cancellationToken);
+        if (saved.EndpointKind == OAuthEndpointKind.Native
+            && (identity.AuthenticatedAt is null || identity.AuthenticatedAt < saved.StartedAt))
+            throw new SecurityTokenValidationException("Native application authentication predates its transaction.");
         var accessPrincipal = await ValidateAccessTokenAsync(token.AccessToken, cancellationToken);
         var scopes = accessPrincipal.FindFirst("scope")?.Value ?? token.Scope ?? string.Empty;
         if (!scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(scope =>
@@ -200,13 +219,54 @@ public sealed class CognitoBffService : ICognitoBffService
             throw new InvalidOperationException("Cognito BFF is not configured.");
     }
 
+    private string ResolveEndpoint(OAuthEndpointKind endpointKind)
+    {
+        if (endpointKind == OAuthEndpointKind.Primary)
+            return NormalizeOrigin(_options.Domain, "Cognito BFF domain");
+        if (endpointKind != OAuthEndpointKind.Native || !_options.NativeEndpointEnabled)
+            throw new InvalidOperationException("Native Cognito endpoint is disabled.");
+
+        var endpoint = NormalizeOrigin(_options.NativeDomain, "Native Cognito endpoint");
+        if (!string.Equals(endpoint, ApprovedDevNativeOrigin, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(_options.NativeDomainVerifiedUserPoolId)
+            || !TryReadIssuerPoolId(_options.Issuer, out var issuerPoolId)
+            || !string.Equals(issuerPoolId, _options.NativeDomainVerifiedUserPoolId, StringComparison.Ordinal))
+            throw new InvalidOperationException("Native Cognito endpoint ownership is not approved for this user pool.");
+        return endpoint;
+    }
+
+    private static string NormalizeOrigin(string value, string name)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(uri.UserInfo) || !uri.IsDefaultPort || uri.AbsolutePath != "/"
+            || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new InvalidOperationException($"{name} is not a trusted HTTPS origin.");
+        return uri.GetLeftPart(UriPartial.Authority);
+    }
+
+    private static bool TryReadIssuerPoolId(string issuer, out string poolId)
+    {
+        poolId = string.Empty;
+        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, "cognito-idp.us-east-1.amazonaws.com", StringComparison.Ordinal)
+            || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            return false;
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 1) return false;
+        poolId = segments[0];
+        return true;
+    }
+
     private string ApiScope(string scopeName) => $"{_options.ResourceIdentifier.TrimEnd('/')}/{scopeName}";
 
     private static string RandomUrlToken(int bytes) => Convert.ToBase64String(RandomNumberGenerator.GetBytes(bytes))
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
+    private enum OAuthEndpointKind { Primary, Native }
+
     private sealed record OAuthState(string State, string Verifier, string Nonce, DateTimeOffset ExpiresAt,
-        Guid? LinkUserId, bool ReplaceExistingIdentity);
+        Guid? LinkUserId, bool ReplaceExistingIdentity, DateTimeOffset? StartedAt = null,
+        OAuthEndpointKind EndpointKind = OAuthEndpointKind.Primary, string? Endpoint = null, string? UserPoolId = null);
     internal sealed class CognitoTokenResponse
     {
         [JsonPropertyName("access_token")]

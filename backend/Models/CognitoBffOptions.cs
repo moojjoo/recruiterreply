@@ -9,6 +9,9 @@ public sealed class CognitoBffOptions
     public string ClientId { get; set; } = string.Empty;
     public string ClientSecret { get; set; } = string.Empty;
     public string Domain { get; set; } = string.Empty;
+    public bool NativeEndpointEnabled { get; set; }
+    public string NativeDomain { get; set; } = string.Empty;
+    public string NativeDomainVerifiedUserPoolId { get; set; } = string.Empty;
     public string RedirectUri { get; set; } = string.Empty;
     public string PostLogoutRedirectUri { get; set; } = string.Empty;
     public string SessionTableName { get; set; } = string.Empty;
