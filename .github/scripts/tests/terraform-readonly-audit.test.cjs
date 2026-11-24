@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -31,6 +32,42 @@ test('Terraform audit uses Node 24 actions and a deliberate runner pin', () => {
   assert.match(audit, /aws-actions\/configure-aws-credentials@[0-9a-f]{40} # v6/);
   assert.doesNotMatch(audit, /hashicorp\/setup-terraform@v3/);
   assert.doesNotMatch(audit, /aws-actions\/configure-aws-credentials@v4/);
+});
+
+test('Terraform audit preserves native detailed exit codes in both jobs', () => {
+  const setupSteps = audit.match(
+    /- uses: hashicorp\/setup-terraform@[0-9a-f]{40} # v4\n\s+with:\n\s+terraform_version: '1\.14\.3'\n\s+terraform_wrapper: false/g,
+  ) || [];
+  assert.equal(setupSteps.length, 2);
+
+  for (const exitCode of [0, 1, 2]) {
+    const result = spawnSync(
+      'bash',
+      ['-c', 'terraform() { return "$1"; }; set +e; terraform "$NATIVE_EXIT"; code=$?; printf "%s" "$code"'],
+      {encoding: 'utf8', env: {...process.env, NATIVE_EXIT: String(exitCode)}},
+    );
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, String(exitCode));
+  }
+});
+
+test('RR-709 proceeds to the exact-three-create gate only for exit code 2', () => {
+  assert.match(audit, /if \[ "\$plan_code" -ne 2 \]; then[\s\S]*exit 1[\s\S]*terraform show -json "\$PLAN_FILE" \| node/);
+
+  for (const exitCode of [0, 1, 2]) {
+    const result = spawnSync(
+      'bash',
+      ['-c', 'terraform() { return "$1"; }; set +e; terraform "$NATIVE_EXIT"; code=$?; set -e; if [ "$code" -ne 2 ]; then exit 9; fi; printf gate'],
+      {encoding: 'utf8', env: {...process.env, NATIVE_EXIT: String(exitCode)}},
+    );
+    if (exitCode === 2) {
+      assert.equal(result.status, 0);
+      assert.equal(result.stdout, 'gate');
+    } else {
+      assert.equal(result.status, 9);
+      assert.equal(result.stdout, '');
+    }
+  }
 });
 
 test('read-only OIDC and no-apply safeguards remain intact', () => {
