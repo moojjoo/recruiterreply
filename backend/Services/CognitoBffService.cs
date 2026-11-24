@@ -150,7 +150,8 @@ public sealed class CognitoBffService : ICognitoBffService
             ?? throw new InvalidOperationException("Cognito token response was empty.");
         var identity = await ValidateIdentityAsync(token.IdToken, saved.Nonce, cancellationToken);
         if (saved.EndpointKind == OAuthEndpointKind.Native
-            && (identity.AuthenticatedAt is null || identity.AuthenticatedAt < saved.StartedAt))
+            && (identity.AuthenticatedAt is null || saved.StartedAt is null
+                || !IsAuthenticationAtOrAfterTransaction(identity.AuthenticatedAt.Value, saved.StartedAt.Value)))
             throw new SecurityTokenValidationException("Native application authentication predates its transaction.");
         var accessPrincipal = await ValidateAccessTokenAsync(token.AccessToken, cancellationToken);
         var scopes = accessPrincipal.FindFirst("scope")?.Value ?? token.Scope ?? string.Empty;
@@ -256,6 +257,10 @@ public sealed class CognitoBffService : ICognitoBffService
         poolId = segments[0];
         return true;
     }
+
+    internal static bool IsAuthenticationAtOrAfterTransaction(
+        DateTimeOffset authenticatedAt, DateTimeOffset transactionStartedAt)
+        => authenticatedAt.ToUnixTimeSeconds() >= transactionStartedAt.ToUnixTimeSeconds();
 
     private string ApiScope(string scopeName) => $"{_options.ResourceIdentifier.TrimEnd('/')}/{scopeName}";
 

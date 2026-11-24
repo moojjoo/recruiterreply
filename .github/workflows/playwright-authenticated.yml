@@ -205,6 +205,9 @@ jobs:
           PLAYWRIGHT_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
           PLAYWRIGHT_TOTP_SECRET: ${{ secrets.PLAYWRIGHT_TOTP_SECRET }}
           PLAYWRIGHT_ALLOWED_AUTH_HOSTS: ${{ (inputs.environment == 'dev' && vars.DEV_COGNITO_DOMAIN) || vars.TEST_COGNITO_DOMAIN }}
+          # Separate from the perimeter prefix. The test helper accepts only the
+          # exact reviewed Dev application hostname and rejects it for Test.
+          PLAYWRIGHT_NATIVE_APP_AUTH_HOST: ${{ inputs.environment == 'dev' && vars.DEV_NATIVE_APP_COGNITO_DOMAIN || '' }}
           # Optional application-pool credentials. If omitted, the setup falls
           # back to the perimeter credentials only where that is intentional.
           PLAYWRIGHT_APP_USERNAME: ${{ secrets.PLAYWRIGHT_APP_USERNAME }}
