@@ -20,6 +20,10 @@ const frontendOutputs = fs.readFileSync(
   path.resolve(__dirname, '../../../infra/aws/terraform/modules/frontend/outputs.tf'),
   'utf8',
 );
+const privateEnvironmentIdentity = fs.readFileSync(
+  path.resolve(__dirname, '../../../infra/aws/terraform/global/private_environment_identity.tf'),
+  'utf8',
+);
 
 test('Terraform audit uses Node 24 actions and a deliberate runner pin', () => {
   assert.match(audit, /runs-on:\s*ubuntu-24\.04/);
@@ -60,6 +64,18 @@ test('RR-709 audit mode is manual, immutable and create-only', () => {
   const trust = audit.indexOf('- name: Verify immutable trusted dispatch');
   const oidc = audit.lastIndexOf('- name: Authenticate read-only AWS audit role');
   assert.ok(trust >= 0 && oidc > trust, 'trust validation must precede OIDC credentials');
+});
+
+test('RR-709 managed-login checks use Terraform-supported set equality', () => {
+  assert.doesNotMatch(privateEnvironmentIdentity, /\bsetequals\s*\(/);
+  assert.match(
+    privateEnvironmentIdentity,
+    /toset\(keys\(var\.private_environment_application_managed_login_domains\)\)\s*==\s*toset\(keys\(var\.private_environment_application_managed_login_certificate_arns\)\)/,
+  );
+  assert.match(
+    privateEnvironmentIdentity,
+    /toset\(keys\(var\.private_environment_application_managed_login_domains\)\)\s*==\s*var\.cognito_bff_managed_login_branding_environments/,
+  );
 });
 
 test('Test promotion no longer invokes the Node 20 AWS action', () => {
