@@ -63,14 +63,10 @@ check "private_environment_identity_prerequisites" {
 check "application_managed_login_prerequisites" {
   assert {
     condition = (
-      setequals(
-        toset(keys(var.private_environment_application_managed_login_domains)),
-        toset(keys(var.private_environment_application_managed_login_certificate_arns))
-      ) &&
-      setequals(
-        toset(keys(var.private_environment_application_managed_login_domains)),
-        var.cognito_bff_managed_login_branding_environments
-      ) &&
+      toset(keys(var.private_environment_application_managed_login_domains)) ==
+      toset(keys(var.private_environment_application_managed_login_certificate_arns)) &&
+      toset(keys(var.private_environment_application_managed_login_domains)) ==
+      var.cognito_bff_managed_login_branding_environments &&
       alltrue([
         for env in keys(var.private_environment_application_managed_login_domains) :
         var.enable_private_environment_identity &&
