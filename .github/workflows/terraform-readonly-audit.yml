@@ -1,11 +1,25 @@
 name: Terraform read-only drift audit
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Audit scenario to run
+        required: true
+        default: baseline
+        type: choice
+        options:
+          - baseline
+          - rr709-dev-native-login
+      expected_sha:
+        description: Exact reviewed main commit (required for RR-709)
+        required: false
+        type: string
 permissions:
   contents: read
   id-token: write
 jobs:
   audit:
+    if: inputs.mode == 'baseline'
     # Temporary pin for the October-November 2026 ubuntu-latest migration.
     # Remove only after the audit matrix is verified on ubuntu-26.04 (Issue #387).
     runs-on: ubuntu-24.04
@@ -115,3 +129,131 @@ jobs:
             echo "::error::Terraform audit incomplete."
             exit 1
           fi
+
+  rr709-dev-native-login:
+    if: inputs.mode == 'rr709-dev-native-login'
+    # This protected environment supplies only the existing audit-role ARN and
+    # temporary Dev certificate input. It requires an independent approval.
+    runs-on: ubuntu-24.04
+    environment: terraform-readonly-audit
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: infra/aws/terraform/global
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Verify immutable trusted dispatch
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "moojjoo/recruiterreply"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Test RR-709 plan safeguards
+        run: |
+          node --test "${{ github.workspace }}/.github/scripts/tests/rr709-dev-plan-summary.test.cjs"
+          node --test "${{ github.workspace }}/.github/scripts/tests/terraform-readonly-audit.test.cjs"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: '1.14.3'
+      - name: Validate formatting
+        run: terraform fmt -check -recursive
+      - name: Validate protected RR-709 inputs
+        env:
+          NATIVE_DOMAIN: ${{ vars.DEV_NATIVE_APP_COGNITO_DOMAIN }}
+          CERTIFICATE_ARN: ${{ vars.DEV_NATIVE_APP_COGNITO_CERTIFICATE_ARN }}
+          AUDIT_ROLE_ARN: ${{ vars.TERRAFORM_AUDIT_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          test "$NATIVE_DOMAIN" = "app-auth-dev.recruiterreply.com"
+          [[ "$CERTIFICATE_ARN" =~ ^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$ ]]
+          [[ "$AUDIT_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/[^[:space:]]+$ ]]
+      - name: Authenticate read-only AWS audit role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ vars.TERRAFORM_AUDIT_ROLE_ARN }}
+          role-session-name: rr709-plan-${{ github.run_id }}
+      - name: Prepare reviewed audit and temporary RR-709 inputs
+        env:
+          NATIVE_DOMAIN: ${{ vars.DEV_NATIVE_APP_COGNITO_DOMAIN }}
+          CERTIFICATE_ARN: ${{ vars.DEV_NATIVE_APP_COGNITO_CERTIFICATE_ARN }}
+        run: |
+          set -euo pipefail
+          python3 "${{ github.workspace }}/.github/scripts/terraform-audit-inputs.py" \
+            --manifest "${{ github.workspace }}/.github/config/terraform-audit-global.json" \
+            --output "$RUNNER_TEMP/terraform-audit-global"
+          umask 077
+          jq -n \
+            --arg domain "$NATIVE_DOMAIN" \
+            --arg certificate "$CERTIFICATE_ARN" \
+            '{
+              private_environment_application_managed_login_domains: {dev: $domain},
+              private_environment_application_managed_login_certificate_arns: {dev: $certificate},
+              cognito_bff_managed_login_branding_environments: ["dev"]
+            }' > "$RUNNER_TEMP/rr709-dev.tfvars.json"
+          jq -e \
+            --arg domain "$NATIVE_DOMAIN" \
+            --arg certificate "$CERTIFICATE_ARN" \
+            'keys == [
+                "cognito_bff_managed_login_branding_environments",
+                "private_environment_application_managed_login_certificate_arns",
+                "private_environment_application_managed_login_domains"
+              ]
+              and .private_environment_application_managed_login_domains == {dev: $domain}
+              and .private_environment_application_managed_login_certificate_arns == {dev: $certificate}
+              and .cognito_bff_managed_login_branding_environments == ["dev"]' \
+            "$RUNNER_TEMP/rr709-dev.tfvars.json" > /dev/null
+      - name: Initialize existing remote state (no migration)
+        run: terraform init -input=false -lockfile=readonly -migrate-state=false
+      - name: Validate configuration
+        run: terraform validate -no-color
+      - name: Inspect exact RR-709 Dev creates
+        env:
+          BASE_INPUTS: ${{ runner.temp }}/terraform-audit-global/global.tfvars.json
+          RR709_INPUTS: ${{ runner.temp }}/rr709-dev.tfvars.json
+          PLAN_FILE: ${{ runner.temp }}/rr709-dev.tfplan
+          PLAN_LOG: ${{ runner.temp }}/rr709-dev-plan.log
+        run: |
+          set -euo pipefail
+          set +e
+          terraform plan \
+            -input=false \
+            -lock=false \
+            -detailed-exitcode \
+            -no-color \
+            -var-file="$BASE_INPUTS" \
+            -var-file="$RR709_INPUTS" \
+            -out="$PLAN_FILE" > "$PLAN_LOG" 2>&1
+          plan_code=$?
+          set -e
+          if [ "$plan_code" -ne 2 ]; then
+            if [ "$plan_code" -eq 1 ]; then
+              python3 "${{ github.workspace }}/.github/scripts/terraform-audit-diagnose.py" "$PLAN_LOG"
+            fi
+            echo "::error::RR-709 plan did not produce the exact expected create-only change set."
+            exit 1
+          fi
+          safe_summary="$(terraform show -json "$PLAN_FILE" | node "${{ github.workspace }}/.github/scripts/rr709-dev-plan-summary.cjs")"
+          {
+            echo "### RR-709 Dev native-login audit"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Result: exactly three approved creates"
+            printf '%s\n' "$safe_summary"
+            echo "- Detailed plan, state and protected inputs are intentionally not uploaded."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary audit material
+        if: always()
+        run: |
+          python3 "${{ github.workspace }}/.github/scripts/terraform-audit-inputs.py" \
+            --manifest "${{ github.workspace }}/.github/config/terraform-audit-global.json" \
+            --output "$RUNNER_TEMP/terraform-audit-global" --cleanup
+          rm -rf "$RUNNER_TEMP/terraform-audit-global"
+          rm -f "$RUNNER_TEMP/rr709-dev.tfvars.json" \
+            "$RUNNER_TEMP/rr709-dev.tfplan" \
+            "$RUNNER_TEMP/rr709-dev-plan.log"

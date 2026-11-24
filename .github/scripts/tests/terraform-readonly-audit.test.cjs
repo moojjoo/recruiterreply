@@ -12,6 +12,10 @@ const auditPolicy = fs.readFileSync(
   path.resolve(__dirname, '../../../infra/aws/terraform/global/terraform_audit_role.tf'),
   'utf8',
 );
+const rr709PlanSummary = fs.readFileSync(
+  path.resolve(__dirname, '../rr709-dev-plan-summary.cjs'),
+  'utf8',
+);
 const frontendOutputs = fs.readFileSync(
   path.resolve(__dirname, '../../../infra/aws/terraform/modules/frontend/outputs.tf'),
   'utf8',
@@ -34,6 +38,28 @@ test('read-only OIDC and no-apply safeguards remain intact', () => {
   assert.match(audit, /TF_LOG=TRACE terraform plan -input=false/);
   assert.doesNotMatch(audit, /terraform\s+apply/);
   assert.doesNotMatch(audit, /-auto-approve/);
+  assert.doesNotMatch(audit, /upload-artifact/);
+});
+
+test('RR-709 audit mode is manual, immutable and create-only', () => {
+  assert.match(audit, /^on:\n  workflow_dispatch:/m);
+  assert.doesNotMatch(audit, /^\s+(?:push|pull_request):/m);
+  assert.match(audit, /rr709-dev-native-login:/);
+  assert.match(audit, /test "\$GITHUB_REF" = "refs\/heads\/main"/);
+  assert.match(audit, /\[\[ "\$EXPECTED_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
+  assert.match(audit, /test "\$GITHUB_SHA" = "\$EXPECTED_SHA"/);
+  assert.match(audit, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
+  assert.match(audit, /DEV_NATIVE_APP_COGNITO_CERTIFICATE_ARN/);
+  assert.match(audit, /-lock=false/);
+  assert.doesNotMatch(audit, /-target=/);
+  assert.match(audit, /rr709-dev-plan-summary\.cjs/);
+  assert.match(rr709PlanSummary, /module\.private_environment_identity\["dev"\]\.aws_cognito_user_pool_domain\.application_managed\[0\]/);
+  assert.match(rr709PlanSummary, /aws_route53_record\.application_managed_login\["dev"\]/);
+  assert.match(rr709PlanSummary, /module\.cognito_bff\["dev"\]\.aws_cognito_managed_login_branding\.bff\[0\]/);
+
+  const trust = audit.indexOf('- name: Verify immutable trusted dispatch');
+  const oidc = audit.lastIndexOf('- name: Authenticate read-only AWS audit role');
+  assert.ok(trust >= 0 && oidc > trust, 'trust validation must precede OIDC credentials');
 });
 
 test('Test promotion no longer invokes the Node 20 AWS action', () => {
