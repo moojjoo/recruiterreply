@@ -146,3 +146,86 @@ test('moves, drift and deferred changes fail closed', () => {
   deferred.deferred_changes = [{reason: 'instance_count_unknown', private_value: 'must-not-appear'}];
   assert.throws(() => summarize(deferred), /deferred-changes/);
 });
+
+test('drift report uses fixed scopes, components and setting categories only', () => {
+  const plan = approved();
+  const bff = 'module.cognito_bff["dev"].aws_cognito_user_pool_client.bff';
+  const gate = 'module.private_environment_identity["test"].aws_cognito_user_pool_client.browser';
+  plan.resource_drift = [
+    change(bff, ['update'], 'managed', {
+      before: { callback_urls: ['before-secret'], 'untrusted-user-key': 'before-token' },
+      after: { callback_urls: ['after-secret'], 'untrusted-user-key': 'after-token' },
+    }),
+    change(gate, ['update'], 'managed', {
+      before: { supported_identity_providers: ['private-provider'] },
+      after: { supported_identity_providers: ['different-private-provider'] },
+    }),
+    change('module.frontend.aws_cloudfront_distribution.this["prod"]', ['update'], 'managed', {
+      before: { default_cache_behavior: [{ 'nested-private-key': 'before-private-scope' }] },
+      after: { default_cache_behavior: [{ 'nested-private-key': 'after-private-scope' }] },
+    }),
+    change('module.github_oidc.aws_iam_role.github_actions', ['update'], 'managed', {
+      before: { assume_role_policy: 'before-trust-document' },
+      after: { assume_role_policy: 'after-trust-document' },
+    }),
+    {
+      ...change('module.cognito_bff["dynamic-identifier"].aws_cognito_user_pool_client.bff', ['update'], 'managed', {
+        before: { client_secret: 'before-client-secret' },
+        after: { client_secret: 'after-client-secret' },
+      }),
+      type: 'aws_cognito_user_pool_client',
+      previous_address: 'previous-private-address',
+    },
+    {
+      ...change('secret-address', ['__proto__']),
+      type: 'secret_type',
+    },
+  ];
+  plan.relevant_attributes = [{ resource: bff, attribute: ['not-safe-path'] }];
+  const result = spawnSync(process.execPath, [path.resolve(__dirname, '../rr709-dev-plan-summary.cjs')], {
+    input: JSON.stringify(plan), encoding: 'utf8',
+  });
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /reason=resource-drift drift_count=6 unknown_scope_count=2 omitted_entry_count=0/);
+  assert.match(result.stderr, /update:dev:app-auth-bff:cognito:1:other-setting\+redirects/);
+  assert.match(result.stderr, /update:test:environment-gate:cognito:1:providers/);
+  assert.match(result.stderr, /update:prod:frontend-distribution:edge-distribution:1:cache-or-association/);
+  assert.match(result.stderr, /update:shared:deployment-role:iam:1:trust/);
+  assert.match(result.stderr, /update:unknown-scope:unmapped-component:cognito:1:other-setting/);
+  assert.match(result.stderr, /unknown:unknown-scope:unmapped-component:unknown-family:1:detail-unavailable/);
+  assert.doesNotMatch(result.stderr,
+    /secret|token|untrusted-user-key|private-provider|private-scope|private-key|trust-document|dynamic-identifier|previous-private-address|__proto__|not-safe-path|callback_urls|client_secret/);
+});
+
+test('counts all drift entries, groups repeated entries and includes no-op drift in the rejection', () => {
+  const plan = approved();
+  const target = 'module.frontend.aws_route53_record.prod_www["A"]';
+  plan.resource_drift = Array.from({ length: 11 }, () => change(target, ['no-op'], 'managed', {
+    before: { records: ['private-record'] }, after: { records: ['private-record'] },
+  }));
+  assert.throws(() => summarize(plan), ({ diagnostic }) => {
+    assert.match(diagnostic, /drift_count=11 unknown_scope_count=0 omitted_entry_count=0/);
+    assert.match(diagnostic, /no-op:prod:frontend-dns:dns:11:no-value-difference/);
+    assert.doesNotMatch(diagnostic, /private-record/);
+    return true;
+  });
+});
+
+test('bounds output and accounts for entries in omitted groups', () => {
+  const plan = approved();
+  const target = 'module.frontend.aws_cloudfront_distribution.this["dev"]';
+  const targets = [
+    target,
+    'module.frontend.aws_cloudfront_distribution.this["test"]',
+    'module.frontend.aws_cloudfront_distribution.this["prod"]',
+    'module.frontend.aws_cloudfront_function.spa_router["dev"]',
+  ];
+  plan.resource_drift = targets.flatMap((address) => [['create'], ['read'], ['update'], ['delete'], ['no-op']]
+    .map((actions) => change(address, actions)));
+  assert.throws(() => summarize(plan), ({ diagnostic }) => {
+    assert.match(diagnostic, /drift_count=20 unknown_scope_count=0 omitted_entry_count=4/);
+    assert.equal(diagnostic.split('groups=')[1].split(',').length, 16);
+    return true;
+  });
+});
