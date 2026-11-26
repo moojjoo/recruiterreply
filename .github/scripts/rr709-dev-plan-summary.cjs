@@ -111,6 +111,85 @@ const DRIFT_FAMILIES = new Map([
   ['aws_route53_record', 'dns'],
 ]);
 
+const DEV_BFF_CLIENT = 'module.cognito_bff["dev"].aws_cognito_user_pool_client.bff';
+const PROVIDER_FIELD = 'supported_identity_providers';
+
+function protectionState(marker) {
+  if (marker === true) return 'flagged';
+  if (marker === false || marker === null || marker === undefined) return 'clear';
+  if (!Array.isArray(marker)) return 'malformed';
+  let malformed = false;
+  for (const member of marker) {
+    if (member === true) return 'flagged';
+    if (member !== false && member !== null && member !== undefined) malformed = true;
+  }
+  return malformed ? 'malformed' : 'clear';
+}
+
+function fieldProtectionState(marker) {
+  if (marker === true || marker === false || marker === null || marker === undefined) {
+    return protectionState(marker);
+  }
+  if (Array.isArray(marker) || typeof marker !== 'object') return 'malformed';
+  if (!Object.hasOwn(marker, PROVIDER_FIELD)) return 'clear';
+  return protectionState(marker[PROVIDER_FIELD]);
+}
+
+function providerSet(change, side) {
+  const sensitive = fieldProtectionState(change?.change?.[`${side}_sensitive`]);
+  const unknown = fieldProtectionState(change?.change?.[`${side}_unknown`]);
+  if (sensitive === 'flagged') return { category: 'sensitive' };
+  if (unknown === 'flagged') return { category: 'unknown' };
+  if (sensitive === 'malformed' || unknown === 'malformed') return { category: 'malformed' };
+
+  const object = change?.change?.[side];
+  if (object === null || typeof object !== 'object' || Array.isArray(object)) {
+    return { category: 'malformed' };
+  }
+  if (!Object.hasOwn(object, PROVIDER_FIELD)) return { category: 'absent' };
+  const value = object[PROVIDER_FIELD];
+  if (value === null) return { category: 'null' };
+  if (!Array.isArray(value) || value.some((provider) => typeof provider !== 'string')) {
+    return { category: 'malformed' };
+  }
+  if (!value.length) return { category: 'empty', values: [] };
+  const values = [...new Set(value)].sort();
+  return {
+    category: 'known', values,
+    native: values.includes('COGNITO'),
+    google: values.includes('Google'),
+    other: values.some((provider) => provider !== 'COGNITO' && provider !== 'Google'),
+  };
+}
+
+function providerSideDiagnostic(label, set) {
+  const flag = (value) => value === undefined ? 'na' : value ? 'yes' : 'no';
+  return [
+    `${label}-category:${set.category}`,
+    `${label}-native:${flag(set.native)}`,
+    `${label}-google:${flag(set.google)}`,
+    `${label}-other:${flag(set.other)}`,
+  ].join(':');
+}
+
+function providerDriftDiagnostic(changes) {
+  const matches = changes.filter((change) => (
+    change?.mode === 'managed'
+    && change.address === DEV_BFF_CLIENT
+    && actionKind(change?.change?.actions) === 'update'
+  ));
+  if (!matches.length) return null;
+  if (matches.length !== 1) return 'providers=selection:ambiguous';
+
+  const before = providerSet(matches[0], 'before');
+  const after = providerSet(matches[0], 'after');
+  const comparable = (set) => set.category === 'known' || set.category === 'empty';
+  const fullSet = comparable(before) && comparable(after)
+    ? isDeepStrictEqual(before.values, after.values) ? 'equal' : 'different'
+    : 'indeterminate';
+  return `providers=${providerSideDiagnostic('before', before)};${providerSideDiagnostic('after', after)};full-set:${fullSet}`;
+}
+
 const FIELD_CATEGORIES = new Map(Object.entries({
   iam: {
     assume_role_policy: 'trust', managed_policy_arns: 'permissions',
@@ -179,7 +258,11 @@ function rejectDrift(changes) {
       `${key}:${group.count}:${[...group.categories].sort().join('+')}`
     )).join(',')}`,
   ].join(' ');
-  throw new PlanRejectionError('resource-drift', diagnostic);
+  const providerDiagnostic = providerDriftDiagnostic(changes);
+  throw new PlanRejectionError(
+    'resource-drift',
+    providerDiagnostic ? `${diagnostic} ${providerDiagnostic}` : diagnostic,
+  );
 }
 
 function summarize(plan) {
@@ -256,6 +339,7 @@ module.exports = {
   EXPECTED_CREATES,
   PlanRejectionError,
   actionKind,
+  providerDriftDiagnostic,
   safeAddressKind,
   summarize,
 };
