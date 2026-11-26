@@ -229,3 +229,132 @@ test('bounds output and accounts for entries in omitted groups', () => {
     return true;
   });
 });
+
+const devBff = 'module.cognito_bff["dev"].aws_cognito_user_pool_client.bff';
+const providerDrift = (before, after, metadata = {}) => ({
+  ...change(devBff, ['update'], 'managed', {before, after}),
+  change: {
+    actions: ['update'], before, after,
+    before_sensitive: metadata.before_sensitive,
+    after_sensitive: metadata.after_sensitive,
+    before_unknown: metadata.before_unknown,
+    after_unknown: metadata.after_unknown,
+  },
+});
+
+function runDriftCli(resourceDrift) {
+  const plan = approved();
+  plan.resource_drift = resourceDrift;
+  return spawnSync(process.execPath, [path.resolve(__dirname, '../rr709-dev-plan-summary.cjs')], {
+    input: JSON.stringify(plan), encoding: 'utf8',
+  });
+}
+
+test('reports only fixed provider categories and flags for the exact Dev BFF drift', () => {
+  const result = runDriftCli([providerDrift(
+    {supported_identity_providers: ['COGNITO', 'Google']},
+    {supported_identity_providers: ['COGNITO', 'private-provider-name']},
+  )]);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /providers=before-category:known:before-native:yes:before-google:yes:before-other:no;/);
+  assert.match(result.stderr, /after-category:known:after-native:yes:after-google:no:after-other:yes;full-set:different/);
+  assert.doesNotMatch(result.stderr, /private-provider-name|COGNITO|Google|supported_identity_providers/);
+});
+
+test('compares full provider sets rather than only fixed flags', () => {
+  const result = runDriftCli([providerDrift(
+    {supported_identity_providers: ['COGNITO', 'private-before-name']},
+    {supported_identity_providers: ['COGNITO', 'private-after-name']},
+  )]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /before-native:yes:before-google:no:before-other:yes/);
+  assert.match(result.stderr, /after-native:yes:after-google:no:after-other:yes;full-set:different/);
+  assert.doesNotMatch(result.stderr, /private-before-name|private-after-name/);
+});
+
+test('treats reordered and duplicate known provider members as the same set', () => {
+  const result = runDriftCli([providerDrift(
+    {supported_identity_providers: ['Google', 'COGNITO', 'Google']},
+    {supported_identity_providers: ['COGNITO', 'Google']},
+  )]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /before-category:known:before-native:yes:before-google:yes:before-other:no/);
+  assert.match(result.stderr, /after-category:known:after-native:yes:after-google:yes:after-other:no;full-set:equal/);
+  assert.doesNotMatch(result.stderr, /COGNITO|Google|supported_identity_providers/);
+});
+
+test('classifies absent, null, empty and malformed provider values without disclosure', () => {
+  const cases = [
+    [{}, {}, 'absent', 'absent'],
+    [{supported_identity_providers: null}, {supported_identity_providers: null}, 'null', 'null'],
+    [{supported_identity_providers: []}, {supported_identity_providers: []}, 'empty', 'empty'],
+    [{supported_identity_providers: 'private-value'}, {supported_identity_providers: [42]}, 'malformed', 'malformed'],
+  ];
+  for (const [before, after, beforeCategory, afterCategory] of cases) {
+    const result = runDriftCli([providerDrift(before, after)]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, new RegExp(`before-category:${beforeCategory}`));
+    assert.match(result.stderr, new RegExp(`after-category:${afterCategory}`));
+    assert.doesNotMatch(result.stderr, /private-value|42|supported_identity_providers/);
+  }
+});
+
+test('sensitivity and unknown metadata apply at object, field and member levels', () => {
+  const levels = [
+    {before_sensitive: true, after_unknown: true},
+    {before_sensitive: {supported_identity_providers: true}, after_unknown: {supported_identity_providers: true}},
+    {before_sensitive: {supported_identity_providers: [false, true]}, after_unknown: {supported_identity_providers: [true, false]}},
+  ];
+  for (const metadata of levels) {
+    const result = runDriftCli([providerDrift(
+      {supported_identity_providers: ['before-private-value']},
+      {supported_identity_providers: ['after-private-value']},
+      metadata,
+    )]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /before-category:sensitive/);
+    assert.match(result.stderr, /after-category:unknown/);
+    assert.match(result.stderr, /full-set:indeterminate/);
+    assert.doesNotMatch(result.stderr, /before-private-value|after-private-value/);
+  }
+});
+
+test('malformed protection metadata fails comparison closed', () => {
+  const result = runDriftCli([providerDrift(
+    {supported_identity_providers: ['before-private-value']},
+    {supported_identity_providers: ['after-private-value']},
+    {
+      before_sensitive: {supported_identity_providers: {private: true}},
+      after_unknown: {supported_identity_providers: ['invalid-marker']},
+    },
+  )]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /before-category:malformed/);
+  assert.match(result.stderr, /after-category:malformed/);
+  assert.match(result.stderr, /full-set:indeterminate/);
+  assert.doesNotMatch(result.stderr, /private|invalid-marker|before-private-value|after-private-value/);
+});
+
+test('ambiguous Dev matches and Test or Prod drift never expose provider comparisons', () => {
+  const ambiguous = runDriftCli([
+    providerDrift({supported_identity_providers: ['first-private']}, {supported_identity_providers: ['second-private']}),
+    providerDrift({supported_identity_providers: ['third-private']}, {supported_identity_providers: ['fourth-private']}),
+  ]);
+  assert.equal(ambiguous.status, 1);
+  assert.match(ambiguous.stderr, /providers=selection:ambiguous/);
+  assert.doesNotMatch(ambiguous.stderr, /first-private|second-private|third-private|fourth-private/);
+
+  for (const env of ['test', 'prod']) {
+    const result = runDriftCli([change(
+      `module.cognito_bff["${env}"].aws_cognito_user_pool_client.bff`,
+      ['update'], 'managed', {
+        before: {supported_identity_providers: ['before-private']},
+        after: {supported_identity_providers: ['after-private']},
+      },
+    )]);
+    assert.equal(result.status, 1);
+    assert.doesNotMatch(result.stderr, /providers=/);
+    assert.doesNotMatch(result.stderr, /before-private|after-private/);
+  }
+});
